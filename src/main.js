@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import SetupScene from './scenes/SetupScene.js';
 import BattleScene from './scenes/BattleScene.js';
 import UpgradeScene from './scenes/UpgradeScene.js';
 
@@ -19,7 +20,7 @@ const config = {
       debug: false
     }
   },
-  scene: [BattleScene, UpgradeScene]
+  scene: [SetupScene, BattleScene, UpgradeScene]
 };
 
 new Phaser.Game(config);

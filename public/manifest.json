@@ -1,0 +1,11 @@
+{
+  "name": "Dicemore",
+  "short_name": "Dicemore",
+  "description": "Roguelike dice-builder",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#111122",
+  "theme_color": "#111122",
+  "icons": []
+}

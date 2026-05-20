@@ -36,6 +36,8 @@ export default class BattleScene extends Phaser.Scene {
     this.enemyDice       = [];
     this.block           = 0;
     this.aimActive       = false;
+    this._aimStartX      = 0;
+    this._aimStartY      = 0;
     this._suppressThrow  = false;
     this.aimGfx          = this.add.graphics().setDepth(30);
     this.inspectorPanel  = null;
@@ -438,9 +440,11 @@ export default class BattleScene extends Phaser.Scene {
     this.input.on('pointerdown', (ptr) => {
       if (this.inspectorPanel) return;
       if (this.phase !== PHASE.PLAYER_ROLL) return;
-      if (ptr.y < SURFACE_TOP || ptr.y > THROW_ZONE_BOTTOM) return;
+      if (ptr.y > THROW_ZONE_BOTTOM) return;
       if (this.throwCount >= this.trayCards.length) return;
-      this.aimActive = true;
+      this.aimActive  = true;
+      this._aimStartX = ptr.x;
+      this._aimStartY = ptr.y;
     });
 
     this.input.on('pointermove', (ptr) => {
@@ -474,11 +478,13 @@ export default class BattleScene extends Phaser.Scene {
       }
 
       if (!this.aimActive) return;
+      const dragDx = ptr.x - this._aimStartX;
+      const dragDy = ptr.y - this._aimStartY;
       this.aimGfx.clear();
-      this.aimGfx.lineStyle(1.5, 0xffffff, 0.3);
+      this.aimGfx.lineStyle(2, 0xffffff, 0.45);
       this.aimGfx.beginPath();
       this.aimGfx.moveTo(THROW_ORIGIN_X, THROW_ORIGIN_Y);
-      this.aimGfx.lineTo(ptr.x, ptr.y);
+      this.aimGfx.lineTo(THROW_ORIGIN_X - dragDx, THROW_ORIGIN_Y - dragDy);
       this.aimGfx.strokePath();
     });
 
@@ -514,11 +520,12 @@ export default class BattleScene extends Phaser.Scene {
       if (this.aimActive && this.phase === PHASE.PLAYER_ROLL) {
         this.aimGfx.clear();
         this.aimActive = false;
-        const dx  = ptr.x - THROW_ORIGIN_X;
-        const dy  = ptr.y - THROW_ORIGIN_Y;
-        const len = Math.hypot(dx, dy) || 1;
+        const dragDx = ptr.x - this._aimStartX;
+        const dragDy = ptr.y - this._aimStartY;
+        const len    = Math.hypot(dragDx, dragDy);
+        if (len < 20) return;  // too small — ignore accidental taps
         const spd = Math.min(MAX_THROW_SPEED, Math.max(7, len * 0.14));
-        this._throwNextCard(THROW_ORIGIN_X, THROW_ORIGIN_Y, (dx / len) * spd, (dy / len) * spd);
+        this._throwNextCard(THROW_ORIGIN_X, THROW_ORIGIN_Y, (-dragDx / len) * spd, (-dragDy / len) * spd);
       }
     });
   }

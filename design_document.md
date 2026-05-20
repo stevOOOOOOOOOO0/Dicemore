@@ -317,7 +317,7 @@ Where `dx/dy` is the outward direction from bumper center to die center, and `BU
 
 | Question | Decision |
 |---|---|
-| **Throw origin** | Fixed at the player bumper position (bottom-center). The player drags anywhere on the surface to aim from that origin. |
+| **Throw mechanic** | Slingshot-style. The player touches anywhere on the surface and drags — the aim line originates from the player bumper and stretches in the opposite direction of the drag. Release fires the die along that line. Drag distance sets power. A minimum drag of ~20px is required to prevent accidental throws from taps. |
 | **Player die resolution timing** | Player dice resolve immediately on settle, not deferred to End Turn. Encourages real-time engagement with each throw. Enemy dice still defer to End Turn. |
 | **Cascade on re-knock** | If a settled die is knocked back into motion, it re-applies its face effect when it re-settles. Creates emergent chain reactions. |
 | **Enemy block design** | Enemy `BLK` acts as an active per-attack shield while the die is settled on that face, not a one-time buffer at End Turn. This makes positioning of enemy dice matter during the rolling phase. Pierce bypasses it entirely. |
@@ -345,8 +345,10 @@ Where `dx/dy` is the outward direction from bumper center to die center, and `BU
 ### 12.1 Primary Platform — Mobile (iOS / Android)
 
 **Throwing a die:**
-- Press and drag anywhere on the rolling surface to aim from the fixed throw origin. Drag direction sets angle; drag distance sets velocity. A faint aim line shows the projected throw direction.
-- Release to launch.
+- Touch and hold anywhere on the rolling surface to begin aiming.
+- Drag away from the initial touch point. An aim line appears, originating from the **player bumper** and stretching in the **opposite direction** of the drag — like a slingshot pullback. Dragging down-right shows a line going up-left, indicating the die will fly up-left.
+- Drag distance controls throw power. A minimum drag of ~20px is required; taps shorter than this are ignored.
+- Release to launch the die along the aim line.
 - Throwing is disabled while the die inspector is open.
 
 **Inspecting a die:**
