@@ -1,6 +1,6 @@
 # Dicemore — Game Design Document
 
-**Version:** 0.4 (Prototype — Reflects Built State)
+**Version:** 0.5 (Prototype — Reflects Built State)
 **Genre:** Roguelike Dice-Builder
 
 > Sections marked **[PLANNED]** describe intended future design not yet implemented in the prototype. All other sections describe mechanics that are built and working.
@@ -212,7 +212,49 @@ The battle sequence is fixed in the prototype: **Grunt → Upgrade → Soldier �
 
 ---
 
-## 8. Enemies
+## 8. Runes & Materials
+
+Each player die can carry at most **one Rune** and at most **one Material**. Both are assigned in Step 4 of the SetupScene before the first battle.
+
+### 8.1 Runes
+
+A Rune attaches to a **specific face** of a die (chosen during setup). It triggers only when that face is the active face at the moment the die settles.
+
+| Rune        | Symbol | Effect |
+|-------------|--------|--------|
+| **Viking**  | VIK    | This face triggers twice. |
+| **Egyptian**| EGY    | Triggers the face effect, then the die immediately rerolls. |
+| **Trojan**  | TRJ    | Triggers this face, then also triggers the face on the opposite side of the die. |
+| **Greek**   | GRK    | Blasts all other dice away from this die (radial velocity kick). |
+| **Cosmic**  | COS    | Pulls all other dice inward toward this die (inverse radial velocity). |
+
+The Trojan rune uses the standard opposite-face mapping for a T-net layout:
+Top(0) ↔ Bottom(5), Left(1) ↔ Right(3), Center(2) ↔ Lower(4).
+
+### 8.2 Materials
+
+A Material applies to the **entire die**, modifying all of its effects regardless of which face is active.
+
+| Material    | Symbol | Effect |
+|-------------|--------|--------|
+| **Iron**    | IRN    | +1 to all numeric effect values. |
+| **Steel**   | STL    | ×2 to all numeric effect values. |
+| **Glass**   | GLS    | Shatters on first die-to-die contact, destroying both dice involved. |
+| **Uranium** | URA    | Any die this one contacts has its values halved for the rest of the turn. |
+| **Fire**    | FIR    | +3 to all damage values specifically. |
+| **Rock**    | ROK    | All damage from this die ignores enemy block. |
+
+### 8.3 Setup Flow
+
+Step 4 of SetupScene presents each die as a row with two slots:
+- **Rune slot** — tap to open the rune picker, then select which face of that die receives the rune.
+- **Material slot** — tap to open the material picker; tap the same material again to remove it.
+
+Both slots are optional. Tapping "Begin Battle" with empty slots is valid.
+
+---
+
+## 9. Enemies
 
 ### 8.1 Enemy Sequence (Prototype)
 
@@ -252,7 +294,7 @@ The enemy bumper acts as a pinball obstacle. Any die that strikes it is deflecte
 
 ---
 
-## 9. Physics
+## 10. Physics
 
 ### 9.1 Dice Physics Bodies
 
@@ -299,7 +341,7 @@ Where `dx/dy` is the outward direction from bumper center to die center, and `BU
 
 ---
 
-## 10. Player Stats
+## 11. Player Stats
 
 | Stat             | Description                                                                                        |
 | ---------------- | -------------------------------------------------------------------------------------------------- |
@@ -311,7 +353,7 @@ Where `dx/dy` is the outward direction from bumper center to die center, and `BU
 
 ---
 
-## 11. Design Decisions Log
+## 12. Design Decisions Log
 
 ### 11.1 Resolved Decisions
 
@@ -340,7 +382,7 @@ Where `dx/dy` is the outward direction from bumper center to die center, and `BU
 
 ---
 
-## 12. Platform & Input
+## 13. Platform & Input
 
 ### 12.1 Primary Platform — Mobile (iOS / Android)
 
@@ -367,7 +409,7 @@ Mouse input mirrors touch: click-and-drag to aim and throw, click to inspect.
 
 ---
 
-## 13. **[PLANNED]** Map and Run Structure
+## 14. **[PLANNED]** Map and Run Structure
 
 The full roguelike run structure is not yet implemented. The current prototype is a linear sequence of three battles (Grunt → Soldier → Captain).
 
@@ -375,7 +417,7 @@ The full roguelike run structure is not yet implemented. The current prototype i
 
 ---
 
-## 14. **[PLANNED]** Character Classes
+## 15. **[PLANNED]** Character Classes
 
 Three starting classes are planned:
 
@@ -387,7 +429,7 @@ Three starting classes are planned:
 
 ---
 
-## 15. Tone and Aesthetic Direction
+## 16. Tone and Aesthetic Direction
 
 - **Visual style:** Minimalist dark UI with glowing dice. Dice are the visual centerpiece — warm gold for player, dark crimson for enemies.
 - **Tone:** Dark fantasy adjacent but not grim. Wry and self-aware.
