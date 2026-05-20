@@ -1,8 +1,8 @@
 // All face token definitions
 export const FACES = {
   blank:   { id: 'blank',   label: 'Blank',    sym: '--',   color: '#777777', effect: null },
-  strike:  { id: 'strike',  label: 'Strike',   sym: 'ATK',  color: '#e74c3c', effect: 'damage',  value: 3, target: 'front' },
-  strike2: { id: 'strike2', label: 'Strike 2', sym: 'ATK2', color: '#c0392b', effect: 'damage',  value: 6, target: 'front' },
+  strike:  { id: 'strike',  label: 'Strike',   sym: 'ATK',  color: '#e74c3c', effect: 'damage',  value: 5, target: 'front' },
+  strike2: { id: 'strike2', label: 'Strike 2', sym: 'ATK2', color: '#c0392b', effect: 'damage',  value: 8, target: 'front' },
   cleave:  { id: 'cleave',  label: 'Cleave',   sym: 'CLV',  color: '#e67e22', effect: 'cleave',  value: 3 },
   defend:  { id: 'defend',  label: 'Defend',   sym: 'DEF',  color: '#3498db', effect: 'block',   value: 2 },
   defend2: { id: 'defend2', label: 'Defend 2', sym: 'DEF2', color: '#2980b9', effect: 'block',   value: 4 },
@@ -21,7 +21,7 @@ export const FACES = {
 
 // Tokens the player can put on their dice (for upgrade screen)
 export const PLAYER_TOKENS = [
-  'blank', 'strike', 'strike2', 'cleave', 'defend', 'defend2', 'brace', 'mend', 'chaos', 'pierce'
+  'blank', 'strike', 'strike2', 'cleave', 'defend', 'defend2', 'brace', 'mend', 'pierce'
 ];
 
 // Starting player dice configurations
