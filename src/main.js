@@ -7,6 +7,7 @@ const config = {
   type: Phaser.AUTO,
   width: 400,
   height: 700,
+  resolution: window.devicePixelRatio,
   backgroundColor: '#111122',
   parent: document.body,
   scale: {
