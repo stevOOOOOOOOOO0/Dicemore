@@ -118,9 +118,9 @@ export default class BattleScene extends Phaser.Scene {
 
   _buildHeaderStrip() {
     const mid = SURFACE_TOP / 2;
-    this.phaseTxt     = this.add.text(W / 2, mid - 12, '', { fontSize: '9px',  color: '#556677', letterSpacing: 2 }).setOrigin(0.5, 0.5);
-    this.battleMsgTxt = this.add.text(W / 2, mid + 12, '', { fontSize: '11px', color: '#ffffff', wordWrap: { width: W - 60 } }).setOrigin(0.5, 0.5);
-    this.rtTxt        = this.add.text(W - 10, mid - 12, '', { fontSize: '11px', color: '#e67e22' }).setOrigin(1, 0.5);
+    this.phaseTxt     = this.add.text(W / 2, mid - 16, '', { fontSize: '17px', color: '#556677', letterSpacing: 2 }).setOrigin(0.5, 0.5);
+    this.battleMsgTxt = this.add.text(W / 2, mid + 16, '', { fontSize: '17px', color: '#ffffff', wordWrap: { width: W - 60 } }).setOrigin(0.5, 0.5);
+    this.rtTxt        = this.add.text(W - 10, mid - 16, '', { fontSize: '17px', color: '#e67e22' }).setOrigin(1, 0.5);
 
     this._refreshStatusUI();
   }
@@ -145,13 +145,13 @@ export default class BattleScene extends Phaser.Scene {
     body.strokeCircle(0, 0, ENEMY_BUMPER_R);
     this.enemyCharContainer.add(body);
 
-    const nameTxt = this.add.text(0, -ENEMY_BUMPER_R - 14, this.enemyDef.name.toUpperCase(), {
-      fontSize: '10px', color: this.enemyDef.color, fontStyle: 'bold', letterSpacing: 2
+    const nameTxt = this.add.text(0, -ENEMY_BUMPER_R - 16, this.enemyDef.name.toUpperCase(), {
+      fontSize: '17px', color: this.enemyDef.color, fontStyle: 'bold', letterSpacing: 2
     }).setOrigin(0.5, 0.5);
     this.enemyCharContainer.add(nameTxt);
 
-    this._enemyHpTxt = this.add.text(0, ENEMY_BUMPER_R + 8, '', {
-      fontSize: '10px', color: '#dd9999'
+    this._enemyHpTxt = this.add.text(0, ENEMY_BUMPER_R + 10, '', {
+      fontSize: '17px', color: '#dd9999'
     }).setOrigin(0.5, 0);
     this.enemyCharContainer.add(this._enemyHpTxt);
 
@@ -212,7 +212,7 @@ export default class BattleScene extends Phaser.Scene {
 
   _floatText(x, y, msg, color) {
     const txt = this.add.text(x, y, msg, {
-      fontSize: '14px', color, fontStyle: 'bold', stroke: '#000', strokeThickness: 3
+      fontSize: '17px', color, fontStyle: 'bold', stroke: '#000', strokeThickness: 3
     }).setOrigin(0.5, 0.5).setDepth(95).setAlpha(0);
     this.tweens.add({ targets: txt, alpha: 1, y: y - 14, duration: 180,
       onComplete: () => {
@@ -270,18 +270,18 @@ export default class BattleScene extends Phaser.Scene {
     g.strokeCircle(THROW_ORIGIN_X, THROW_ORIGIN_Y, 32);
 
     this.add.text(THROW_ORIGIN_X, THROW_ORIGIN_Y, 'YOU', {
-      fontSize: '9px', color: '#d4a820', fontStyle: 'bold', letterSpacing: 1
+      fontSize: '17px', color: '#d4a820', fontStyle: 'bold', letterSpacing: 1
     }).setOrigin(0.5, 0.5).setDepth(20);
 
     const dot = this.add.circle(THROW_ORIGIN_X, THROW_ORIGIN_Y, 4, 0xd4a820, 0.5).setDepth(20);
     this.tweens.add({ targets: dot, alpha: 0.1, duration: 950, yoyo: true, repeat: -1 });
 
     this.playerHpTxt = this.add.text(THROW_ORIGIN_X + PLAYER_BUMPER_R + 10, THROW_ORIGIN_Y, '', {
-      fontSize: '12px', color: '#2ecc71', fontStyle: 'bold'
+      fontSize: '17px', color: '#2ecc71', fontStyle: 'bold'
     }).setOrigin(0, 0.5).setDepth(20);
 
     this.playerBlockTxt = this.add.text(THROW_ORIGIN_X - PLAYER_BUMPER_R - 10, THROW_ORIGIN_Y, '', {
-      fontSize: '12px', color: '#3498db', fontStyle: 'bold'
+      fontSize: '17px', color: '#3498db', fontStyle: 'bold'
     }).setOrigin(1, 0.5).setDepth(20).setVisible(false);
 
     this.playerPhysicsBody = this.matter.add.circle(
@@ -316,7 +316,8 @@ export default class BattleScene extends Phaser.Scene {
       const img = this.add.image(x, y, 'tcard').setDepth(21).setInteractive();
       const face = FACES[dc.faces[0]];
       const lbl  = this.add.text(x, y, face ? face.sym : '--', {
-        fontSize: '10px', color: face ? face.color : '#777777', fontStyle: 'bold'
+        fontSize: '17px', color: face ? face.color : '#777777', fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 3
       }).setOrigin(0.5, 0.5).setDepth(22);
 
       const card = { configIdx, img, lbl };
@@ -350,7 +351,7 @@ export default class BattleScene extends Phaser.Scene {
     bg.on('pointerout',   () => bg.setFillStyle(0x163824));
 
     const txt = this.add.text(0, 0, 'End Turn', {
-      fontSize: '16px', color: '#aaffaa', fontStyle: 'bold', letterSpacing: 2
+      fontSize: '17px', color: '#aaffaa', fontStyle: 'bold', letterSpacing: 2
     }).setOrigin(0.5, 0.5);
 
     this.commitGroup.add([bg, txt]);
@@ -662,12 +663,12 @@ export default class BattleScene extends Phaser.Scene {
     img.setVelocity(vx, vy);
 
     const face   = FACES[data.faces[data.currentFaceIdx]];
-    const lbl    = this.add.text(x, y - 7, face ? face.sym : '--', {
-      fontSize: '11px', color: face ? face.color : '#ffffff', fontStyle: 'bold',
+    const lbl    = this.add.text(x, y - 8, face ? face.sym : '--', {
+      fontSize: '17px', color: face ? face.color : '#ffffff', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 3,
     }).setOrigin(0.5, 0.5).setDepth(10);
-    const valLbl = this.add.text(x, y + 7, face?.value !== undefined ? String(face.value) : '', {
-      fontSize: '10px', color: '#ffffff', fontStyle: 'bold',
+    const valLbl = this.add.text(x, y + 10, face?.value !== undefined ? String(face.value) : '', {
+      fontSize: '17px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 2,
     }).setOrigin(0.5, 0.5).setDepth(10);
 
@@ -955,8 +956,8 @@ export default class BattleScene extends Phaser.Scene {
     bg.on('pointerdown', () => this._hideInspector());
     this.inspectorPanel.add(bg);
 
-    const closeBtn = this.add.text(cx + (netW + 24) / 2 - 10, cy - panelH / 2 + 10, '✕', {
-      fontSize: '13px', color: '#666688',
+    const closeBtn = this.add.text(cx + (netW + 24) / 2 - 12, cy - panelH / 2 + 14, '✕', {
+      fontSize: '17px', color: '#666688',
     }).setOrigin(0.5, 0.5).setInteractive();
     closeBtn.on('pointerdown', (ptr) => { ptr.event.stopPropagation(); this._suppressThrow = true; this._hideInspector(); });
     closeBtn.on('pointerover', () => closeBtn.setColor('#ffffff'));
@@ -975,14 +976,9 @@ export default class BattleScene extends Phaser.Scene {
       fb.setStrokeStyle(active ? 2 : 1, fc, active ? 1 : 0.45);
       this.inspectorPanel.add(fb);
       this.inspectorPanel.add(
-        this.add.text(fx, fy - 7, face ? face.sym : '--', {
-          fontSize: '13px', color: face ? face.color : '#555577', fontStyle: 'bold',
+        this.add.text(fx, fy, face ? face.sym : '--', {
+          fontSize: '17px', color: face ? face.color : '#555577', fontStyle: 'bold',
           stroke: '#000000', strokeThickness: 3,
-        }).setOrigin(0.5, 0.5)
-      );
-      this.inspectorPanel.add(
-        this.add.text(fx, fy + 10, face ? face.label.substring(0, 7) : '', {
-          fontSize: '7px', color: '#555577'
         }).setOrigin(0.5, 0.5)
       );
     });
@@ -1001,8 +997,8 @@ export default class BattleScene extends Phaser.Scene {
     bg.on('pointerdown', () => this._hideInspector());
     this.inspectorPanel.add(bg);
 
-    const closeBtn = this.add.text(cx + panelW / 2 - 10, cy - panelH / 2 + 10, '✕', {
-      fontSize: '13px', color: '#666688',
+    const closeBtn = this.add.text(cx + panelW / 2 - 12, cy - panelH / 2 + 14, '✕', {
+      fontSize: '17px', color: '#666688',
     }).setOrigin(0.5, 0.5).setInteractive();
     closeBtn.on('pointerdown', (ptr) => { ptr.event.stopPropagation(); this._suppressThrow = true; this._hideInspector(); });
     closeBtn.on('pointerover', () => closeBtn.setColor('#ffffff'));
@@ -1023,14 +1019,9 @@ export default class BattleScene extends Phaser.Scene {
       fb.setStrokeStyle(active ? 2 : 1, fc, active ? 1 : 0.4);
       this.inspectorPanel.add(fb);
       this.inspectorPanel.add(
-        this.add.text(fx, fy - 9, face ? face.sym : '--', {
-          fontSize: '12px', color: face ? face.color : '#555577', fontStyle: 'bold',
+        this.add.text(fx, fy - 5, face ? face.sym : '--', {
+          fontSize: '17px', color: face ? face.color : '#555577', fontStyle: 'bold',
           stroke: '#000000', strokeThickness: 3,
-        }).setOrigin(0.5, 0.5)
-      );
-      this.inspectorPanel.add(
-        this.add.text(fx, fy + 10, face ? face.label.substring(0, 6) : '', {
-          fontSize: '7px', color: '#555577'
         }).setOrigin(0.5, 0.5)
       );
     });
@@ -1039,7 +1030,7 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   _addPickupButton(cx, by) {
-    const pbg = this.add.rectangle(cx, by, 170, 26, 0x3a1e00);
+    const pbg = this.add.rectangle(cx, by, 200, 34, 0x3a1e00);
     pbg.setStrokeStyle(1, 0xe67e22, 0.8).setInteractive();
     pbg.on('pointerdown', () => { this._suppressThrow = true; this._hideInspector(); this._pickUpDie(this._pendingPickup); });
     pbg.on('pointerover',  () => pbg.setFillStyle(0x8a4010));
@@ -1047,7 +1038,7 @@ export default class BattleScene extends Phaser.Scene {
     this.inspectorPanel.add(pbg);
     this.inspectorPanel.add(
       this.add.text(cx, by, `↺ Pick Up  (${this.rerollTokens} token)`, {
-        fontSize: '11px', color: '#e67e22'
+        fontSize: '17px', color: '#e67e22'
       }).setOrigin(0.5, 0.5)
     );
   }
@@ -1096,8 +1087,8 @@ export default class BattleScene extends Phaser.Scene {
     this.add.text(W / 2, H / 2 - 28, 'GAME OVER', {
       fontSize: '34px', color: '#e74c3c', fontStyle: 'bold'
     }).setOrigin(0.5).setDepth(81);
-    const t = this.add.text(W / 2, H / 2 + 24, 'Tap to restart', {
-      fontSize: '16px', color: '#aaaaaa'
+    const t = this.add.text(W / 2, H / 2 + 28, 'Tap to restart', {
+      fontSize: '17px', color: '#aaaaaa'
     }).setOrigin(0.5).setDepth(81).setInteractive();
     t.on('pointerdown', () => this.scene.start('BattleScene', {}));
   }

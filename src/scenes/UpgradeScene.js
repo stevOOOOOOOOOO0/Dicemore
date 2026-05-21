@@ -39,18 +39,18 @@ export default class UpgradeScene extends Phaser.Scene {
     }).setOrigin(0.5, 0.5);
 
     const hpPct = Math.max(0, this.playerHp) / PLAYER_MAX_HP;
-    this.add.text(W / 2, 56, `HP: ${Math.max(0, this.playerHp)} / ${PLAYER_MAX_HP}`, {
-      fontSize: '12px', color: '#2ecc71'
+    this.add.text(W / 2, 58, `HP: ${Math.max(0, this.playerHp)} / ${PLAYER_MAX_HP}`, {
+      fontSize: '17px', color: '#2ecc71'
     }).setOrigin(0.5, 0.5);
 
     const hpG = this.add.graphics();
     hpG.fillStyle(0x27ae60);
-    hpG.fillRect(W / 2 - 80, 64, 160 * hpPct, 5);
+    hpG.fillRect(W / 2 - 80, 68, 160 * hpPct, 5);
     hpG.lineStyle(1, 0x1a6a3a);
-    hpG.strokeRect(W / 2 - 80, 64, 160, 5);
+    hpG.strokeRect(W / 2 - 80, 68, 160, 5);
 
-    this.add.text(W / 2, 82, 'Tap a face on a die, then pick a replacement token below.', {
-      fontSize: '10px', color: '#555577', wordWrap: { width: W - 32 }
+    this.add.text(W / 2, 86, 'Tap a face, then pick a token below.', {
+      fontSize: '17px', color: '#555577', wordWrap: { width: W - 32 }
     }).setOrigin(0.5, 0);
   }
 
@@ -78,7 +78,7 @@ export default class UpgradeScene extends Phaser.Scene {
       const gy = startY;
 
       this.add.text(gx + netW / 2, gy - 14, `Die ${di + 1}`, {
-        fontSize: '10px', color: '#888899'
+        fontSize: '17px', color: '#888899'
       }).setOrigin(0.5, 0.5);
 
       dc.faces.forEach((faceId, fi) => {
@@ -92,20 +92,16 @@ export default class UpgradeScene extends Phaser.Scene {
         bg.setStrokeStyle(1.5, fc, 0.7);
         bg.setInteractive();
 
-        const sym = this.add.text(fx, fy - 7, face ? face.sym : '--', {
-          fontSize: '11px', color: face ? face.color : '#555555', fontStyle: 'bold',
+        const sym = this.add.text(fx, fy, face ? face.sym : '--', {
+          fontSize: '17px', color: face ? face.color : '#555555', fontStyle: 'bold',
           stroke: '#000000', strokeThickness: 3,
-        }).setOrigin(0.5, 0.5);
-
-        const nm = this.add.text(fx, fy + 8, face ? face.label.substring(0, 5) : 'Blank', {
-          fontSize: '7px', color: '#444466'
         }).setOrigin(0.5, 0.5);
 
         bg.on('pointerdown', () => this._pickFace(di, fi));
         bg.on('pointerover', () => { if (!(this.selDie === di && this.selFace === fi)) bg.setFillStyle(0x252540); });
         bg.on('pointerout',  () => { if (!(this.selDie === di && this.selFace === fi)) bg.setFillStyle(0x191928); });
 
-        this.faceObjs.push({ bg, sym, nm, di, fi, faceId });
+        this.faceObjs.push({ bg, sym, di, fi, faceId });
       });
     });
 
@@ -116,12 +112,12 @@ export default class UpgradeScene extends Phaser.Scene {
     const panelTop = this._dicePanelBottom + 20;
 
     this.add.text(W / 2, panelTop, 'REPLACEMENT TOKENS', {
-      fontSize: '10px', color: '#333355', letterSpacing: 2
+      fontSize: '17px', color: '#333355', letterSpacing: 2
     }).setOrigin(0.5, 0);
 
     const tokens = PLAYER_TOKENS;
     const cols   = 5;
-    const sp     = 62;
+    const sp     = 66;
     const ox     = W / 2 - ((Math.min(tokens.length, cols) - 1) * sp) / 2;
 
     this.tokenObjs = [];
@@ -132,19 +128,19 @@ export default class UpgradeScene extends Phaser.Scene {
       const col  = i % cols;
       const row  = Math.floor(i / cols);
       const tx   = ox + col * sp;
-      const ty   = panelTop + 24 + row * 62;
+      const ty   = panelTop + 28 + row * 70;
 
-      const bg = this.add.rectangle(tx, ty, 48, 52, 0x191928);
+      const bg = this.add.rectangle(tx, ty, 56, 58, 0x191928);
       bg.setStrokeStyle(1, fc, 0.5);
       bg.setInteractive();
 
-      const sym = this.add.text(tx, ty - 10, face ? face.sym : '--', {
-        fontSize: '13px', color: face ? face.color : '#555555', fontStyle: 'bold',
+      const sym = this.add.text(tx, ty - 12, face ? face.sym : '--', {
+        fontSize: '17px', color: face ? face.color : '#555555', fontStyle: 'bold',
         stroke: '#000000', strokeThickness: 3,
       }).setOrigin(0.5, 0.5);
 
-      const nm = this.add.text(tx, ty + 12, face ? face.label.substring(0, 7) : '', {
-        fontSize: '8px', color: '#444466'
+      const nm = this.add.text(tx, ty + 11, face ? face.label.substring(0, 7) : '', {
+        fontSize: '17px', color: '#444466'
       }).setOrigin(0.5, 0.5);
 
       bg.on('pointerdown', () => this._pickToken(tokenId, i));
@@ -165,7 +161,7 @@ export default class UpgradeScene extends Phaser.Scene {
     this.applyBtn.on('pointerover',  () => { if (this._canApply()) this.applyBtn.setFillStyle(0x27ae60); });
     this.applyBtn.on('pointerout',   () => this.applyBtn.setFillStyle(this._canApply() ? 0x1e7a40 : 0x1a3a1a));
     this.applyTxt = this.add.text(W / 2 - 68, y, 'Apply', {
-      fontSize: '15px', color: '#448844'
+      fontSize: '17px', color: '#448844'
     }).setOrigin(0.5, 0.5);
 
     // Skip
@@ -174,13 +170,13 @@ export default class UpgradeScene extends Phaser.Scene {
     skipBtn.on('pointerover',  () => skipBtn.setFillStyle(0x44445a));
     skipBtn.on('pointerout',   () => skipBtn.setFillStyle(0x2a2a3a));
     this.add.text(W / 2 + 88, y, 'Skip', {
-      fontSize: '15px', color: '#8888aa'
+      fontSize: '17px', color: '#8888aa'
     }).setOrigin(0.5, 0.5);
   }
 
   _buildStatusLine() {
-    this.statusTxt = this.add.text(W / 2, H - 78, 'Select a die face to begin.', {
-      fontSize: '11px', color: '#556677', wordWrap: { width: W - 24 }
+    this.statusTxt = this.add.text(W / 2, H - 82, 'Select a die face to begin.', {
+      fontSize: '17px', color: '#556677', wordWrap: { width: W - 24 }
     }).setOrigin(0.5, 0.5);
   }
 
