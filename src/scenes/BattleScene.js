@@ -920,8 +920,7 @@ export default class BattleScene extends Phaser.Scene {
     this._hideInspector();
     this.inspectorPanel = this.add.container(0, 0).setDepth(60);
 
-    const dim = this.add.rectangle(W / 2, (SURFACE_TOP + SURFACE_BOTTOM) / 2,
-      W, SURFACE_BOTTOM - SURFACE_TOP, 0x000000, 0.6).setInteractive();
+    const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.6).setInteractive();
     dim.on('pointerdown', () => { this._suppressThrow = true; this._hideInspector(); });
     this.inspectorPanel.add(dim);
 
