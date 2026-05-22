@@ -481,11 +481,39 @@ export default class SetupScene extends Phaser.Scene {
     const sides = dc.sides;
     const cx    = W / 2;
     const dt    = DIE_TYPES[dc.type];
+    const fc    = dt ? parseInt(dt.color.replace('#', ''), 16) : 0x555555;
+    const runeColor = parseInt(rune.color.replace('#', ''), 16);
 
-    const cols = Math.min(sides, 4), sp = 54;
-    const rows = Math.ceil(sides / cols);
-    const panelW = cols * sp + 24;
-    const panelH = rows * sp + 68;
+    // T-net for d6, grid for other sizes
+    const CELL = 46;
+    let facePositions, netW, netH;
+
+    if (sides === 6) {
+      const NET = [
+        { col: 1, row: 0 },
+        { col: 0, row: 1 }, { col: 1, row: 1 }, { col: 2, row: 1 },
+        { col: 1, row: 2 },
+        { col: 1, row: 3 },
+      ];
+      netW = 3 * CELL;
+      netH = 4 * CELL;
+      facePositions = NET.map(({ col, row }) => ({ fx: col * CELL + CELL / 2, fy: row * CELL + CELL / 2 }));
+    } else {
+      const cols = Math.min(sides, 4);
+      const rows = Math.ceil(sides / cols);
+      netW = cols * CELL;
+      netH = rows * CELL;
+      facePositions = Array.from({ length: sides }, (_, fi) => {
+        const col = fi % cols;
+        const row = Math.floor(fi / cols);
+        const rowCount = Math.min(cols, sides - row * cols);
+        const rowOx = (netW - (rowCount - 1) * CELL) / 2;
+        return { fx: rowOx + col * CELL, fy: row * CELL + CELL / 2 };
+      });
+    }
+
+    const panelW = netW + 56;
+    const panelH = netH + 70;
     const panelY = H / 2 + 20;
 
     const panel = this._picker = this.add.container(0, 0).setDepth(60);
@@ -494,7 +522,6 @@ export default class SetupScene extends Phaser.Scene {
     dim.on('pointerdown', () => this._closePicker());
     panel.add(dim);
 
-    const runeColor = parseInt(rune.color.replace('#', ''), 16);
     panel.add(this.add.rectangle(cx, panelY, panelW, panelH, 0x0a0a1e)
       .setStrokeStyle(1.5, runeColor, 0.6));
     panel.add(this.add.text(cx, panelY - panelH / 2 + 18,
@@ -504,22 +531,18 @@ export default class SetupScene extends Phaser.Scene {
       fontSize: '17px', color: '#2a3848'
     }).setOrigin(0.5));
 
-    const gridTop = panelY - panelH / 2 + 56;
+    const originX = cx - netW / 2;
+    const originY = panelY - panelH / 2 + 54;
 
-    for (let fi = 0; fi < sides; fi++) {
-      const col = fi % cols;
-      const row = Math.floor(fi / cols);
-      const rowCount = Math.min(cols, sides - row * cols);
-      const rowOx = cx - ((rowCount - 1) * sp) / 2;
-      const fx  = rowOx + col * sp;
-      const fy  = gridTop + row * sp + sp / 2;
+    facePositions.forEach(({ fx, fy }, fi) => {
+      const ax  = originX + fx;
+      const ay  = originY + fy;
       const sel = dc.runeFaceIdx === fi;
-      const fc  = dt ? parseInt(dt.color.replace('#', ''), 16) : 0x555555;
 
-      const tbg = this.add.rectangle(fx, fy, sp - 6, sp - 6, sel ? 0x221a10 : 0x131320);
+      const tbg = this.add.rectangle(ax, ay, CELL - 4, CELL - 4, sel ? 0x221a10 : 0x131320);
       tbg.setStrokeStyle(sel ? 2 : 1.5, sel ? runeColor : fc, sel ? 1 : 0.55).setInteractive();
       panel.add(tbg);
-      panel.add(this.add.text(fx, fy, String(fi + 1), {
+      panel.add(this.add.text(ax, ay, String(fi + 1), {
         fontSize: '17px', color: sel ? rune.color : (dt?.color ?? '#ffffff'),
         fontStyle: 'bold', stroke: '#000000', strokeThickness: 2
       }).setOrigin(0.5));
@@ -532,7 +555,7 @@ export default class SetupScene extends Phaser.Scene {
       });
       tbg.on('pointerover',  () => tbg.setFillStyle(0x252540));
       tbg.on('pointerout',   () => tbg.setFillStyle(sel ? 0x221a10 : 0x131320));
-    }
+    });
   }
 
   // ─── MATERIAL PICKER ─────────────────────────────────────────────────────
