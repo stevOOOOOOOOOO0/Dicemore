@@ -16,6 +16,10 @@ const ENEMY_BUMPER_R     = 26;
 const PLAYER_BUMPER_R    = 22;
 const BUMPER_KICK_SPEED  = 9;
 
+const QUEUE_CARD_H   = 72;
+const QUEUE_CARD_GAP = 8;
+const QUEUE_START_Y  = SURFACE_TOP + 40;
+const QUEUE_CARD_X   = 33;
 
 export default class BattleScene extends Phaser.Scene {
   constructor() { super({ key: 'BattleScene' }); }
@@ -45,6 +49,11 @@ export default class BattleScene extends Phaser.Scene {
     this.inspectorPanel  = null;
     this._autoCommitDone = false;
     this._settleChecker  = null;
+
+    this._effectQueue = [];
+    this._queueCards  = [];
+    this._queueActive = false;
+    this._throwLocked = false;
 
     this.trayCards          = [];
     this.throwCount         = 0;
@@ -472,6 +481,7 @@ export default class BattleScene extends Phaser.Scene {
       if (this.phase !== PHASE.PLAYER_ROLL) return;
       if (ptr.y > THROW_ZONE_BOTTOM) return;
       if (this.throwCount >= this.trayCards.length) return;
+      if (this._throwLocked) return;
       this.aimActive  = true;
       this._aimStartX = ptr.x;
       this._aimStartY = ptr.y;
@@ -591,6 +601,12 @@ export default class BattleScene extends Phaser.Scene {
     this.block           = 0;
     this._autoCommitDone = false;
 
+    this._effectQueue = [];
+    this._queueCards.forEach(c => c.container.destroy());
+    this._queueCards  = [];
+    this._queueActive = false;
+    this._throwLocked = false;
+
     this._resetTray();
     this._hideCommitOverlay();
     this._refreshStatusUI();
@@ -640,6 +656,7 @@ export default class BattleScene extends Phaser.Scene {
 
   _onCommit() {
     if (this.phase !== PHASE.PLAYER_ROLL) return;
+    if (this._throwLocked || this._queueActive) return;
     if (this.throwCount < this.trayCards.length) {
       this._showMsg(`Throw your remaining ${this.trayCards.length - this.throwCount} dice first!`);
       return;
@@ -717,7 +734,8 @@ export default class BattleScene extends Phaser.Scene {
     img.setInteractive();
     img.on('pointerdown', (ptr) => {
       ptr.event.stopPropagation();
-      const pickupRef = (isPlayer && this.rerollTokens > 0 && this.phase === PHASE.PLAYER_ROLL)
+      const pickupRef = (isPlayer && this.rerollTokens > 0 && this.phase === PHASE.PLAYER_ROLL
+        && !this._throwLocked && !this._queueActive)
         ? dieRef : null;
       this._showInspector(dieRef, pickupRef);
     });
@@ -729,6 +747,7 @@ export default class BattleScene extends Phaser.Scene {
 
   _throwNextCard(x, y, vx, vy) {
     if (this.throwCount >= this.trayCards.length) return;
+    if (this._throwLocked) return;
 
     const card      = this.trayCards[this.throwCount];
     const configIdx = card.configIdx;
@@ -740,6 +759,7 @@ export default class BattleScene extends Phaser.Scene {
     die._finalFaceIdx = fIdx;
     die._rolling      = true;
     die._lastCycleMs  = 0;
+    this._throwLocked = true;
 
     // Ignore the player bumper until the die has cleared the origin
     die.img.body.collisionFilter.mask = 0xFFFFFFFF & ~0x0002;
@@ -751,21 +771,7 @@ export default class BattleScene extends Phaser.Scene {
     card.lbl.setVisible(false);
     this.throwCount++;
     this._snapAllCards();
-
-    if (this.throwCount >= this.trayCards.length) {
-      this._showMsg('All thrown — waiting to settle...');
-      this._waitSettle(() => {
-        if (this.phase === PHASE.PLAYER_ROLL && !this._autoCommitDone) {
-          this._autoCommitDone = true;
-          this._showMsg('All dice settled — commit when ready');
-          this._showCommitOverlay();
-        }
-      });
-    } else {
-      const nextCard = this.trayCards[this.throwCount];
-      const nextFace = FACES[this.playerDiceConfig[nextCard.configIdx].faces[0]];
-      this._showMsg(`Next: ${nextFace ? nextFace.label : '?'} — drag to throw`);
-    }
+    this._showMsg('Die thrown — waiting to settle…');
   }
 
   _rerollDie(dieRef) {
@@ -991,6 +997,11 @@ export default class BattleScene extends Phaser.Scene {
     this.allDice    = [];
     this.playerDice = [];
     this.enemyDice  = [];
+    this._effectQueue = [];
+    this._queueCards.forEach(c => c.container.destroy());
+    this._queueCards  = [];
+    this._queueActive = false;
+    this._throwLocked = false;
   }
 
   // ─── TRAY RESET ───────────────────────────────────────────────────────────
@@ -1185,10 +1196,36 @@ export default class BattleScene extends Phaser.Scene {
     const dt = DIE_TYPES[data.type];
     const typeColor = dt ? parseInt(dt.color.replace('#', ''), 16) : 0xd4a820;
 
-    const cols = 4, sp = 50;
-    const rows = Math.ceil(data.sides / cols);
-    const panelW = cols * sp + 24;
-    const panelH = rows * sp + 64 + (pickupDieRef ? 44 : 0);
+    // Build face position list — T-net for d6, grid otherwise
+    const CELL = 46, FACE = 41;
+    let facePositions, netW, netH;
+
+    if (data.sides === 6) {
+      const NET = [
+        { col: 1, row: 0 },
+        { col: 0, row: 1 }, { col: 1, row: 1 }, { col: 2, row: 1 },
+        { col: 1, row: 2 },
+        { col: 1, row: 3 },
+      ];
+      netW = 3 * CELL;
+      netH = 4 * CELL;
+      facePositions = NET.map(({ col, row }) => ({ fx: col * CELL + CELL / 2, fy: row * CELL + CELL / 2 }));
+    } else {
+      const cols = 4, sp = CELL;
+      const rows = Math.ceil(data.sides / cols);
+      netW = cols * sp;
+      netH = rows * sp;
+      facePositions = Array.from({ length: data.sides }, (_, fi) => {
+        const col = fi % cols;
+        const row = Math.floor(fi / cols);
+        const rowCount = Math.min(cols, data.sides - row * cols);
+        const rowOx = (netW - (rowCount - 1) * sp) / 2;
+        return { fx: rowOx + col * sp, fy: row * sp + sp / 2 };
+      });
+    }
+
+    const panelW = netW + 24;
+    const panelH = netH + 64 + (pickupDieRef ? 44 : 0);
 
     const bg = this.add.rectangle(cx, cy, panelW, panelH, 0x0a0a1e, 0.96);
     bg.setStrokeStyle(1.5, typeColor, 0.85).setInteractive();
@@ -1209,23 +1246,20 @@ export default class BattleScene extends Phaser.Scene {
       }).setOrigin(0.5, 0.5)
     );
 
-    const gridTop = cy - panelH / 2 + 38;
+    const originX = cx - netW / 2;
+    const originY = cy - panelH / 2 + 38;
 
-    for (let fi = 0; fi < data.sides; fi++) {
-      const col = fi % cols;
-      const row = Math.floor(fi / cols);
-      const rowCount = Math.min(cols, data.sides - row * cols);
-      const rowOx = cx - ((rowCount - 1) * sp) / 2;
-      const fx = rowOx + col * sp;
-      const fy = gridTop + row * sp + sp / 2;
+    facePositions.forEach(({ fx, fy }, fi) => {
+      const ax = originX + fx;
+      const ay = originY + fy;
       const isActive   = fi === currentIdx;
       const isRuneFace = fi === data.runeFaceIdx && data.rune;
 
-      const fb = this.add.rectangle(fx, fy, 42, 42, isActive ? 0x1a2e4a : 0x141428);
+      const fb = this.add.rectangle(ax, ay, FACE, FACE, isActive ? 0x1a2e4a : 0x141428);
       fb.setStrokeStyle(isActive ? 2 : 1, isRuneFace ? 0xf0c040 : typeColor, isActive ? 1 : 0.45);
       this.inspectorPanel.add(fb);
       this.inspectorPanel.add(
-        this.add.text(fx, fy, String(fi + 1), {
+        this.add.text(ax, ay, String(fi + 1), {
           fontSize: '17px', color: isActive ? (dt?.color ?? '#ffffff') : '#556677',
           fontStyle: isActive ? 'bold' : 'normal',
           stroke: '#000000', strokeThickness: isActive ? 3 : 1,
@@ -1235,14 +1269,14 @@ export default class BattleScene extends Phaser.Scene {
       if (isRuneFace) {
         const rune = RUNES[data.rune];
         this.inspectorPanel.add(
-          this.add.text(fx + 14, fy - 14, rune?.sym ?? '◆', {
+          this.add.text(ax + 14, ay - 14, rune?.sym ?? '◆', {
             fontSize: '9px', color: '#f0c040',
           }).setOrigin(0.5, 0.5)
         );
       }
-    }
+    });
 
-    if (pickupDieRef) this._addPickupButton(cx, gridTop + rows * sp + 14);
+    if (pickupDieRef) this._addPickupButton(cx, originY + netH + 14);
   }
 
   _addPickupButton(cx, by) {
@@ -1280,6 +1314,141 @@ export default class BattleScene extends Phaser.Scene {
           this._settleChecker.destroy(); this._settleChecker = null; cb();
         }
       }
+    });
+  }
+
+  // ─── EFFECT QUEUE ─────────────────────────────────────────────────────────
+
+  _addToEffectQueue(dieRef) {
+    const { data } = dieRef;
+    const value = data.currentFaceIdx + 1;
+    const type  = dieRef._mimicType ?? data.type;
+    const entry = { dieRef, value, type };
+    this._effectQueue.push(entry);
+    const card = this._createQueueCard(entry, this._queueCards.length);
+    this._queueCards.push(card);
+  }
+
+  _createQueueCard(entry, stackIdx) {
+    const CARD_W = 58;
+    const dt  = DIE_TYPES[entry.type] ?? DIE_TYPES['attack'];
+    const fc  = parseInt(dt.color.replace('#', ''), 16);
+    const yPos = QUEUE_START_Y + stackIdx * (QUEUE_CARD_H + QUEUE_CARD_GAP);
+
+    const container = this.add.container(QUEUE_CARD_X, yPos).setDepth(35);
+    container.setAlpha(0);
+    this.tweens.add({ targets: container, alpha: 1, duration: 200 });
+
+    const bg = this.add.rectangle(0, 0, CARD_W, QUEUE_CARD_H, 0x0d0d1c);
+    bg.setStrokeStyle(2, fc, 0.85);
+
+    const symTxt = this.add.text(0, -12, dt.sym, {
+      fontSize: '13px', color: dt.color, fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 2,
+    }).setOrigin(0.5, 0.5);
+
+    const valTxt = this.add.text(0, 11, String(entry.value), {
+      fontSize: '20px', color: '#ffffff', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0.5, 0.5);
+
+    container.add([bg, symTxt, valTxt]);
+
+    const { data } = entry.dieRef;
+    if (data.rune && data.runeFaceIdx === data.currentFaceIdx) {
+      const rune = RUNES[data.rune];
+      const runeLbl = this.add.text(16, -28, rune?.sym ?? '◆', {
+        fontSize: '9px', color: rune?.color ?? '#f0c040',
+      }).setOrigin(0.5, 0.5);
+      container.add(runeLbl);
+    }
+
+    return { container };
+  }
+
+  _startQueue() {
+    this._queueActive = true;
+    this._waitSettle(() => {
+      if (this._effectQueue.length > 0) this._processQueue();
+      else this._queueComplete();
+    });
+  }
+
+  _processQueue() {
+    if (this._effectQueue.length === 0) {
+      this._queueComplete();
+      return;
+    }
+
+    const entry = this._effectQueue.shift();
+    // Peek — keep card in _queueCards until fully animated out so new cards
+    // added while this one is in-flight get the correct stacking index.
+    const card  = this._queueCards[0];
+
+    // Pulse the card to signal it's firing
+    card.container.setDepth(36);
+    this.tweens.add({
+      targets: card.container,
+      scaleX: 1.15, scaleY: 1.15,
+      duration: 180,
+      yoyo: true,
+      ease: 'Sine.Out',
+      onComplete: () => {
+        this._applyDieFaceImmediate(entry.dieRef);
+
+        // Wait long enough for rune delays (e.g. Egyptian's 250ms) to initiate movement
+        this.time.delayedCall(800, () => {
+          const anyRolling = this.allDice.some(d => d._rolling);
+
+          // Slide card off-screen left and destroy
+          this.tweens.add({
+            targets: card.container,
+            x: -36, alpha: 0,
+            duration: 280,
+            ease: 'Sine.In',
+            onComplete: () => {
+              this._queueCards.shift();
+              card.container.destroy();
+              this._repositionQueueCards();
+
+              if (anyRolling) {
+                // Rune caused movement — pause until all dice re-settle
+                this._waitSettle(() => this.time.delayedCall(250, () => this._processQueue()));
+              } else {
+                this.time.delayedCall(250, () => this._processQueue());
+              }
+            }
+          });
+        });
+      }
+    });
+  }
+
+  _queueComplete() {
+    this._queueActive = false;
+    this._throwLocked = false;
+
+    if (this.phase !== PHASE.PLAYER_ROLL) return;
+
+    if (this.throwCount >= this.trayCards.length && !this._autoCommitDone) {
+      this._autoCommitDone = true;
+      this._showMsg('All dice settled — commit when ready');
+      this._showCommitOverlay();
+    } else if (this.throwCount < this.trayCards.length) {
+      const remaining = this.trayCards.length - this.throwCount;
+      this._showMsg(`${remaining} ${remaining === 1 ? 'die' : 'dice'} remaining — drag to throw`);
+    }
+  }
+
+  _repositionQueueCards() {
+    this._queueCards.forEach((card, i) => {
+      const targetY = QUEUE_START_Y + i * (QUEUE_CARD_H + QUEUE_CARD_GAP);
+      this.tweens.add({
+        targets: card.container,
+        y: targetY,
+        duration: 200,
+        ease: 'Sine.Out',
+      });
     });
   }
 
@@ -1386,7 +1555,8 @@ export default class BattleScene extends Phaser.Scene {
           d.lbl.setText(String(d._finalFaceIdx + 1));
           d.lbl.setColor(dt ? dt.color : '#ffffff');
           d.valLbl.setText('');
-          this._applyDieFaceImmediate(d);
+          this._addToEffectQueue(d);
+          if (!this._queueActive) this._startQueue();
         } else {
           const finalFace = FACES[d.data.faces[d._finalFaceIdx]];
           d.lbl.setText(finalFace ? finalFace.sym : '--');
