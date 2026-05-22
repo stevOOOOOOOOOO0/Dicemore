@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { DIE_TYPES, DIE_TYPE_KEYS, SIDES_PROGRESSION } from '../data/dice.js';
+import { DIE_TYPES, SIDES_PROGRESSION } from '../data/dice.js';
 import { RUNES, MATERIALS, RUNE_KEYS, MATERIAL_KEYS } from '../data/runes.js';
 import { W, H, PLAYER_MAX_HP } from '../constants.js';
 
@@ -15,6 +15,7 @@ export default class UpgradeScene extends Phaser.Scene {
     this.playerDiceConfig = JSON.parse(JSON.stringify(data.playerDiceConfig));
     this.playerHp         = data.playerHp;
     this.battleIndex      = data.battleIndex;
+    this.isBossReward     = data.isBossReward ?? false;
     this._upgrades        = [];
     this._screenObjects   = [];
     this._stepLbl         = null;
@@ -24,8 +25,12 @@ export default class UpgradeScene extends Phaser.Scene {
     this.add.rectangle(W / 2, H / 2, W, H, 0x111122);
     this.add.rectangle(W / 2, 1, W, 2, 0x1a4a7a);
     this._buildHeader();
-    this._upgrades = this._buildPool();
-    this._showCardStep();
+    if (this.isBossReward) {
+      this._showBossRewardStep();
+    } else {
+      this._upgrades = this._buildPool();
+      this._showCardStep();
+    }
   }
 
   // ─── HEADER ──────────────────────────────────────────────────────────────
@@ -93,15 +98,6 @@ export default class UpgradeScene extends Phaser.Scene {
       desc:  mat.desc,
     });
 
-    // add_die — random type, always a d6
-    const typeId  = DIE_TYPE_KEYS[Phaser.Math.Between(0, DIE_TYPE_KEYS.length - 1)];
-    const addType = DIE_TYPES[typeId];
-    pool.push({
-      type: 'add_die', dieType: typeId, color: addType.color,
-      title: `New ${addType.label} Die`,
-      desc:  `Add a d6 ${addType.label} die to your collection`,
-    });
-
     Phaser.Utils.Array.Shuffle(pool);
     return pool.slice(0, 3);
   }
@@ -154,11 +150,7 @@ export default class UpgradeScene extends Phaser.Scene {
   }
 
   _onCardSelected(upg) {
-    if (upg.type === 'add_die') {
-      this._applyUpgrade(upg, -1, -1);
-    } else {
-      this._showDiePicker(upg);
-    }
+    this._showDiePicker(upg);
   }
 
   // ─── STEP 2: DIE PICKER ──────────────────────────────────────────────────
@@ -285,7 +277,7 @@ export default class UpgradeScene extends Phaser.Scene {
       const ay         = originY + fy;
       const faceValue  = fi + 1;
       const isCulled   = (dc.culledFaces ?? []).includes(faceValue);
-      const isRuneFace = fi === dc.runeFaceIdx && !!dc.rune;
+      const runeOnFace = !isCulled ? dc.runeMap?.[fi] : null;
       // Can't cull: already culled, or would leave 0 active faces
       const isSelectable = !isCulled && !(upg.type === 'cull' && activeCount <= 1);
 
@@ -294,7 +286,7 @@ export default class UpgradeScene extends Phaser.Scene {
       ));
       fb.setStrokeStyle(
         1,
-        isCulled ? 0x333344 : (isRuneFace ? 0xf0c040 : typeColor),
+        isCulled ? 0x333344 : (runeOnFace ? 0xf0c040 : typeColor),
         isCulled ? 0.2 : 0.6
       );
       if (isSelectable) fb.setInteractive();
@@ -305,8 +297,8 @@ export default class UpgradeScene extends Phaser.Scene {
         stroke: '#000000', strokeThickness: 1,
       }).setOrigin(0.5, 0.5));
 
-      if (isRuneFace) {
-        const r = RUNES[dc.rune];
+      if (runeOnFace) {
+        const r = RUNES[runeOnFace];
         this._track(this.add.text(ax + 14, ay - 14, r?.sym ?? '◆', {
           fontSize: '9px', color: r?.color ?? '#f0c040',
         }).setOrigin(0.5, 0.5));
@@ -315,7 +307,7 @@ export default class UpgradeScene extends Phaser.Scene {
       if (isSelectable) {
         fb.on('pointerdown', () => this._onFaceSelected(upg, dieIdx, faceValue));
         fb.on('pointerover',  () => { fb.setFillStyle(0x1a2e4a); fb.setStrokeStyle(2, typeColor, 0.9); });
-        fb.on('pointerout',   () => { fb.setFillStyle(0x141428); fb.setStrokeStyle(1, isRuneFace ? 0xf0c040 : typeColor, 0.6); });
+        fb.on('pointerout',   () => { fb.setFillStyle(0x141428); fb.setStrokeStyle(1, runeOnFace ? 0xf0c040 : typeColor, 0.6); });
       }
     });
 
@@ -324,7 +316,7 @@ export default class UpgradeScene extends Phaser.Scene {
 
   _onFaceSelected(upg, dieIdx, faceValue) {
     const dc = this.playerDiceConfig[dieIdx];
-    if (upg.type === 'cull' && dc.rune && dc.runeFaceIdx === faceValue - 1) {
+    if (upg.type === 'cull' && dc.runeMap?.[faceValue - 1]) {
       this._showCullWarning(upg, dieIdx, faceValue);
     } else {
       this._applyUpgrade(upg, dieIdx, faceValue);
@@ -335,7 +327,7 @@ export default class UpgradeScene extends Phaser.Scene {
 
   _showCullWarning(upg, dieIdx, faceValue) {
     const dc   = this.playerDiceConfig[dieIdx];
-    const rune = RUNES[dc.rune];
+    const rune = RUNES[dc.runeMap[faceValue - 1]];
 
     const dim = this._track(
       this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.65).setInteractive()
@@ -396,30 +388,86 @@ export default class UpgradeScene extends Phaser.Scene {
       case 'cull': {
         if (!dc.culledFaces) dc.culledFaces = [];
         dc.culledFaces.push(faceValue);
-        if (dc.rune && dc.runeFaceIdx === faceValue - 1) {
-          dc.rune = null;
-          dc.runeFaceIdx = -1;
-        }
+        delete dc.runeMap[faceValue - 1];
         break;
       }
       case 'add_rune': {
-        dc.rune        = upg.runeId;
-        dc.runeFaceIdx = faceValue - 1;
+        if (!dc.runeMap) dc.runeMap = {};
+        dc.runeMap[faceValue - 1] = upg.runeId;
         break;
       }
       case 'add_material': {
         dc.material = upg.matId;
         break;
       }
-      case 'add_die': {
-        this.playerDiceConfig.push({
-          id: `upg_${Date.now()}`, type: upg.dieType, sides: 6,
-          rune: null, runeFaceIdx: -1, material: null, culledFaces: [],
-        });
-        break;
-      }
     }
 
+    this._continue();
+  }
+
+  // ─── BOSS REWARD ─────────────────────────────────────────────────────────
+
+  _showBossRewardStep() {
+    this._clearScreen();
+    this._stepLbl?.setText('BOSS CLEARED — add a special die to your bag.');
+
+    const SPECIAL_DICE = [
+      {
+        type: 'leech',  color: '#aa44ff',
+        title: 'Leech Die',
+        desc:  'Deals piercing damage and heals you for every point drained',
+      },
+      {
+        type: 'poison', color: '#58d68d',
+        title: 'Poison Die',
+        desc:  'Stacks poison on the enemy — they take damage each turn and it decays slowly',
+      },
+      {
+        type: 'hex',    color: '#9b59b6',
+        title: 'Hex Die',
+        desc:  'Curses the enemy this turn, halving all damage they deal when they commit',
+      },
+      {
+        type: 'bomb',   color: '#ff6622',
+        title: 'Bomb Die',
+        desc:  'Deals double damage — but the explosion recoils back onto you',
+      },
+    ];
+
+    SPECIAL_DICE.forEach((sd, i) => {
+      const cy = CARDS_TOP + i * (CARD_H + CARD_GAP) + CARD_H / 2;
+      const fc = parseInt(sd.color.replace('#', ''), 16);
+
+      const bg = this._track(this.add.rectangle(W / 2, cy, CARD_W, CARD_H, 0x0d0d1c));
+      bg.setStrokeStyle(1.5, fc, 0.55).setInteractive();
+
+      this._track(this.add.rectangle(16, cy, 4, CARD_H - 16, fc, 0.7));
+
+      this._track(this.add.text(30, cy - 24, sd.title, {
+        fontSize: '17px', color: sd.color, fontStyle: 'bold',
+      }).setOrigin(0, 0.5));
+
+      this._track(this.add.text(30, cy + 8, sd.desc, {
+        fontSize: '14px', color: '#556677', wordWrap: { width: CARD_W - 56 },
+      }).setOrigin(0, 0.5));
+
+      const arrow = this._track(this.add.text(W - 24, cy, '→', {
+        fontSize: '20px', color: '#2a2a3a',
+      }).setOrigin(0.5));
+
+      bg.on('pointerdown', () => this._onSpecialDieSelected(sd.type));
+      bg.on('pointerover',  () => { bg.setFillStyle(0x181828); bg.setStrokeStyle(2, fc, 0.9); arrow.setColor(sd.color); });
+      bg.on('pointerout',   () => { bg.setFillStyle(0x0d0d1c); bg.setStrokeStyle(1.5, fc, 0.55); arrow.setColor('#2a2a3a'); });
+    });
+
+    this._addSkipButton();
+  }
+
+  _onSpecialDieSelected(dieType) {
+    this.playerDiceConfig.push({
+      id: `boss_${Date.now()}`, type: dieType, sides: 6,
+      runeMap: {}, material: null, culledFaces: [],
+    });
     this._continue();
   }
 

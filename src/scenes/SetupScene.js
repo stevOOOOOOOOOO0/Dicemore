@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
-import { FACES, ENEMIES } from '../data/faces.js';
+import { FACES, ENEMIES, BATTLE_SEQUENCE } from '../data/faces.js';
 import { DIE_TYPES, DIE_TYPE_KEYS, FIGHTER_CONFIG, MAGICIAN_CONFIG } from '../data/dice.js';
 import { W, H, PLAYER_MAX_HP } from '../constants.js';
 import { RUNES, MATERIALS, RUNE_KEYS, MATERIAL_KEYS } from '../data/runes.js';
 
-const ENEMY_KEYS = ['grunt', 'soldier', 'captain'];
+const ENEMY_KEYS = ['red_louse', 'cultist', 'jaw_worm'];
 
 export default class SetupScene extends Phaser.Scene {
   constructor() { super({ key: 'SetupScene' }); }
@@ -267,8 +267,8 @@ export default class SetupScene extends Phaser.Scene {
       bg.on('pointerdown', () => {
         this._diceCount  = n;
         this._diceConfig = Array.from({ length: n }, (_, j) => ({
-          id: `custom_${j}`, type: null, sides: 4,
-          rune: null, runeFaceIdx: -1, material: null
+          id: `custom_${j}`, type: null, sides: 6,
+          runeMap: {}, material: null, culledFaces: [],
         }));
         this._transitionTo(() => this._showTypeStep());
       });
@@ -374,14 +374,19 @@ export default class SetupScene extends Phaser.Scene {
       rBg.setStrokeStyle(1, 0x3a2a18, 0.8).setInteractive();
       g.add(rBg);
 
+      const runeEntries = Object.entries(dc.runeMap ?? {});
+      const firstRune   = runeEntries[0];
       const rLabel = this.add.text(rSlotX, cy - 10,
-        dc.rune ? RUNES[dc.rune].sym : 'RUNE', {
+        firstRune ? RUNES[firstRune[1]].sym : 'RUNE', {
           fontSize: '17px', fontStyle: 'bold', letterSpacing: 1,
-          color: dc.rune ? RUNES[dc.rune].color : '#222233'
+          color: firstRune ? RUNES[firstRune[1]].color : '#222233',
         }).setOrigin(0.5);
       const rSub = this.add.text(rSlotX, cy + 12,
-        dc.rune ? `F${dc.runeFaceIdx + 1}` : '— add —', {
-          fontSize: '17px', color: dc.rune ? '#445566' : '#1c1c2e'
+        firstRune
+          ? (runeEntries.length > 1 ? `×${runeEntries.length} runes` : `F${parseInt(firstRune[0]) + 1}`)
+          : '— add —', {
+          fontSize: '17px',
+          color: firstRune ? '#445566' : '#1c1c2e',
         }).setOrigin(0.5);
       g.add(rLabel); g.add(rSub);
 
@@ -537,7 +542,7 @@ export default class SetupScene extends Phaser.Scene {
     facePositions.forEach(({ fx, fy }, fi) => {
       const ax  = originX + fx;
       const ay  = originY + fy;
-      const sel = dc.runeFaceIdx === fi;
+      const sel = !!dc.runeMap?.[fi];
 
       const tbg = this.add.rectangle(ax, ay, CELL - 4, CELL - 4, sel ? 0x221a10 : 0x131320);
       tbg.setStrokeStyle(sel ? 2 : 1.5, sel ? runeColor : fc, sel ? 1 : 0.55).setInteractive();
@@ -548,8 +553,8 @@ export default class SetupScene extends Phaser.Scene {
       }).setOrigin(0.5));
 
       tbg.on('pointerdown', () => {
-        dc.rune = runeId;
-        dc.runeFaceIdx = fi;
+        if (!dc.runeMap) dc.runeMap = {};
+        dc.runeMap[fi] = runeId;
         this._closePicker();
         this._refreshRuneSlot(di);
       });
@@ -622,11 +627,14 @@ export default class SetupScene extends Phaser.Scene {
   _refreshRuneSlot(di) {
     const obj = this._runeObjs.find(o => o.di === di);
     if (!obj) return;
-    const dc = this._diceConfig[di];
-    if (dc.rune) {
-      obj.rLabel.setText(RUNES[dc.rune].sym).setColor(RUNES[dc.rune].color);
-      obj.rSub.setText(`F${dc.runeFaceIdx + 1}`).setColor('#445566');
-      obj.rBg.setStrokeStyle(1, parseInt(RUNES[dc.rune].color.replace('#', ''), 16), 0.6);
+    const dc          = this._diceConfig[di];
+    const runeEntries = Object.entries(dc.runeMap ?? {});
+    const firstRune   = runeEntries[0];
+    if (firstRune) {
+      const r = RUNES[firstRune[1]];
+      obj.rLabel.setText(r.sym).setColor(r.color);
+      obj.rSub.setText(runeEntries.length > 1 ? `×${runeEntries.length} runes` : `F${parseInt(firstRune[0]) + 1}`).setColor('#445566');
+      obj.rBg.setStrokeStyle(1, parseInt(r.color.replace('#', ''), 16), 0.6);
     } else {
       obj.rLabel.setText('RUNE').setColor('#222233');
       obj.rSub.setText('— add —').setColor('#1c1c2e');
@@ -656,7 +664,7 @@ export default class SetupScene extends Phaser.Scene {
       playerDiceConfig: this._diceConfig,
       playerHp:         PLAYER_MAX_HP,
       rerollTokens:     1,
-      battleIndex:      ENEMY_KEYS.indexOf(this._enemyKey),
+      battleIndex:      BATTLE_SEQUENCE.indexOf(this._enemyKey),
     });
   }
 }
