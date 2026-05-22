@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { FACES, ENEMIES, BATTLE_SEQUENCE, STARTER_DICE } from '../data/faces.js';
+import { RUNES, OPPOSITE_FACE } from '../data/runes.js';
 import {
   W, H, SURFACE_TOP, SURFACE_BOTTOM, DIE_SIZE, WALL_T, DIE_STRIP_Y,
   DIE_FRICTION, DIE_FRICTION_AIR, DIE_BOUNCE, SETTLE_VEL,
@@ -395,8 +396,27 @@ export default class BattleScene extends Phaser.Scene {
         const dA = bodyA.gameObject?.getData('dieRef');
         const dB = bodyB.gameObject?.getData('dieRef');
 
-        // Die-die: reroll the slower one
+        // Die-die: material checks then reroll the slower one
         if (dA && dB) {
+          // Glass: shatters both on contact
+          const glassA = dA.isPlayer && dA.data.material === 'glass';
+          const glassB = dB.isPlayer && dB.data.material === 'glass';
+          if (glassA || glassB) {
+            this._shatterDie(dA);
+            this._shatterDie(dB);
+            return;
+          }
+
+          // Uranium: debuff the contacted die (once)
+          if (dA.isPlayer && dA.data.material === 'uranium' && !dB._uraniumDebuffed) {
+            dB._uraniumDebuffed = true;
+            this._floatText(dB.img.x, dB.img.y - 24, 'URA ½', '#88ff44');
+          }
+          if (dB.isPlayer && dB.data.material === 'uranium' && !dA._uraniumDebuffed) {
+            dA._uraniumDebuffed = true;
+            this._floatText(dA.img.x, dA.img.y - 24, 'URA ½', '#88ff44');
+          }
+
           const sA = Math.hypot(bodyA.velocity.x, bodyA.velocity.y);
           const sB = Math.hypot(bodyB.velocity.x, bodyB.velocity.y);
           const struck = sA < sB ? dA : dB;
@@ -739,15 +759,20 @@ export default class BattleScene extends Phaser.Scene {
 
   // ─── IMMEDIATE EFFECTS ────────────────────────────────────────────────────
 
-  _applyDieFaceImmediate(dieRef) {
+  _applyDieFaceImmediate(dieRef, skipRune = false) {
     if (this.phase === 99) return;
     const f = FACES[dieRef.data.faces[dieRef.data.currentFaceIdx]];
-    if (!f?.effect) return;
+    if (!f?.effect) {
+      if (!skipRune && dieRef.data.rune && dieRef.data.runeFaceIdx === dieRef.data.currentFaceIdx) {
+        this._applyRuneEffect(dieRef);
+      }
+      return;
+    }
     switch (f.effect) {
       case 'damage':
       case 'cleave': {
-        const raw     = (f.value || 1);
-        const blocked = this._getActiveEnemyBlock();
+        const raw     = this._getModifiedValue(dieRef, f.value || 1, true);
+        const blocked = dieRef.data.material === 'rock' ? 0 : this._getActiveEnemyBlock();
         const dmg     = Math.max(0, raw - blocked);
         this._laserBeam(dieRef.img.x, dieRef.img.y, this.enemyPos.x, this.enemyPos.y, 0xff4444);
         if (dmg > 0) {
@@ -761,7 +786,7 @@ export default class BattleScene extends Phaser.Scene {
         break;
       }
       case 'pierce': {
-        const dmg = (f.value || 2);
+        const dmg = this._getModifiedValue(dieRef, f.value || 2, true);
         this._laserBeam(dieRef.img.x, dieRef.img.y, this.enemyPos.x, this.enemyPos.y, 0xff6600);
         this.enemyHp = Math.max(0, this.enemyHp - dmg);
         this._refreshEnemyCharacter();
@@ -771,20 +796,108 @@ export default class BattleScene extends Phaser.Scene {
       }
       case 'block':
       case 'brace': {
-        const blk = (f.value || 1);
+        const blk = this._getModifiedValue(dieRef, f.value || 1, false);
         this.block += blk;
         this._refreshStatusUI();
         this._flashDieImpact(dieRef, `+${blk} BLK`, '#3498db');
         break;
       }
       case 'heal': {
-        const heal = f.value || 2;
+        const heal = this._getModifiedValue(dieRef, f.value || 2, false);
         this.playerHp = Math.min(PLAYER_MAX_HP, this.playerHp + heal);
         this._refreshStatusUI();
         this._flashDieImpact(dieRef, `+${heal} HP`, '#2ecc71');
         break;
       }
     }
+    if (!skipRune && dieRef.data.rune && dieRef.data.runeFaceIdx === dieRef.data.currentFaceIdx) {
+      this._applyRuneEffect(dieRef);
+    }
+  }
+
+  _applyRuneEffect(dieRef) {
+    const runeId = dieRef.data.rune;
+    if (!RUNES[runeId]) return;
+    const rune = RUNES[runeId];
+
+    switch (runeId) {
+      case 'viking': {
+        this._floatText(dieRef.img.x, dieRef.img.y - 44, `${rune.sym} ×2`, rune.color);
+        this.time.delayedCall(120, () => this._applyDieFaceImmediate(dieRef, true));
+        break;
+      }
+      case 'egyptian': {
+        this._floatText(dieRef.img.x, dieRef.img.y - 44, `${rune.sym} ↻`, rune.color);
+        this.time.delayedCall(250, () => {
+          if (!dieRef.img?.active || !dieRef.img.body) return;
+          const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+          const spd   = Phaser.Math.FloatBetween(6, 11);
+          Phaser.Physics.Matter.Matter.Body.setVelocity(dieRef.img.body, {
+            x: Math.cos(angle) * spd,
+            y: Math.sin(angle) * spd,
+          });
+          this._rerollDie(dieRef);
+        });
+        break;
+      }
+      case 'trojan': {
+        const origIdx = dieRef.data.currentFaceIdx;
+        const oppIdx  = OPPOSITE_FACE[origIdx] ?? ((origIdx + 3) % 6);
+        this._floatText(dieRef.img.x, dieRef.img.y - 44, `${rune.sym}`, rune.color);
+        dieRef.data.currentFaceIdx = oppIdx;
+        this._applyDieFaceImmediate(dieRef, true);
+        dieRef.data.currentFaceIdx = origIdx;
+        break;
+      }
+      case 'greek': {
+        this._floatText(dieRef.img.x, dieRef.img.y - 44, `${rune.sym} BLAST`, rune.color);
+        this._blastDice(dieRef, 1);
+        break;
+      }
+      case 'cosmic': {
+        this._floatText(dieRef.img.x, dieRef.img.y - 44, `${rune.sym} PULL`, rune.color);
+        this._blastDice(dieRef, -1);
+        break;
+      }
+    }
+  }
+
+  _blastDice(originDieRef, direction) {
+    const BLAST_SPEED = 14;
+    const ox = originDieRef.img.x;
+    const oy = originDieRef.img.y;
+    this.allDice.forEach(d => {
+      if (d === originDieRef || !d.img?.active || !d.img.body) return;
+      const dx  = d.img.x - ox;
+      const dy  = d.img.y - oy;
+      const len = Math.hypot(dx, dy) || 1;
+      Phaser.Physics.Matter.Matter.Body.setVelocity(d.img.body, {
+        x: (dx / len) * BLAST_SPEED * direction,
+        y: (dy / len) * BLAST_SPEED * direction,
+      });
+      this._rerollDie(d);
+    });
+  }
+
+  _getModifiedValue(dieRef, base, isDamage = false) {
+    const mat = dieRef.data.material;
+    let v = base;
+    if (mat === 'iron')             v += 1;
+    if (mat === 'steel')            v *= 2;
+    if (isDamage && mat === 'fire') v += 3;
+    if (dieRef._uraniumDebuffed)    v = Math.max(1, Math.floor(v / 2));
+    return v;
+  }
+
+  _shatterDie(dieRef) {
+    if (!this.allDice.includes(dieRef)) return;
+    this._floatText(dieRef.img.x, dieRef.img.y - 24, 'SHATTER!', '#aaddff');
+    this._stopDieShield(dieRef);
+    const removeFrom = (arr) => { const i = arr.indexOf(dieRef); if (i >= 0) arr.splice(i, 1); };
+    removeFrom(this.allDice);
+    removeFrom(this.playerDice);
+    removeFrom(this.enemyDice);
+    this.time.delayedCall(150, () => { dieRef.img?.destroy(); dieRef.lbl?.destroy(); dieRef.valLbl?.destroy(); });
   }
 
   _triggerVictory() {
