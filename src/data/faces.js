@@ -19,18 +19,6 @@ export const FACES = {
   e_blank: { id: 'e_blank', label: 'Blank',   sym: '--',   color: '#555555', effect: null },
 };
 
-// Tokens the player can put on their dice (for upgrade screen)
-export const PLAYER_TOKENS = [
-  'blank', 'strike', 'strike2', 'cleave', 'defend', 'defend2', 'brace', 'mend', 'pierce'
-];
-
-// Starting player dice configurations
-export const STARTER_DICE = [
-  { id: 'd1', faces: ['blank', 'blank', 'defend', 'defend', 'strike', 'cleave'] },
-  { id: 'd2', faces: ['blank', 'strike', 'strike', 'defend', 'mend',  'cleave'] },
-  { id: 'd3', faces: ['blank', 'blank', 'strike', 'strike', 'cleave', 'defend'] },
-];
-
 // Enemy definitions
 export const ENEMIES = {
   grunt: {

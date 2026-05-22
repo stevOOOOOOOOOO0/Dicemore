@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
-import { FACES, ENEMIES, BATTLE_SEQUENCE, STARTER_DICE } from '../data/faces.js';
-import { RUNES, OPPOSITE_FACE } from '../data/runes.js';
+import { FACES, ENEMIES, BATTLE_SEQUENCE } from '../data/faces.js';
+import { DIE_TYPES, STARTER_DICE } from '../data/dice.js';
+import { RUNES } from '../data/runes.js';
 import {
   W, H, SURFACE_TOP, SURFACE_BOTTOM, DIE_SIZE, WALL_T, DIE_STRIP_Y,
   DIE_FRICTION, DIE_FRICTION_AIR, DIE_BOUNCE, SETTLE_VEL,
@@ -315,9 +316,9 @@ export default class BattleScene extends Phaser.Scene {
       const y = DIE_STRIP_Y + 5;
 
       const img = this.add.image(x, y, 'tcard').setDepth(21).setInteractive();
-      const face = FACES[dc.faces[0]];
-      const lbl  = this.add.text(x, y, face ? face.sym : '--', {
-        fontSize: '17px', color: face ? face.color : '#777777', fontStyle: 'bold',
+      const dt  = DIE_TYPES[dc.type];
+      const lbl = this.add.text(x, y, dt ? dt.sym : '?', {
+        fontSize: '17px', color: dt ? dt.color : '#777777', fontStyle: 'bold',
         stroke: '#000000', strokeThickness: 3
       }).setOrigin(0.5, 0.5).setDepth(22);
 
@@ -415,6 +416,14 @@ export default class BattleScene extends Phaser.Scene {
           if (dB.isPlayer && dB.data.material === 'uranium' && !dA._uraniumDebuffed) {
             dA._uraniumDebuffed = true;
             this._floatText(dA.img.x, dA.img.y - 24, 'URA ½', '#88ff44');
+          }
+
+          // Copy die: remember the last player die type it touched
+          if (dA.isPlayer && dA.data.type === 'copy' && dB.isPlayer && dB.data.type !== 'copy') {
+            dA._mimicType = dB.data.type;
+          }
+          if (dB.isPlayer && dB.data.type === 'copy' && dA.isPlayer && dA.data.type !== 'copy') {
+            dB._mimicType = dA.data.type;
           }
 
           const sA = Math.hypot(bodyA.velocity.x, bodyA.velocity.y);
@@ -534,7 +543,7 @@ export default class BattleScene extends Phaser.Scene {
         const card = this._dragCard;
         this._dragCard = null;
         const dc = this.playerDiceConfig[card.configIdx];
-        this._buildInspectorPanel(dc.faces, -1, 0xd4a820, null);
+        this._buildPlayerInspector(dc, -1, null);
         return;
       }
 
@@ -682,12 +691,23 @@ export default class BattleScene extends Phaser.Scene {
     });
     img.setVelocity(vx, vy);
 
-    const face   = FACES[data.faces[data.currentFaceIdx]];
-    const lbl    = this.add.text(x, y - 8, face ? face.sym : '--', {
-      fontSize: '17px', color: face ? face.color : '#ffffff', fontStyle: 'bold',
+    let lblText, lblColor, valText;
+    if (isPlayer) {
+      const dt = DIE_TYPES[data.type];
+      lblText  = String(data.currentFaceIdx + 1);
+      lblColor = dt ? dt.color : '#ffffff';
+      valText  = '';
+    } else {
+      const face = FACES[data.faces[data.currentFaceIdx]];
+      lblText  = face ? face.sym : '--';
+      lblColor = face ? face.color : '#ffffff';
+      valText  = face?.value !== undefined ? String(face.value) : '';
+    }
+    const lbl    = this.add.text(x, y - 8, lblText, {
+      fontSize: '17px', color: lblColor, fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 3,
     }).setOrigin(0.5, 0.5).setDepth(10);
-    const valLbl = this.add.text(x, y + 10, face?.value !== undefined ? String(face.value) : '', {
+    const valLbl = this.add.text(x, y + 10, valText, {
       fontSize: '17px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 2,
     }).setOrigin(0.5, 0.5).setDepth(10);
@@ -713,7 +733,7 @@ export default class BattleScene extends Phaser.Scene {
     const card      = this.trayCards[this.throwCount];
     const configIdx = card.configIdx;
     const dc        = this.playerDiceConfig[configIdx];
-    const fIdx      = Phaser.Math.Between(0, dc.faces.length - 1);
+    const fIdx      = Phaser.Math.Between(0, dc.sides - 1);
     const data      = { ...dc, currentFaceIdx: fIdx };
 
     const die  = this._spawnDie(data, x, y, vx, vy, true, configIdx);
@@ -751,7 +771,8 @@ export default class BattleScene extends Phaser.Scene {
   _rerollDie(dieRef) {
     this._stopDieShield(dieRef);
     const { data } = dieRef;
-    data.currentFaceIdx  = Phaser.Math.Between(0, data.faces.length - 1);
+    const faceCount      = data.sides ?? data.faces?.length ?? 6;
+    data.currentFaceIdx  = Phaser.Math.Between(0, faceCount - 1);
     dieRef._finalFaceIdx = data.currentFaceIdx;
     dieRef._rolling      = true;
     dieRef._lastCycleMs  = 0;
@@ -761,18 +782,15 @@ export default class BattleScene extends Phaser.Scene {
 
   _applyDieFaceImmediate(dieRef, skipRune = false) {
     if (this.phase === 99) return;
-    const f = FACES[dieRef.data.faces[dieRef.data.currentFaceIdx]];
-    if (!f?.effect) {
-      if (!skipRune && dieRef.data.rune && dieRef.data.runeFaceIdx === dieRef.data.currentFaceIdx) {
-        this._applyRuneEffect(dieRef);
-      }
-      return;
-    }
-    switch (f.effect) {
-      case 'damage':
-      case 'cleave': {
-        const raw     = this._getModifiedValue(dieRef, f.value || 1, true);
-        const blocked = dieRef.data.material === 'rock' ? 0 : this._getActiveEnemyBlock();
+    const { data } = dieRef;
+    const value = data.currentFaceIdx + 1;
+    const type  = dieRef._mimicType ?? data.type;
+    const isDmg = type === 'attack' || type === 'pierce';
+
+    switch (type) {
+      case 'attack': {
+        const raw     = this._getModifiedValue(dieRef, value, true);
+        const blocked = data.material === 'rock' ? 0 : this._getActiveEnemyBlock();
         const dmg     = Math.max(0, raw - blocked);
         this._laserBeam(dieRef.img.x, dieRef.img.y, this.enemyPos.x, this.enemyPos.y, 0xff4444);
         if (dmg > 0) {
@@ -785,32 +803,39 @@ export default class BattleScene extends Phaser.Scene {
         if (this.enemyHp <= 0) this._triggerVictory();
         break;
       }
+      case 'block': {
+        const blk = this._getModifiedValue(dieRef, value, false);
+        this.block += blk;
+        this._refreshStatusUI();
+        this._flashDieImpact(dieRef, `+${blk} BLK`, '#3498db');
+        break;
+      }
       case 'pierce': {
-        const dmg = this._getModifiedValue(dieRef, f.value || 2, true);
-        this._laserBeam(dieRef.img.x, dieRef.img.y, this.enemyPos.x, this.enemyPos.y, 0xff6600);
+        const dmg = this._getModifiedValue(dieRef, value, true);
+        this._laserBeam(dieRef.img.x, dieRef.img.y, this.enemyPos.x, this.enemyPos.y, 0xff9900);
         this.enemyHp = Math.max(0, this.enemyHp - dmg);
         this._refreshEnemyCharacter();
         this._flashEnemyDamage(dmg);
         if (this.enemyHp <= 0) this._triggerVictory();
         break;
       }
-      case 'block':
-      case 'brace': {
-        const blk = this._getModifiedValue(dieRef, f.value || 1, false);
-        this.block += blk;
-        this._refreshStatusUI();
-        this._flashDieImpact(dieRef, `+${blk} BLK`, '#3498db');
-        break;
-      }
-      case 'heal': {
-        const heal = this._getModifiedValue(dieRef, f.value || 2, false);
-        this.playerHp = Math.min(PLAYER_MAX_HP, this.playerHp + heal);
-        this._refreshStatusUI();
-        this._flashDieImpact(dieRef, `+${heal} HP`, '#2ecc71');
+      case 'copy': {
+        // No mimic acquired — deal 1 weak attack (subject to block)
+        const blocked = this._getActiveEnemyBlock();
+        const dmg = Math.max(0, 1 - blocked);
+        this._floatText(dieRef.img.x, dieRef.img.y - 32, 'NO COPY', '#cc88ff');
+        if (dmg > 0) {
+          this._laserBeam(dieRef.img.x, dieRef.img.y, this.enemyPos.x, this.enemyPos.y, 0xcc88ff);
+          this.enemyHp = Math.max(0, this.enemyHp - dmg);
+          this._refreshEnemyCharacter();
+          this._flashEnemyDamage(dmg);
+          if (this.enemyHp <= 0) this._triggerVictory();
+        }
         break;
       }
     }
-    if (!skipRune && dieRef.data.rune && dieRef.data.runeFaceIdx === dieRef.data.currentFaceIdx) {
+
+    if (!skipRune && data.rune && data.runeFaceIdx === data.currentFaceIdx) {
       this._applyRuneEffect(dieRef);
     }
   }
@@ -842,7 +867,7 @@ export default class BattleScene extends Phaser.Scene {
       }
       case 'trojan': {
         const origIdx = dieRef.data.currentFaceIdx;
-        const oppIdx  = OPPOSITE_FACE[origIdx] ?? ((origIdx + 3) % 6);
+        const oppIdx  = (dieRef.data.sides - 1) - origIdx;
         this._floatText(dieRef.img.x, dieRef.img.y - 44, `${rune.sym}`, rune.color);
         dieRef.data.currentFaceIdx = oppIdx;
         this._applyDieFaceImmediate(dieRef, true);
@@ -975,9 +1000,9 @@ export default class BattleScene extends Phaser.Scene {
     this.trayCards.forEach((c, pos) => {
       c.img.setVisible(true).setAlpha(1).setDepth(21);
       c.lbl.setVisible(true).setDepth(22);
-      const face = FACES[this.playerDiceConfig[c.configIdx].faces[0]];
-      c.lbl.setText(face ? face.sym : '--');
-      c.lbl.setColor(face ? face.color : '#777777');
+      const dt = DIE_TYPES[this.playerDiceConfig[c.configIdx].type];
+      c.lbl.setText(dt ? dt.sym : '?');
+      c.lbl.setColor(dt ? dt.color : '#777777');
       c.img.setX(this._cardX(pos));
       c.lbl.setX(this._cardX(pos));
     });
@@ -1002,9 +1027,9 @@ export default class BattleScene extends Phaser.Scene {
 
       card.img.setVisible(true).setAlpha(1).setDepth(21);
       card.lbl.setVisible(true).setDepth(22);
-      const face = FACES[this.playerDiceConfig[card.configIdx].faces[0]];
-      card.lbl.setText(face ? face.sym : '--');
-      card.lbl.setColor(face ? face.color : '#777777');
+      const dt = DIE_TYPES[this.playerDiceConfig[card.configIdx].type];
+      card.lbl.setText(dt ? dt.sym : '?');
+      card.lbl.setColor(dt ? dt.color : '#777777');
       this._snapAllCards();
     }
 
@@ -1022,8 +1047,11 @@ export default class BattleScene extends Phaser.Scene {
     this._hideInspector();
     this._pendingPickup = pickupDieRef ?? null;
     const { data, isPlayer } = dieRef;
-    this._buildInspectorPanel(data.faces, data.currentFaceIdx,
-      isPlayer ? 0xd4a820 : 0x8b1a1a, pickupDieRef);
+    if (isPlayer) {
+      this._buildPlayerInspector(data, data.currentFaceIdx, pickupDieRef);
+    } else {
+      this._buildInspectorPanel(data.faces, data.currentFaceIdx, 0x8b1a1a, pickupDieRef);
+    }
   }
 
   _buildInspectorPanel(faces, currentIdx, borderColor, pickupDieRef) {
@@ -1139,6 +1167,82 @@ export default class BattleScene extends Phaser.Scene {
     });
 
     if (pickupDieRef) this._addPickupButton(cx, oy + rows * 58 / 2 + 14);
+  }
+
+  _buildPlayerInspector(data, currentIdx, pickupDieRef) {
+    this.aimActive = false;
+    this._suppressThrow = true;
+    this.aimGfx.clear();
+    this._hideInspector();
+    this.inspectorPanel = this.add.container(0, 0).setDepth(60);
+
+    const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.6).setInteractive();
+    dim.on('pointerdown', () => { this._suppressThrow = true; this._hideInspector(); });
+    this.inspectorPanel.add(dim);
+
+    const cx = W / 2;
+    const cy = SURFACE_TOP + (THROW_ZONE_BOTTOM - SURFACE_TOP) / 2;
+    const dt = DIE_TYPES[data.type];
+    const typeColor = dt ? parseInt(dt.color.replace('#', ''), 16) : 0xd4a820;
+
+    const cols = 4, sp = 50;
+    const rows = Math.ceil(data.sides / cols);
+    const panelW = cols * sp + 24;
+    const panelH = rows * sp + 64 + (pickupDieRef ? 44 : 0);
+
+    const bg = this.add.rectangle(cx, cy, panelW, panelH, 0x0a0a1e, 0.96);
+    bg.setStrokeStyle(1.5, typeColor, 0.85).setInteractive();
+    bg.on('pointerdown', () => this._hideInspector());
+    this.inspectorPanel.add(bg);
+
+    const closeBtn = this.add.text(cx + panelW / 2 - 12, cy - panelH / 2 + 14, '✕', {
+      fontSize: '17px', color: '#666688',
+    }).setOrigin(0.5, 0.5).setInteractive();
+    closeBtn.on('pointerdown', (ptr) => { ptr.event.stopPropagation(); this._suppressThrow = true; this._hideInspector(); });
+    closeBtn.on('pointerover', () => closeBtn.setColor('#ffffff'));
+    closeBtn.on('pointerout',  () => closeBtn.setColor('#666688'));
+    this.inspectorPanel.add(closeBtn);
+
+    this.inspectorPanel.add(
+      this.add.text(cx, cy - panelH / 2 + 18, `${dt?.label ?? '?'}  d${data.sides}`, {
+        fontSize: '17px', color: dt?.color ?? '#ffffff', fontStyle: 'bold',
+      }).setOrigin(0.5, 0.5)
+    );
+
+    const gridTop = cy - panelH / 2 + 38;
+
+    for (let fi = 0; fi < data.sides; fi++) {
+      const col = fi % cols;
+      const row = Math.floor(fi / cols);
+      const rowCount = Math.min(cols, data.sides - row * cols);
+      const rowOx = cx - ((rowCount - 1) * sp) / 2;
+      const fx = rowOx + col * sp;
+      const fy = gridTop + row * sp + sp / 2;
+      const isActive   = fi === currentIdx;
+      const isRuneFace = fi === data.runeFaceIdx && data.rune;
+
+      const fb = this.add.rectangle(fx, fy, 42, 42, isActive ? 0x1a2e4a : 0x141428);
+      fb.setStrokeStyle(isActive ? 2 : 1, isRuneFace ? 0xf0c040 : typeColor, isActive ? 1 : 0.45);
+      this.inspectorPanel.add(fb);
+      this.inspectorPanel.add(
+        this.add.text(fx, fy, String(fi + 1), {
+          fontSize: '17px', color: isActive ? (dt?.color ?? '#ffffff') : '#556677',
+          fontStyle: isActive ? 'bold' : 'normal',
+          stroke: '#000000', strokeThickness: isActive ? 3 : 1,
+        }).setOrigin(0.5, 0.5)
+      );
+
+      if (isRuneFace) {
+        const rune = RUNES[data.rune];
+        this.inspectorPanel.add(
+          this.add.text(fx + 14, fy - 14, rune?.sym ?? '◆', {
+            fontSize: '9px', color: '#f0c040',
+          }).setOrigin(0.5, 0.5)
+        );
+      }
+    }
+
+    if (pickupDieRef) this._addPickupButton(cx, gridTop + rows * sp + 14);
   }
 
   _addPickupButton(cx, by) {
@@ -1277,23 +1381,34 @@ export default class BattleScene extends Phaser.Scene {
 
       if (motion < SETTLE_VEL) {
         d._rolling = false;
-        const finalFace = FACES[d.data.faces[d._finalFaceIdx]];
-        d.lbl.setText(finalFace ? finalFace.sym : '--');
-        d.lbl.setColor(finalFace ? finalFace.color : '#ffffff');
-        d.valLbl.setText(finalFace?.value !== undefined ? String(finalFace.value) : '');
         if (d.isPlayer) {
+          const dt = DIE_TYPES[d.data.type];
+          d.lbl.setText(String(d._finalFaceIdx + 1));
+          d.lbl.setColor(dt ? dt.color : '#ffffff');
+          d.valLbl.setText('');
           this._applyDieFaceImmediate(d);
-        } else if (finalFace?.effect === 'enemy_block') {
-          this._startDieShield(d);
+        } else {
+          const finalFace = FACES[d.data.faces[d._finalFaceIdx]];
+          d.lbl.setText(finalFace ? finalFace.sym : '--');
+          d.lbl.setColor(finalFace ? finalFace.color : '#ffffff');
+          d.valLbl.setText(finalFace?.value !== undefined ? String(finalFace.value) : '');
+          if (finalFace?.effect === 'enemy_block') this._startDieShield(d);
         }
       } else {
         const interval = Math.max(40, 250 / motion);
         if (now - d._lastCycleMs > interval) {
           d._lastCycleMs = now;
-          const randFace = FACES[d.data.faces[Phaser.Math.Between(0, d.data.faces.length - 1)]];
-          d.lbl.setText(randFace ? randFace.sym : '--');
-          d.lbl.setColor(randFace ? randFace.color : '#ffffff');
-          d.valLbl.setText(randFace?.value !== undefined ? String(randFace.value) : '');
+          if (d.isPlayer) {
+            const dt = DIE_TYPES[d.data.type];
+            d.lbl.setText(String(Phaser.Math.Between(1, d.data.sides)));
+            d.lbl.setColor(dt ? dt.color : '#ffffff');
+            d.valLbl.setText('');
+          } else {
+            const randFace = FACES[d.data.faces[Phaser.Math.Between(0, d.data.faces.length - 1)]];
+            d.lbl.setText(randFace ? randFace.sym : '--');
+            d.lbl.setColor(randFace ? randFace.color : '#ffffff');
+            d.valLbl.setText(randFace?.value !== undefined ? String(randFace.value) : '');
+          }
         }
       }
     });

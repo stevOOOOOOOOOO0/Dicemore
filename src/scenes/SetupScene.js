@@ -1,15 +1,10 @@
 import Phaser from 'phaser';
-import { FACES, PLAYER_TOKENS, ENEMIES } from '../data/faces.js';
+import { FACES, ENEMIES } from '../data/faces.js';
+import { DIE_TYPES, DIE_TYPE_KEYS, FIGHTER_CONFIG, MAGICIAN_CONFIG } from '../data/dice.js';
 import { W, H, PLAYER_MAX_HP } from '../constants.js';
 import { RUNES, MATERIALS, RUNE_KEYS, MATERIAL_KEYS } from '../data/runes.js';
 
 const ENEMY_KEYS = ['grunt', 'soldier', 'captain'];
-
-const FIGHTER_CONFIG = [
-  { id: 'fighter_0', faces: ['blank', 'blank', 'strike2', 'strike', 'strike', 'strike'], rune: null, runeFaceIdx: -1, material: 'fire' },
-  { id: 'fighter_1', faces: ['blank', 'blank', 'defend2', 'defend', 'defend', 'defend'], rune: null, runeFaceIdx: -1, material: null },
-  { id: 'fighter_2', faces: ['blank', 'mend',  'strike',  'strike', 'defend', 'defend'], rune: null, runeFaceIdx: -1, material: null },
-];
 
 export default class SetupScene extends Phaser.Scene {
   constructor() { super({ key: 'SetupScene' }); }
@@ -20,7 +15,6 @@ export default class SetupScene extends Phaser.Scene {
     this._diceConfig      = [];
     this._usedClassPreset = false;
     this._stepGroup       = null;
-    this._faceObjs        = [];
     this._runeObjs        = [];
     this._picker          = null;
 
@@ -35,7 +29,6 @@ export default class SetupScene extends Phaser.Scene {
   _clearStep() {
     if (this._picker)    { this._picker.destroy(true);    this._picker    = null; }
     if (this._stepGroup) { this._stepGroup.destroy(true); this._stepGroup = null; }
-    this._faceObjs = [];
     this._runeObjs = [];
   }
 
@@ -101,7 +94,6 @@ export default class SetupScene extends Phaser.Scene {
         fontSize: '17px', color: '#445566'
       }).setOrigin(0.5));
 
-      // Unique face chips — color-coded only, no text
       const unique = [...new Set(def.dice.flatMap(d => d.faces))].slice(0, 4);
       unique.forEach((fid, fi) => {
         const face  = FACES[fid];
@@ -129,68 +121,67 @@ export default class SetupScene extends Phaser.Scene {
     const g = this._stepGroup = this.add.container(0, 0);
     const def = ENEMIES[this._enemyKey];
 
-    g.add(this.add.text(W / 2, 40, 'CHOOSE YOUR CLASS', {
+    g.add(this.add.text(W / 2, 36, 'CHOOSE YOUR CLASS', {
       fontSize: '20px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3
     }).setOrigin(0.5));
-    g.add(this.add.text(W / 2, 72, `vs. ${def.name}  ·  ${def.hp} HP`, {
+    g.add(this.add.text(W / 2, 66, `vs. ${def.name}  ·  ${def.hp} HP`, {
       fontSize: '17px', color: '#2a3848'
     }).setOrigin(0.5));
 
-    // ── Fighter class card ──────────────────────────────────────────────────
-    const cx = W / 2, cy = 320;
-    const cardW = W - 40, cardH = 210;
+    const cardW = W - 40, cardH = 120;
+    const cx = W / 2;
 
-    const cardBg = this.add.rectangle(cx, cy, cardW, cardH, 0x130e08);
-    cardBg.setStrokeStyle(2, 0xff6622, 0.65).setInteractive();
-    g.add(cardBg);
-
-    g.add(this.add.text(cx, cy - 82, 'FIGHTER', {
-      fontSize: '28px', color: '#ff8844', fontStyle: 'bold', letterSpacing: 4
-    }).setOrigin(0.5));
-    g.add(this.add.text(cx, cy - 54, 'The relentless brawler', {
-      fontSize: '17px', color: '#664433'
-    }).setOrigin(0.5));
-
-    const divGfx = this.add.graphics();
-    divGfx.lineStyle(1, 0x3a2010, 1);
-    divGfx.lineBetween(cx - cardW / 2 + 16, cy - 32, cx + cardW / 2 - 16, cy - 32);
-    g.add(divGfx);
-
-    const dieSummaries = [
-      { label: 'Die 1', matColor: '#ff6622', mat: 'Fire', faces: 'ATK2,  ATK ×3' },
-      { label: 'Die 2', matColor: '#556677', mat: '—',    faces: 'DEF2,  DEF ×3' },
-      { label: 'Die 3', matColor: '#556677', mat: '—',    faces: 'ATK ×2,  DEF ×2,  Mend' },
-    ];
-
-    dieSummaries.forEach((ds, i) => {
-      const lineY = cy - 12 + i * 32;
-      const lx = cx - cardW / 2 + 16;
-      g.add(this.add.text(lx,       lineY, ds.label,     { fontSize: '17px', color: '#334455', fontStyle: 'bold' }).setOrigin(0, 0.5));
-      g.add(this.add.text(lx + 58,  lineY, `[${ds.mat}]`,{ fontSize: '17px', color: ds.matColor }).setOrigin(0, 0.5));
-      g.add(this.add.text(lx + 118, lineY, ds.faces,     { fontSize: '17px', color: '#aabbcc' }).setOrigin(0, 0.5));
+    // Fighter card
+    const fy = 180;
+    this._makeClassCard(g, cx, fy, cardW, cardH, {
+      title: 'FIGHTER',
+      titleColor: '#ff8844',
+      borderColor: 0xff6622,
+      bgColor: 0x130e08,
+      bgHover: 0x1e160a,
+      subtitle: 'The relentless brawler',
+      dice: [
+        { type: 'attack', label: 'ATK d4' },
+        { type: 'block',  label: 'BLK d4' },
+        { type: 'pierce', label: 'PRC d4' },
+      ],
+      onTap: () => {
+        this._usedClassPreset = true;
+        this._diceCount  = 3;
+        this._diceConfig = JSON.parse(JSON.stringify(FIGHTER_CONFIG));
+        this._transitionTo(() => this._showRuneStep());
+      }
     });
 
-    g.add(this.add.text(cx, cy + 80, 'tap to play  →', {
-      fontSize: '17px', color: '#4a2e14'
-    }).setOrigin(0.5));
-
-    cardBg.on('pointerdown', () => {
-      this._usedClassPreset = true;
-      this._diceCount  = 3;
-      this._diceConfig = JSON.parse(JSON.stringify(FIGHTER_CONFIG));
-      this._transitionTo(() => this._showRuneStep());
+    // Magician card
+    const my = 340;
+    this._makeClassCard(g, cx, my, cardW, cardH, {
+      title: 'MAGICIAN',
+      titleColor: '#cc88ff',
+      borderColor: 0x8844cc,
+      bgColor: 0x100a18,
+      bgHover: 0x1a1028,
+      subtitle: 'The arcane trickster',
+      dice: [
+        { type: 'attack', label: 'ATK d4' },
+        { type: 'block',  label: 'BLK d4' },
+        { type: 'copy',   label: 'CPY d4' },
+      ],
+      onTap: () => {
+        this._usedClassPreset = true;
+        this._diceCount  = 3;
+        this._diceConfig = JSON.parse(JSON.stringify(MAGICIAN_CONFIG));
+        this._transitionTo(() => this._showRuneStep());
+      }
     });
-    cardBg.on('pointerover',  () => cardBg.setFillStyle(0x1e160a));
-    cardBg.on('pointerout',   () => cardBg.setFillStyle(0x130e08));
 
-    // ── Build Custom button ─────────────────────────────────────────────────
-    const customBg = this.add.rectangle(cx, cy + 138, cardW, 50, 0x0d0d1c);
+    // Custom button
+    const customBg = this.add.rectangle(cx, 490, cardW, 46, 0x0d0d1c);
     customBg.setStrokeStyle(1.5, 0x2a3a5a, 0.9).setInteractive();
     g.add(customBg);
-    g.add(this.add.text(cx, cy + 138, 'Build Custom  →', {
+    g.add(this.add.text(cx, 490, 'Build Custom  →', {
       fontSize: '17px', color: '#2a3848', letterSpacing: 1
     }).setOrigin(0.5));
-
     customBg.on('pointerdown', () => {
       this._usedClassPreset = false;
       this._transitionTo(() => this._showCountStep());
@@ -200,6 +191,42 @@ export default class SetupScene extends Phaser.Scene {
 
     this._addBackBtn(g, () => this._showEnemyStep());
     this._fadeIn(g);
+  }
+
+  _makeClassCard(g, cx, cy, cardW, cardH, opts) {
+    const cardBg = this.add.rectangle(cx, cy, cardW, cardH, opts.bgColor);
+    cardBg.setStrokeStyle(2, opts.borderColor, 0.65).setInteractive();
+    g.add(cardBg);
+
+    g.add(this.add.text(cx, cy - 42, opts.title, {
+      fontSize: '22px', color: opts.titleColor, fontStyle: 'bold', letterSpacing: 4
+    }).setOrigin(0.5));
+    g.add(this.add.text(cx, cy - 20, opts.subtitle, {
+      fontSize: '17px', color: '#445566'
+    }).setOrigin(0.5));
+
+    // Die type pills
+    const pillW = 76, pillGap = 8;
+    const totalW = opts.dice.length * pillW + (opts.dice.length - 1) * pillGap;
+    opts.dice.forEach((d, i) => {
+      const dt = DIE_TYPES[d.type];
+      const fc = dt ? parseInt(dt.color.replace('#', ''), 16) : 0x555555;
+      const px = cx - totalW / 2 + i * (pillW + pillGap) + pillW / 2;
+      const pill = this.add.rectangle(px, cy + 12, pillW, 30, 0x0a0a18);
+      pill.setStrokeStyle(1, fc, 0.7);
+      g.add(pill);
+      g.add(this.add.text(px, cy + 12, d.label, {
+        fontSize: '17px', color: dt ? dt.color : '#777777', fontStyle: 'bold'
+      }).setOrigin(0.5));
+    });
+
+    g.add(this.add.text(cx, cy + 44, 'tap to play  →', {
+      fontSize: '17px', color: '#2a2a3a'
+    }).setOrigin(0.5));
+
+    cardBg.on('pointerdown', opts.onTap);
+    cardBg.on('pointerover',  () => cardBg.setFillStyle(opts.bgHover));
+    cardBg.on('pointerout',   () => cardBg.setFillStyle(opts.bgColor));
   }
 
   // ─── STEP 2: DICE COUNT ───────────────────────────────────────────────────
@@ -240,10 +267,10 @@ export default class SetupScene extends Phaser.Scene {
       bg.on('pointerdown', () => {
         this._diceCount  = n;
         this._diceConfig = Array.from({ length: n }, (_, j) => ({
-          id: `custom_${j}`, faces: Array(6).fill('blank'),
+          id: `custom_${j}`, type: null, sides: 4,
           rune: null, runeFaceIdx: -1, material: null
         }));
-        this._transitionTo(() => this._showBuildStep());
+        this._transitionTo(() => this._showTypeStep());
       });
       bg.on('pointerover',  () => { bg.setFillStyle(0x1e2840); bg.setStrokeStyle(1.5, 0x4466aa); });
       bg.on('pointerout',   () => { bg.setFillStyle(0x131320); bg.setStrokeStyle(1.5, 0x2a3a5a, 0.9); });
@@ -253,155 +280,67 @@ export default class SetupScene extends Phaser.Scene {
     this._fadeIn(g);
   }
 
-  // ─── STEP 3: DICE BUILDER ─────────────────────────────────────────────────
+  // ─── STEP 3: DIE TYPE SELECTION ───────────────────────────────────────────
 
-  _showBuildStep() {
+  _showTypeStep() {
     const g = this._stepGroup = this.add.container(0, 0);
 
-    g.add(this.add.text(W / 2, 36, 'BUILD YOUR DICE', {
+    g.add(this.add.text(W / 2, 36, 'CHOOSE DIE TYPES', {
       fontSize: '17px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3
     }).setOrigin(0.5));
 
-    this._buildDiceNets(g);
+    const startY = 76;
+    const rowH   = 70;
+    const btnW   = 70, btnH = 50, btnGap = 6;
+    const bxStart = 52;
 
-    const btnBg = this.add.rectangle(W / 2, H - 44, W - 16, 50, 0x162030);
-    btnBg.setStrokeStyle(1.5, 0x4488cc, 0.9).setInteractive();
-    btnBg.on('pointerdown', () => this._transitionTo(() => this._showRuneStep()));
-    btnBg.on('pointerover',  () => btnBg.setFillStyle(0x4488cc));
-    btnBg.on('pointerout',   () => btnBg.setFillStyle(0x162030));
-    g.add(btnBg);
+    this._diceConfig.forEach((dc, di) => {
+      const rowCy = startY + di * rowH + rowH / 2;
+
+      g.add(this.add.text(16, rowCy, `Die ${di + 1}`, {
+        fontSize: '17px', color: '#2a3848'
+      }).setOrigin(0, 0.5));
+
+      DIE_TYPE_KEYS.forEach((typeId, ti) => {
+        const dt  = DIE_TYPES[typeId];
+        const fc  = parseInt(dt.color.replace('#', ''), 16);
+        const bx  = bxStart + ti * (btnW + btnGap) + btnW / 2;
+        const sel = dc.type === typeId;
+
+        const bbg = this.add.rectangle(bx, rowCy, btnW, btnH, sel ? 0x1a2030 : 0x0d0d1c);
+        bbg.setStrokeStyle(sel ? 2 : 1, fc, sel ? 1 : 0.35).setInteractive();
+        g.add(bbg);
+        g.add(this.add.text(bx, rowCy, dt.sym, {
+          fontSize: '17px', color: sel ? dt.color : '#334455', fontStyle: sel ? 'bold' : 'normal'
+        }).setOrigin(0.5));
+
+        bbg.on('pointerdown', () => {
+          dc.type = typeId;
+          this._transitionTo(() => this._showTypeStep());
+        });
+        bbg.on('pointerover',  () => { if (!sel) bbg.setFillStyle(0x181828); });
+        bbg.on('pointerout',   () => { if (!sel) bbg.setFillStyle(0x0d0d1c); });
+      });
+    });
+
+    const allAssigned = this._diceConfig.every(dc => dc.type !== null);
+    const nextBg = this.add.rectangle(W / 2, H - 44, W - 16, 50,
+      allAssigned ? 0x162030 : 0x0d0d18);
+    nextBg.setStrokeStyle(1.5, allAssigned ? 0x4488cc : 0x1a1a2e, 0.9);
+    if (allAssigned) {
+      nextBg.setInteractive();
+      nextBg.on('pointerdown', () => this._transitionTo(() => this._showRuneStep()));
+      nextBg.on('pointerover',  () => nextBg.setFillStyle(0x4488cc));
+      nextBg.on('pointerout',   () => nextBg.setFillStyle(0x162030));
+    }
+    g.add(nextBg);
     g.add(this.add.text(W / 2, H - 44, 'Next  →', {
-      fontSize: '17px', color: '#aaccff', fontStyle: 'bold', letterSpacing: 2
+      fontSize: '17px', color: allAssigned ? '#aaccff' : '#2a2a3e',
+      fontStyle: 'bold', letterSpacing: 2
     }).setOrigin(0.5));
 
     this._addBackBtn(g, () => this._showCountStep());
     this._fadeIn(g);
-  }
-
-  _buildDiceNets(g) {
-    this._faceObjs = [];
-    const n = this._diceCount;
-
-    // Scale cell size so all dice fit — up to 3 per row at full size,
-    // 4–6 dice wrap into two rows with smaller cells.
-    const perRow = n <= 3 ? n : Math.ceil(n / 2);
-    const CELL   = Math.floor(Math.min(38, (W - 8) / (perRow * 3 + 1)));
-    const FACE   = Math.round(CELL * 0.89);
-
-    const NET = [
-      { col: 1, row: 0 },
-      { col: 0, row: 1 }, { col: 1, row: 1 }, { col: 2, row: 1 },
-      { col: 1, row: 2 },
-      { col: 1, row: 3 },
-    ];
-    const netW   = 3 * CELL;
-    const netH   = 4 * CELL;
-    const gap    = (W - perRow * netW) / (perRow + 1);
-    const startY = 82;
-
-    this._diceConfig.forEach((dc, di) => {
-      const col = di % perRow;
-      const row = Math.floor(di / perRow);
-      const gx  = gap + col * (netW + gap);
-      const gy  = startY + row * (netH + 28);
-
-      g.add(this.add.text(gx + netW / 2, gy + 6, `Die ${di + 1}`, {
-        fontSize: '17px', color: '#334455'
-      }).setOrigin(0.5));
-
-      dc.faces.forEach((faceId, fi) => {
-        const pos  = NET[fi] ?? { col: fi % 3, row: Math.floor(fi / 3) };
-        const face = FACES[faceId];
-        const fc   = face ? parseInt(face.color.replace('#', ''), 16) : 0x252538;
-        const fx   = gx + pos.col * CELL + CELL / 2;
-        const fy   = gy + 26 + pos.row * CELL + CELL / 2;
-
-        const bg = this.add.rectangle(fx, fy, FACE, FACE, 0x0d0d1c);
-        bg.setStrokeStyle(1.5, fc, face ? 0.7 : 0.25).setInteractive();
-
-        const sym = this.add.text(fx, fy, face ? face.sym : '--', {
-          fontSize: '17px', color: face ? face.color : '#252538',
-          fontStyle: 'bold', stroke: '#000000', strokeThickness: 3,
-        }).setOrigin(0.5);
-
-        bg.on('pointerdown', () => this._openFacePicker(di, fi));
-        bg.on('pointerover',  () => bg.setFillStyle(0x181828));
-        bg.on('pointerout',   () => bg.setFillStyle(0x0d0d1c));
-
-        g.add([bg, sym]);
-        this._faceObjs.push({ bg, sym, di, fi });
-      });
-    });
-  }
-
-  // ─── FACE PICKER ─────────────────────────────────────────────────────────
-
-  _openFacePicker(di, fi) {
-    this._closePicker();
-
-    const SETUP_TOKENS = ['blank', 'strike', 'strike2', 'defend', 'defend2', 'pierce', 'mend'];
-    const cols   = 4;
-    const sp     = 90;
-    const tileW  = 84, tileH = 82;
-    const rows   = Math.ceil(SETUP_TOKENS.length / cols);
-    const panelW = cols * sp + 16;
-    const panelH = rows * (tileH + 14) + 48;
-    const cx     = W / 2;
-    const cy     = H / 2 + 20;
-
-    const panel = this._picker = this.add.container(0, 0).setDepth(50);
-
-    const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.65).setInteractive();
-    dim.on('pointerdown', () => this._closePicker());
-    panel.add(dim);
-
-    panel.add(this.add.rectangle(cx, cy, panelW, panelH, 0x0a0a1e)
-      .setStrokeStyle(1.5, 0xf0c040, 0.55));
-
-    panel.add(this.add.text(cx, cy - panelH / 2 + 20, 'choose a face', {
-      fontSize: '17px', color: '#334455', letterSpacing: 1
-    }).setOrigin(0.5));
-
-    const ox = cx - ((cols - 1) * sp) / 2;
-
-    SETUP_TOKENS.forEach((tokenId, i) => {
-      const face = FACES[tokenId];
-      const fc   = face ? parseInt(face.color.replace('#', ''), 16) : 0x555555;
-      const col  = i % cols;
-      const row  = Math.floor(i / cols);
-      const tx   = ox + col * sp;
-      const ty   = cy - panelH / 2 + 48 + row * (tileH + 14) + tileH / 2;
-
-      const tbg = this.add.rectangle(tx, ty, tileW, tileH, 0x131320);
-      tbg.setStrokeStyle(1.5, fc, 0.55).setInteractive();
-
-      panel.add(tbg);
-      panel.add(this.add.text(tx, ty - 16, face ? face.sym : '--', {
-        fontSize: '22px', color: face ? face.color : '#555555',
-        fontStyle: 'bold', stroke: '#000000', strokeThickness: 3,
-      }).setOrigin(0.5));
-      panel.add(this.add.text(tx, ty + 16, face ? face.label : '', {
-        fontSize: '17px', color: '#8899aa'
-      }).setOrigin(0.5));
-
-      tbg.on('pointerdown', () => { this._applyFace(di, fi, tokenId); this._closePicker(); });
-      tbg.on('pointerover',  () => tbg.setFillStyle(0x252540));
-      tbg.on('pointerout',   () => tbg.setFillStyle(0x131320));
-    });
-  }
-
-  _closePicker() {
-    if (this._picker) { this._picker.destroy(true); this._picker = null; }
-  }
-
-  _applyFace(di, fi, tokenId) {
-    this._diceConfig[di].faces[fi] = tokenId;
-    const obj  = this._faceObjs.find(o => o.di === di && o.fi === fi);
-    if (!obj) return;
-    const face = FACES[tokenId];
-    const fc   = face ? parseInt(face.color.replace('#', ''), 16) : 0x252538;
-    obj.sym.setText(face ? face.sym : '--').setColor(face ? face.color : '#252538');
-    obj.bg.setStrokeStyle(1.5, fc, face ? 0.7 : 0.25);
   }
 
   // ─── STEP 4: RUNES & MATERIALS ───────────────────────────────────────────
@@ -419,13 +358,14 @@ export default class SetupScene extends Phaser.Scene {
 
     this._diceConfig.forEach((dc, di) => {
       const cy = startY + di * (cardH + gap) + cardH / 2;
+      const dt = DIE_TYPES[dc.type];
 
       const cardBg = this.add.rectangle(cx, cy, W - 32, cardH, 0x0d0d1c);
       cardBg.setStrokeStyle(1, 0x1e2838, 0.8);
       g.add(cardBg);
 
       g.add(this.add.text(20, cy, `D${di + 1}`, {
-        fontSize: '17px', color: '#2a3848', fontStyle: 'bold'
+        fontSize: '17px', color: dt ? dt.color : '#2a3848', fontStyle: 'bold'
       }).setOrigin(0, 0.5));
 
       // Rune slot
@@ -473,7 +413,6 @@ export default class SetupScene extends Phaser.Scene {
       this._runeObjs.push({ rBg, rLabel, rSub, mBg, mLabel, mSub, di });
     });
 
-    // Begin Battle
     const btnBg = this.add.rectangle(W / 2, H - 44, W - 16, 50, 0x163824);
     btnBg.setStrokeStyle(1.5, 0x27ae60, 0.9).setInteractive();
     btnBg.on('pointerdown', () => this._startBattle());
@@ -484,9 +423,11 @@ export default class SetupScene extends Phaser.Scene {
       fontSize: '17px', color: '#aaffaa', fontStyle: 'bold', letterSpacing: 2
     }).setOrigin(0.5));
 
-    this._addBackBtn(g, () => this._usedClassPreset ? this._showClassStep() : this._showBuildStep());
+    this._addBackBtn(g, () => this._usedClassPreset ? this._showClassStep() : this._showTypeStep());
     this._fadeIn(g);
   }
+
+  // ─── RUNE PICKER ─────────────────────────────────────────────────────────
 
   _openRunePicker(di) {
     this._closePicker();
@@ -504,7 +445,6 @@ export default class SetupScene extends Phaser.Scene {
 
     panel.add(this.add.rectangle(cx, panelY, panelW, panelH, 0x0a0a1e)
       .setStrokeStyle(1.5, 0xe8c97a, 0.45));
-
     panel.add(this.add.text(cx, panelY - panelH / 2 + 18, 'choose a rune', {
       fontSize: '17px', color: '#334455', letterSpacing: 1
     }).setOrigin(0.5));
@@ -528,10 +468,7 @@ export default class SetupScene extends Phaser.Scene {
         fontSize: '17px', color: '#6677aa'
       }).setOrigin(0.5));
 
-      tbg.on('pointerdown', () => {
-        this._closePicker();
-        this._openFaceRunePicker(di, runeId);
-      });
+      tbg.on('pointerdown', () => { this._closePicker(); this._openFaceRunePicker(di, runeId); });
       tbg.on('pointerover',  () => tbg.setFillStyle(0x252540));
       tbg.on('pointerout',   () => tbg.setFillStyle(0x131320));
     });
@@ -539,21 +476,16 @@ export default class SetupScene extends Phaser.Scene {
 
   _openFaceRunePicker(di, runeId) {
     this._closePicker();
-    const rune = RUNES[runeId];
-    const dc   = this._diceConfig[di];
-    const cx   = W / 2;
+    const rune  = RUNES[runeId];
+    const dc    = this._diceConfig[di];
+    const sides = dc.sides;
+    const cx    = W / 2;
+    const dt    = DIE_TYPES[dc.type];
 
-    const CELL   = 46;
-    const NET    = [
-      { col: 1, row: 0 },
-      { col: 0, row: 1 }, { col: 1, row: 1 }, { col: 2, row: 1 },
-      { col: 1, row: 2 },
-      { col: 1, row: 3 },
-    ];
-    const netW   = 3 * CELL;
-    const netH   = 4 * CELL;
-    const panelW = netW + 56;
-    const panelH = netH + 70;
+    const cols = Math.min(sides, 4), sp = 54;
+    const rows = Math.ceil(sides / cols);
+    const panelW = cols * sp + 24;
+    const panelH = rows * sp + 68;
     const panelY = H / 2 + 20;
 
     const panel = this._picker = this.add.container(0, 0).setDepth(60);
@@ -562,33 +494,33 @@ export default class SetupScene extends Phaser.Scene {
     dim.on('pointerdown', () => this._closePicker());
     panel.add(dim);
 
+    const runeColor = parseInt(rune.color.replace('#', ''), 16);
     panel.add(this.add.rectangle(cx, panelY, panelW, panelH, 0x0a0a1e)
-      .setStrokeStyle(1.5, parseInt(rune.color.replace('#', ''), 16), 0.6));
-
+      .setStrokeStyle(1.5, runeColor, 0.6));
     panel.add(this.add.text(cx, panelY - panelH / 2 + 18,
-      `${rune.sym}  —  pick a face`, {
-        fontSize: '17px', color: rune.color, letterSpacing: 1
-      }).setOrigin(0.5));
+      `${rune.sym}  —  pick a face`, { fontSize: '17px', color: rune.color }
+    ).setOrigin(0.5));
     panel.add(this.add.text(cx, panelY - panelH / 2 + 38, `Die ${di + 1}`, {
-      fontSize: '17px', color: '#2a3848', letterSpacing: 1
+      fontSize: '17px', color: '#2a3848'
     }).setOrigin(0.5));
 
-    const netStartX = cx - netW / 2;
-    const netStartY = panelY - panelH / 2 + 54;
+    const gridTop = panelY - panelH / 2 + 56;
 
-    dc.faces.forEach((faceId, fi) => {
-      const face = FACES[faceId];
-      const pos  = NET[fi];
-      const fc   = face ? parseInt(face.color.replace('#', ''), 16) : 0x252538;
-      const fx   = netStartX + pos.col * CELL + CELL / 2;
-      const fy   = netStartY + pos.row * CELL + CELL / 2;
-      const sel  = dc.runeFaceIdx === fi;
+    for (let fi = 0; fi < sides; fi++) {
+      const col = fi % cols;
+      const row = Math.floor(fi / cols);
+      const rowCount = Math.min(cols, sides - row * cols);
+      const rowOx = cx - ((rowCount - 1) * sp) / 2;
+      const fx  = rowOx + col * sp;
+      const fy  = gridTop + row * sp + sp / 2;
+      const sel = dc.runeFaceIdx === fi;
+      const fc  = dt ? parseInt(dt.color.replace('#', ''), 16) : 0x555555;
 
-      const tbg = this.add.rectangle(fx, fy, CELL - 4, CELL - 4, sel ? 0x221a10 : 0x131320);
-      tbg.setStrokeStyle(sel ? 2 : 1.5, fc, sel ? 1 : 0.55).setInteractive();
+      const tbg = this.add.rectangle(fx, fy, sp - 6, sp - 6, sel ? 0x221a10 : 0x131320);
+      tbg.setStrokeStyle(sel ? 2 : 1.5, sel ? runeColor : fc, sel ? 1 : 0.55).setInteractive();
       panel.add(tbg);
-      panel.add(this.add.text(fx, fy, face ? face.sym : '--', {
-        fontSize: '17px', color: face ? face.color : '#252538',
+      panel.add(this.add.text(fx, fy, String(fi + 1), {
+        fontSize: '17px', color: sel ? rune.color : (dt?.color ?? '#ffffff'),
         fontStyle: 'bold', stroke: '#000000', strokeThickness: 2
       }).setOrigin(0.5));
 
@@ -600,8 +532,10 @@ export default class SetupScene extends Phaser.Scene {
       });
       tbg.on('pointerover',  () => tbg.setFillStyle(0x252540));
       tbg.on('pointerout',   () => tbg.setFillStyle(sel ? 0x221a10 : 0x131320));
-    });
+    }
   }
+
+  // ─── MATERIAL PICKER ─────────────────────────────────────────────────────
 
   _openMaterialPicker(di) {
     this._closePicker();
@@ -622,7 +556,6 @@ export default class SetupScene extends Phaser.Scene {
 
     panel.add(this.add.rectangle(cx, panelY, panelW, panelH, 0x0a0a1e)
       .setStrokeStyle(1.5, 0x8899aa, 0.45));
-
     panel.add(this.add.text(cx, panelY - panelH / 2 + 18, 'choose a material', {
       fontSize: '17px', color: '#334455', letterSpacing: 1
     }).setOrigin(0.5));
@@ -657,6 +590,10 @@ export default class SetupScene extends Phaser.Scene {
       tbg.on('pointerover',  () => tbg.setFillStyle(0x252540));
       tbg.on('pointerout',   () => tbg.setFillStyle(sel ? 0x1a1a30 : 0x131320));
     });
+  }
+
+  _closePicker() {
+    if (this._picker) { this._picker.destroy(true); this._picker = null; }
   }
 
   _refreshRuneSlot(di) {
