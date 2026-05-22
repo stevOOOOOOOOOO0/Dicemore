@@ -752,7 +752,8 @@ export default class BattleScene extends Phaser.Scene {
     const card      = this.trayCards[this.throwCount];
     const configIdx = card.configIdx;
     const dc        = this.playerDiceConfig[configIdx];
-    const fIdx      = Phaser.Math.Between(0, dc.sides - 1);
+    const activeIdx = this._getActiveFaceIndices(dc);
+    const fIdx      = activeIdx[Phaser.Math.Between(0, activeIdx.length - 1)];
     const data      = { ...dc, currentFaceIdx: fIdx };
 
     const die  = this._spawnDie(data, x, y, vx, vy, true, configIdx);
@@ -777,8 +778,12 @@ export default class BattleScene extends Phaser.Scene {
   _rerollDie(dieRef) {
     this._stopDieShield(dieRef);
     const { data } = dieRef;
-    const faceCount      = data.sides ?? data.faces?.length ?? 6;
-    data.currentFaceIdx  = Phaser.Math.Between(0, faceCount - 1);
+    if (dieRef.isPlayer) {
+      const activeIdx = this._getActiveFaceIndices(data);
+      data.currentFaceIdx = activeIdx[Phaser.Math.Between(0, activeIdx.length - 1)];
+    } else {
+      data.currentFaceIdx = Phaser.Math.Between(0, (data.faces?.length ?? 6) - 1);
+    }
     dieRef._finalFaceIdx = data.currentFaceIdx;
     dieRef._rolling      = true;
     dieRef._lastCycleMs  = 0;
@@ -945,6 +950,11 @@ export default class BattleScene extends Phaser.Scene {
         const f = FACES[d.data.faces[d.data.currentFaceIdx]];
         return f?.effect === 'enemy_block' ? sum + (f.value || 0) : sum;
       }, 0);
+  }
+
+  _getActiveFaceIndices(dc) {
+    const culled = dc.culledFaces ?? [];
+    return Array.from({ length: dc.sides }, (_, i) => i).filter(i => !culled.includes(i + 1));
   }
 
   _laserBeam(x1, y1, x2, y2, color) {
@@ -1250,17 +1260,25 @@ export default class BattleScene extends Phaser.Scene {
     const originY = cy - panelH / 2 + 38;
 
     facePositions.forEach(({ fx, fy }, fi) => {
-      const ax = originX + fx;
-      const ay = originY + fy;
-      const isActive   = fi === currentIdx;
-      const isRuneFace = fi === data.runeFaceIdx && data.rune;
+      const ax         = originX + fx;
+      const ay         = originY + fy;
+      const faceValue  = fi + 1;
+      const isCulled   = (data.culledFaces ?? []).includes(faceValue);
+      const isActive   = fi === currentIdx && !isCulled;
+      const isRuneFace = fi === data.runeFaceIdx && data.rune && !isCulled;
 
-      const fb = this.add.rectangle(ax, ay, FACE, FACE, isActive ? 0x1a2e4a : 0x141428);
-      fb.setStrokeStyle(isActive ? 2 : 1, isRuneFace ? 0xf0c040 : typeColor, isActive ? 1 : 0.45);
+      const fb = this.add.rectangle(ax, ay, FACE, FACE,
+        isCulled ? 0x0a0a14 : (isActive ? 0x1a2e4a : 0x141428));
+      fb.setStrokeStyle(
+        isActive ? 2 : 1,
+        isCulled ? 0x333344 : (isRuneFace ? 0xf0c040 : typeColor),
+        isCulled ? 0.25 : (isActive ? 1 : 0.45)
+      );
       this.inspectorPanel.add(fb);
       this.inspectorPanel.add(
-        this.add.text(ax, ay, String(fi + 1), {
-          fontSize: '17px', color: isActive ? (dt?.color ?? '#ffffff') : '#556677',
+        this.add.text(ax, ay, isCulled ? '✕' : String(fi + 1), {
+          fontSize: '17px',
+          color: isCulled ? '#2a2a3a' : (isActive ? (dt?.color ?? '#ffffff') : '#556677'),
           fontStyle: isActive ? 'bold' : 'normal',
           stroke: '#000000', strokeThickness: isActive ? 3 : 1,
         }).setOrigin(0.5, 0.5)
@@ -1570,7 +1588,9 @@ export default class BattleScene extends Phaser.Scene {
           d._lastCycleMs = now;
           if (d.isPlayer) {
             const dt = DIE_TYPES[d.data.type];
-            d.lbl.setText(String(Phaser.Math.Between(1, d.data.sides)));
+            const active = this._getActiveFaceIndices(d.data);
+            const randIdx = active[Phaser.Math.Between(0, active.length - 1)];
+            d.lbl.setText(String(randIdx + 1));
             d.lbl.setColor(dt ? dt.color : '#ffffff');
             d.valLbl.setText('');
           } else {
