@@ -1041,11 +1041,17 @@ export default class BattleScene extends Phaser.Scene {
     if (!this.allDice.includes(dieRef)) return;
     this._floatText(dieRef.img.x, dieRef.img.y - 24, 'SHATTER!', '#aaddff');
     this._stopDieShield(dieRef);
+    const wasRollingPlayer = dieRef.isPlayer && dieRef._rolling;
     const removeFrom = (arr) => { const i = arr.indexOf(dieRef); if (i >= 0) arr.splice(i, 1); };
     removeFrom(this.allDice);
     removeFrom(this.playerDice);
     removeFrom(this.enemyDice);
     this.time.delayedCall(150, () => { dieRef.img?.destroy(); dieRef.lbl?.destroy(); dieRef.valLbl?.destroy(); });
+    // Die was shattered before settling — the update loop will never trigger
+    // _startQueue for it, so _throwLocked would stay true indefinitely.
+    if (wasRollingPlayer && !this._queueActive) {
+      this._startQueue();
+    }
   }
 
   _triggerVictory() {

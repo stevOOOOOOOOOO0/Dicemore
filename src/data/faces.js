@@ -35,14 +35,14 @@ export const ENEMIES = {
   // ── MINIONS (1 die · HP 8-14) ───────────────────────────────────────────
 
   red_louse: {
-    name: 'Red Louse', hp: 9, tier: 'minion', color: '#e74c3c',
+    name: 'Red Louse', hp: 18, tier: 'minion', color: '#e74c3c',
     dice: [
       { faces: ['e_atk2', 'e_atk2', 'e_atk1', 'e_atk1', 'e_blk', 'e_atk1'] },
     ],
   },
 
   cultist: {
-    name: 'Cultist', hp: 8, tier: 'minion', color: '#9b59b6',
+    name: 'Cultist', hp: 16, tier: 'minion', color: '#9b59b6',
     // Mostly stacks strength — harmless at first, terrifying by turn 3+
     dice: [
       { faces: ['e_str', 'e_str', 'e_str', 'e_atk2', 'e_atk1', 'e_blank'] },
@@ -50,7 +50,7 @@ export const ENEMIES = {
   },
 
   jaw_worm: {
-    name: 'Jaw Worm', hp: 14, tier: 'minion', color: '#c0392b',
+    name: 'Jaw Worm', hp: 28, tier: 'minion', color: '#c0392b',
     dice: [
       { faces: ['e_atk3', 'e_atk2', 'e_atk3', 'e_atk2', 'e_str', 'e_atk1'] },
     ],
@@ -59,7 +59,7 @@ export const ENEMIES = {
   // ── STANDARDS (2 dice · HP 14-22) ───────────────────────────────────────
 
   spike_slime: {
-    name: 'Spike Slime', hp: 18, tier: 'standard', color: '#58d68d',
+    name: 'Spike Slime', hp: 36, tier: 'standard', color: '#58d68d',
     dice: [
       { faces: ['e_atk2', 'e_atk2', 'e_poison', 'e_atk1', 'e_blank', 'e_blk'] },
       { faces: ['e_atk2', 'e_poison', 'e_poison', 'e_atk1', 'e_atk1', 'e_blank'] },
@@ -67,7 +67,7 @@ export const ENEMIES = {
   },
 
   green_louse: {
-    name: 'Green Louse', hp: 14, tier: 'standard', color: '#27ae60',
+    name: 'Green Louse', hp: 28, tier: 'standard', color: '#27ae60',
     // One die applies vulnerable, the other just attacks — punishes passive play
     dice: [
       { faces: ['e_vuln', 'e_vuln', 'e_atk1', 'e_atk1', 'e_atk1', 'e_blank'] },
@@ -76,7 +76,7 @@ export const ENEMIES = {
   },
 
   fungal_beast: {
-    name: 'Fungal Beast', hp: 22, tier: 'standard', color: '#8e44ad',
+    name: 'Fungal Beast', hp: 44, tier: 'standard', color: '#8e44ad',
     dice: [
       { faces: ['e_atk2', 'e_str', 'e_str', 'e_atk2', 'e_atk1', 'e_blank'] },
       { faces: ['e_atk2', 'e_blk', 'e_atk2', 'e_str', 'e_atk1', 'e_blank'] },
@@ -86,7 +86,7 @@ export const ENEMIES = {
   // ── ELITES (3 dice · HP 28-34) ──────────────────────────────────────────
 
   gremlin_nob: {
-    name: 'Gremlin Nob', hp: 28, tier: 'elite', color: '#e67e22',
+    name: 'Gremlin Nob', hp: 56, tier: 'elite', color: '#e67e22',
     // Applies vulnerable then follows up with heavy hits; also stacks strength
     dice: [
       { faces: ['e_vuln', 'e_atk2', 'e_atk2', 'e_atk1', 'e_str', 'e_blank'] },
@@ -96,7 +96,7 @@ export const ENEMIES = {
   },
 
   lagavulin: {
-    name: 'Lagavulin', hp: 34, tier: 'elite', color: '#2c3e50',
+    name: 'Lagavulin', hp: 68, tier: 'elite', color: '#2c3e50',
     // Heavily armored — lots of block, but when hits land they HURT
     dice: [
       { faces: ['e_blk2', 'e_blk2', 'e_blk', 'e_atk3', 'e_atk3', 'e_blank'] },
@@ -106,7 +106,7 @@ export const ENEMIES = {
   },
 
   bronze_automaton: {
-    name: 'Automaton', hp: 30, tier: 'elite', color: '#ba8c63',
+    name: 'Automaton', hp: 60, tier: 'elite', color: '#ba8c63',
     // Relentless consistent damage + strength accumulation
     dice: [
       { faces: ['e_atk3', 'e_atk2', 'e_atk2', 'e_atk2', 'e_str', 'e_atk1'] },
@@ -118,7 +118,7 @@ export const ENEMIES = {
   // ── BOSSES (4 dice · HP 46-52) ──────────────────────────────────────────
 
   slime_lord: {
-    name: 'Slime Lord', hp: 46, tier: 'boss', color: '#2ecc71',
+    name: 'Slime Lord', hp: 92, tier: 'boss', color: '#2ecc71',
     // Heavy poison stacker + big damage — kill it fast or drown in DoT
     dice: [
       { faces: ['e_atk3', 'e_atk3', 'e_poison', 'e_atk2', 'e_atk2', 'e_blank'] },
@@ -129,7 +129,7 @@ export const ENEMIES = {
   },
 
   hexaghost: {
-    name: 'Hexaghost', hp: 52, tier: 'boss', color: '#cc88ff',
+    name: 'Hexaghost', hp: 104, tier: 'boss', color: '#cc88ff',
     // Stacks strength aggressively — starts manageable, becomes terrifying
     dice: [
       { faces: ['e_str', 'e_str', 'e_atk3', 'e_atk2', 'e_blank', 'e_blank'] },
