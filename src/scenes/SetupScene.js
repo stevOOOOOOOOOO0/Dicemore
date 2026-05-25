@@ -90,15 +90,20 @@ export default class SetupScene extends Phaser.Scene {
       g.add(this.add.text(cx, cy + 12, 'HP', {
         fontSize: '17px', color: '#334455', letterSpacing: 2
       }).setOrigin(0.5));
-      g.add(this.add.text(cx, cy + 44, `${def.dice.length} ${def.dice.length === 1 ? 'die' : 'dice'}`, {
+      g.add(this.add.text(cx, cy + 44, `${def.obstacleCount} obstacle${def.obstacleCount !== 1 ? 's' : ''}`, {
         fontSize: '17px', color: '#445566'
       }).setOrigin(0.5));
 
-      const unique = [...new Set(def.dice.flatMap(d => d.faces))].slice(0, 4);
-      unique.forEach((fid, fi) => {
-        const face  = FACES[fid];
-        const fc    = face ? parseInt(face.color.replace('#', ''), 16) : 0x333344;
-        const chipX = cx - ((unique.length - 1) * 20) / 2 + fi * 20;
+      const INTENT_CLR = {
+        attack: '#e74c3c', block: '#3498db', strength: '#e67e22',
+        vulnerable: '#bb44cc', frail: '#1abc9c',
+      };
+      const intentTypes = [...new Set(
+        def.intents.flatMap(e => e.type === 'multi' ? e.intents.map(s => s.type) : [e.type])
+      )].slice(0, 4);
+      intentTypes.forEach((iType, fi) => {
+        const fc    = parseInt((INTENT_CLR[iType] ?? '#555555').replace('#', ''), 16);
+        const chipX = cx - ((intentTypes.length - 1) * 20) / 2 + fi * 20;
         const chip  = this.add.rectangle(chipX, cy + 82, 16, 16, 0x0a0a18);
         chip.setStrokeStyle(1.5, fc, 0.8);
         g.add(chip);

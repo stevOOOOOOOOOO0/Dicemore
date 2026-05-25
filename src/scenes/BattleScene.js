@@ -9,6 +9,14 @@ import {
 } from '../constants.js';
 
 const PHASE = { PREP: 0, ENEMY_ROLL: 1, PLAYER_ROLL: 2, COMMIT: 3 };
+
+const INTENT = {
+  attack:     { label: 'ATK', color: '#e74c3c' },
+  block:      { label: 'BLK', color: '#3498db' },
+  strength:   { label: 'STR', color: '#e67e22' },
+  vulnerable: { label: 'VLN', color: '#bb44cc' },
+  frail:      { label: 'FRL', color: '#1abc9c' },
+};
 const THROW_ZONE_BOTTOM  = SURFACE_BOTTOM - 8;
 const THROW_ORIGIN_X     = W / 2;
 const THROW_ORIGIN_Y     = 605;
@@ -55,11 +63,16 @@ export default class BattleScene extends Phaser.Scene {
     this._queueActive = false;
     this._throwLocked = false;
 
-    this.poisonStacks      = 0;
-    this.enemyStrength     = 0;
-    this.vulnerable        = false;
-    this.enemyPoisonStacks = 0;
-    this.enemyWeakened     = false;
+    this.poisonStacks        = 0;
+    this.enemyStrength       = 0;
+    this.vulnerable          = false;
+    this.enemyPoisonStacks   = 0;
+    this.enemyWeakened       = false;
+    this.playerFrail         = false;
+    this.enemyBlock          = 0;
+    this._lastIntentWasBlock = false;
+    this.currentIntent       = null;
+    this._intentPopup        = null;
 
     this.trayCards          = [];
     this.throwCount         = 0;
@@ -162,10 +175,20 @@ export default class BattleScene extends Phaser.Scene {
     body.strokeCircle(0, 0, ENEMY_BUMPER_R);
     this.enemyCharContainer.add(body);
 
+    this._intentTxt = this.add.text(0, -ENEMY_BUMPER_R - 38, '', {
+      fontSize: '14px', color: '#ffffff', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 3,
+    }).setOrigin(0.5, 0.5);
+    this.enemyCharContainer.add(this._intentTxt);
+
     const nameTxt = this.add.text(0, -ENEMY_BUMPER_R - 16, this.enemyDef.name.toUpperCase(), {
       fontSize: '17px', color: this.enemyDef.color, fontStyle: 'bold', letterSpacing: 2
     }).setOrigin(0.5, 0.5);
     this.enemyCharContainer.add(nameTxt);
+
+    const tapZone = this.add.rectangle(0, 0, (ENEMY_BUMPER_R + 24) * 2, (ENEMY_BUMPER_R + 48) * 2, 0xffffff, 0).setInteractive();
+    tapZone.on('pointerdown', (ptr) => { ptr.event.stopPropagation(); this._toggleIntentPopup(); });
+    this.enemyCharContainer.add(tapZone);
 
     this._enemyHpTxt = this.add.text(0, ENEMY_BUMPER_R + 10, '', {
       fontSize: '17px', color: '#dd9999'
@@ -174,6 +197,15 @@ export default class BattleScene extends Phaser.Scene {
 
     this._enemyHpBarGfx = this.add.graphics();
     this.enemyCharContainer.add(this._enemyHpBarGfx);
+
+    this._blockShieldGfx = this.add.graphics();
+    this.enemyCharContainer.add(this._blockShieldGfx);
+
+    this._blockShieldTxt = this.add.text(0, 0, '', {
+      fontSize: '11px', color: '#ffffff', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 2,
+    }).setOrigin(0.5, 0.5);
+    this.enemyCharContainer.add(this._blockShieldTxt);
 
     this._enemyStrTxt = this.add.text(0, ENEMY_BUMPER_R + 30, '', {
       fontSize: '13px', color: '#e67e22', fontStyle: 'bold',
@@ -237,6 +269,163 @@ export default class BattleScene extends Phaser.Scene {
     this._enemyHpBarGfx?.strokeRect(-bw / 2, ENEMY_BUMPER_R + 22, bw, 5);
     this._enemyStrTxt?.setText(this.enemyStrength > 0 ? `STR +${this.enemyStrength}` : '');
     this._enemyPsnTxt?.setText(this.enemyPoisonStacks > 0 ? `☠ ${this.enemyPoisonStacks}` : '');
+    this._refreshIntentDisplay();
+    this._refreshBlockShield();
+  }
+
+  _refreshBlockShield() {
+    if (!this._blockShieldGfx) return;
+    this._blockShieldGfx.clear();
+    this._blockShieldTxt?.setText('');
+    if (!(this.enemyBlock > 0)) return;
+
+    const cx = -46, cy = ENEMY_BUMPER_R + 20;
+    const w = 10, h = 13;
+
+    this._blockShieldGfx.fillStyle(0x1a5276, 0.95);
+    this._blockShieldGfx.lineStyle(1.5, 0x5dade2, 1);
+    this._blockShieldGfx.beginPath();
+    this._blockShieldGfx.moveTo(cx - w, cy - h);
+    this._blockShieldGfx.lineTo(cx + w, cy - h);
+    this._blockShieldGfx.lineTo(cx + w, cy + h * 0.15);
+    this._blockShieldGfx.lineTo(cx,     cy + h);
+    this._blockShieldGfx.lineTo(cx - w, cy + h * 0.15);
+    this._blockShieldGfx.closePath();
+    this._blockShieldGfx.fillPath();
+    this._blockShieldGfx.strokePath();
+
+    this._blockShieldTxt?.setPosition(cx, cy - 1).setText(String(this.enemyBlock));
+  }
+
+  // ─── INTENT SYSTEM ────────────────────────────────────────────────────────
+
+  _drawIntent() {
+    const pool = this.enemyDef.intents;
+    let candidates = this._lastIntentWasBlock
+      ? pool.filter(e => e.type !== 'block').map(e => {
+          const aggressive = e.type === 'attack' ||
+            (e.type === 'multi' && e.intents?.some(i => i.type === 'attack'));
+          return { ...e, weight: aggressive ? e.weight * 2 : e.weight };
+        })
+      : pool;
+    if (!candidates.length) candidates = pool;
+    const total = candidates.reduce((s, e) => s + e.weight, 0);
+    let r = Phaser.Math.FloatBetween(0, total);
+    for (const e of candidates) {
+      r -= e.weight;
+      if (r <= 0) { this._lastIntentWasBlock = e.type === 'block'; return e; }
+    }
+    const last = candidates[candidates.length - 1];
+    this._lastIntentWasBlock = last.type === 'block';
+    return last;
+  }
+
+  _refreshIntentDisplay() {
+    if (!this._intentTxt) return;
+    if (!this.currentIntent) { this._intentTxt.setText(''); return; }
+    const intent = this.currentIntent;
+    if (intent.type === 'multi') {
+      const parts = intent.intents.map(sub => {
+        const cfg = INTENT[sub.type];
+        return cfg ? cfg.label : sub.type.toUpperCase();
+      });
+      this._intentTxt.setText(parts.join(' + '));
+      this._intentTxt.setColor('#ffffff');
+    } else {
+      const cfg = INTENT[intent.type];
+      if (cfg) {
+        let label = cfg.label;
+        if (intent.type === 'attack') {
+          label = `ATK ${intent.value + (this.enemyStrength ?? 0)}`;
+        } else if (intent.type === 'block') {
+          label = `BLK ${intent.value}`;
+        } else if (intent.value !== undefined) {
+          label = `${cfg.label} +${intent.value}`;
+        }
+        this._intentTxt.setText(label);
+        this._intentTxt.setColor(cfg.color);
+      } else {
+        this._intentTxt.setText(intent.type.toUpperCase());
+        this._intentTxt.setColor('#ffffff');
+      }
+    }
+  }
+
+  _toggleIntentPopup() {
+    if (this._intentPopup) this._hideIntentPopup();
+    else this._showIntentPopup();
+  }
+
+  _showIntentPopup() {
+    if (this._intentPopup || !this.currentIntent) return;
+
+    this._intentPopup = this.add.container(W / 2, H / 2).setDepth(75);
+
+    const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.55).setInteractive();
+    dim.on('pointerdown', () => this._hideIntentPopup());
+    this._intentPopup.add(dim);
+
+    const lines = this._describeIntent(this.currentIntent);
+    const strBonus = this.enemyStrength > 0;
+    const panelH = 44 + lines.length * 22 + (strBonus ? 22 : 0) + 16;
+    const panelW = 280;
+
+    const bg = this.add.rectangle(0, 0, panelW, panelH, 0x0d0d1e, 0.97);
+    bg.setStrokeStyle(1.5, parseInt(this.enemyDef.color.replace('#', ''), 16), 0.7).setInteractive();
+    bg.on('pointerdown', (ptr) => { ptr.event.stopPropagation(); this._hideIntentPopup(); });
+    this._intentPopup.add(bg);
+
+    this._intentPopup.add(
+      this.add.text(0, -panelH / 2 + 20, this.enemyDef.name.toUpperCase(), {
+        fontSize: '14px', color: this.enemyDef.color, fontStyle: 'bold', letterSpacing: 2,
+      }).setOrigin(0.5, 0.5)
+    );
+
+    lines.forEach((line, i) => {
+      this._intentPopup.add(
+        this.add.text(0, -panelH / 2 + 44 + i * 22, line.text, {
+          fontSize: '13px', color: line.color ?? '#cccccc',
+        }).setOrigin(0.5, 0.5)
+      );
+    });
+
+    if (strBonus) {
+      this._intentPopup.add(
+        this.add.text(0, panelH / 2 - 16, `STR +${this.enemyStrength} added to attacks`, {
+          fontSize: '11px', color: '#e67e22',
+        }).setOrigin(0.5, 0.5)
+      );
+    }
+  }
+
+  _hideIntentPopup() {
+    if (this._intentPopup) { this._intentPopup.destroy(true); this._intentPopup = null; }
+  }
+
+  _describeIntent(intent) {
+    if (intent.type === 'multi') {
+      return intent.intents.flatMap(sub => this._describeSingleIntent(sub));
+    }
+    return this._describeSingleIntent(intent);
+  }
+
+  _describeSingleIntent(sub) {
+    switch (sub.type) {
+      case 'attack': {
+        const total = sub.value + (this.enemyStrength ?? 0);
+        return [{ text: `Attack  ${total} damage`, color: '#e74c3c' }];
+      }
+      case 'block':
+        return [{ text: `Block  ${sub.value} damage`, color: '#3498db' }];
+      case 'strength':
+        return [{ text: `Gain +${sub.value} Strength`, color: '#e67e22' }];
+      case 'vulnerable':
+        return [{ text: `Vulnerable  (+50% damage taken)`, color: '#bb44cc' }];
+      case 'frail':
+        return [{ text: `Frail  (-50% damage dealt)`, color: '#1abc9c' }];
+      default:
+        return [{ text: sub.type.toUpperCase(), color: '#aaaaaa' }];
+    }
   }
 
   _floatText(x, y, msg, color) {
@@ -315,6 +504,10 @@ export default class BattleScene extends Phaser.Scene {
 
     this.poisonTxt = this.add.text(THROW_ORIGIN_X, THROW_ORIGIN_Y - 44, '', {
       fontSize: '13px', color: '#58d68d', fontStyle: 'bold',
+    }).setOrigin(0.5, 0.5).setDepth(20);
+
+    this.frailTxt = this.add.text(THROW_ORIGIN_X, THROW_ORIGIN_Y + 44, '', {
+      fontSize: '13px', color: '#1abc9c', fontStyle: 'bold',
     }).setOrigin(0.5, 0.5).setDepth(20);
 
     this.playerPhysicsBody = this.matter.add.circle(
@@ -416,6 +609,7 @@ export default class BattleScene extends Phaser.Scene {
       }
     }
     this.poisonTxt?.setText(this.poisonStacks > 0 ? `☠ ${this.poisonStacks}` : '');
+    this.frailTxt?.setText(this.playerFrail ? 'FRAIL' : '');
   }
 
   // ─── COLLISIONS ───────────────────────────────────────────────────────────
@@ -461,9 +655,7 @@ export default class BattleScene extends Phaser.Scene {
           const sA = Math.hypot(bodyA.velocity.x, bodyA.velocity.y);
           const sB = Math.hypot(bodyB.velocity.x, bodyB.velocity.y);
           const struck = sA < sB ? dA : dB;
-          // Don't reroll a player die that has already settled and been queued —
-          // changing its currentFaceIdx would corrupt the pending queue entry.
-          if (!rerolled.has(struck) && (struck._rolling || !struck.isPlayer)) {
+          if (!rerolled.has(struck)) {
             rerolled.add(struck); this._rerollDie(struck);
           }
           return;
@@ -476,29 +668,23 @@ export default class BattleScene extends Phaser.Scene {
 
         if (dieRef && other.label === 'enemyBumper') {
           this._applyBumperKick(dieBody, this.enemyPos.x, this.enemyPos.y);
-          if (!rerolled.has(dieRef) && (dieRef._rolling || !dieRef.isPlayer)) {
+          if (!rerolled.has(dieRef)) {
             rerolled.add(dieRef); this._rerollDie(dieRef);
           }
           this._flashEnemyBumper();
-          if (dieRef.isPlayer) {
-            this.enemyHp = Math.max(0, this.enemyHp - 1);
-            this._refreshEnemyCharacter();
-            this._flashEnemyDamage(1);
-            if (this.enemyHp <= 0) this._triggerVictory();
-          }
+          // Any die contacting the enemy bumper deals 1 chip damage
+          this.enemyHp = Math.max(0, this.enemyHp - 1);
+          this._refreshEnemyCharacter();
+          this._flashEnemyDamage(1);
+          if (this.enemyHp <= 0) this._triggerVictory();
         }
 
         if (dieRef && other.label === 'playerBumper') {
           this._applyBumperKick(dieBody, THROW_ORIGIN_X, THROW_ORIGIN_Y);
-          if (!rerolled.has(dieRef) && (dieRef._rolling || !dieRef.isPlayer)) {
+          if (!rerolled.has(dieRef)) {
             rerolled.add(dieRef); this._rerollDie(dieRef);
           }
           this._flashPlayerBumper();
-          if (dieRef.isPlayer) {
-            this.block += 1;
-            this._refreshStatusUI();
-            this._floatText(THROW_ORIGIN_X + 40, THROW_ORIGIN_Y, '+1 BLK', '#3498db');
-          }
         }
       });
     });
@@ -632,7 +818,10 @@ export default class BattleScene extends Phaser.Scene {
     this.block           = 0;
     this.vulnerable      = false;
     this.enemyWeakened   = false;
+    this.playerFrail     = false;
+    this.enemyBlock      = 0;
     this._autoCommitDone = false;
+    this._hideIntentPopup();
 
     this._effectQueue = [];
     this._queueCards.forEach(c => c.container.destroy());
@@ -655,6 +844,7 @@ export default class BattleScene extends Phaser.Scene {
     this.phase = PHASE.ENEMY_ROLL;
     this._setPhase('ENEMY ROLLING');
 
+    // Tick enemy poison before obstacles are thrown
     if (this.enemyPoisonStacks > 0) {
       const psn    = this.enemyPoisonStacks;
       this.enemyHp = Math.max(0, this.enemyHp - psn);
@@ -664,20 +854,30 @@ export default class BattleScene extends Phaser.Scene {
       if (this.enemyHp <= 0) { this._triggerVictory(); return; }
     }
 
+    // Draw intent for this turn
+    this.currentIntent = this._drawIntent();
+
+    // Apply block intent immediately so it's active during the player's turn
+    const allIntents = this.currentIntent.type === 'multi'
+      ? this.currentIntent.intents : [this.currentIntent];
+    const blockSub = allIntents.find(i => i.type === 'block');
+    if (blockSub) this.enemyBlock = blockSub.value;
+
+    this._refreshEnemyCharacter();
+    this._showMsg('Enemy is acting — tap the enemy to see intent');
+
+    // Throw blank obstacle dice
     let thrown = 0;
-    const defs = this.enemyDef.dice;
+    const count = this.enemyDef.obstacleCount ?? 1;
     const throwNext = () => {
-      if (thrown >= defs.length) { this._waitSettle(() => this._playerRollPhase()); return; }
-      const cfg   = defs[thrown];
-      const fIdx  = Phaser.Math.Between(0, cfg.faces.length - 1);
-      // Spread downward from enemy position
+      if (thrown >= count) { this._waitSettle(() => this._playerRollPhase()); return; }
       const spread = Phaser.Math.FloatBetween(-0.6, 0.6);
       const spd    = Phaser.Math.FloatBetween(8, 13);
       const vx     = Math.sin(spread) * spd;
       const vy     = Math.cos(spread) * spd;
-      const eDie = this._spawnDie({ ...cfg, currentFaceIdx: fIdx },
+      const eDie   = this._spawnDie({ isObstacle: true, currentFaceIdx: 0 },
         this.enemyPos.x, this.enemyPos.y, vx, vy, false, -1);
-      eDie._finalFaceIdx = fIdx;
+      eDie._finalFaceIdx = 0;
       eDie._rolling      = true;
       eDie._lastCycleMs  = 0;
       eDie.img.body.collisionFilter.mask = 0xFFFFFFFF & ~0x0004;
@@ -724,48 +924,60 @@ export default class BattleScene extends Phaser.Scene {
     this.phase = PHASE.COMMIT;
     this._setPhase('RESOLVING...');
     this._showMsg('');
+    this._hideIntentPopup();
 
     this.time.delayedCall(600, () => {
-      let eDmg      = 0;
-      let newPoison = 0;
-      let newStr    = 0;
-      let wasVuln   = false;
+      const intent   = this.currentIntent;
+      const subs     = intent?.type === 'multi' ? intent.intents : (intent ? [intent] : []);
+      const msgs     = [];
 
-      this.enemyDice.forEach(d => {
-        const f = FACES[d.data.faces[d.data.currentFaceIdx]];
-        if (!f?.effect) return;
-        switch (f.effect) {
-          case 'enemy_damage':     eDmg      += (f.value || 1) + this.enemyStrength; break;
-          case 'enemy_strength':   newStr    += (f.value || 1); break;
-          case 'enemy_poison':     newPoison += (f.value || 1); break;
-          case 'enemy_vulnerable': wasVuln    = true; break;
+      subs.forEach(sub => {
+        switch (sub.type) {
+          case 'attack': {
+            let dmg = (sub.value + this.enemyStrength);
+            if (this.vulnerable)     dmg = Math.ceil(dmg * 1.5);
+            if (this.enemyWeakened)  dmg = Math.floor(dmg * 0.5);
+            const taken = Math.max(0, dmg - this.block);
+            this.playerHp = Math.max(0, this.playerHp - taken);
+            if (taken > 0) {
+              this._flashDamage(taken);
+              msgs.push(`-${taken} HP`);
+            } else {
+              msgs.push('Blocked!');
+            }
+            break;
+          }
+          case 'block':
+            // Already set in _enemyRollPhase; just acknowledge
+            msgs.push(`Enemy blocked ${sub.value}`);
+            break;
+          case 'strength':
+            this.enemyStrength += sub.value;
+            this._floatText(this.enemyPos.x, this.enemyPos.y - ENEMY_BUMPER_R - 20, `STR +${sub.value}`, '#e67e22');
+            msgs.push(`Enemy STR +${sub.value}`);
+            break;
+          case 'vulnerable':
+            this.vulnerable = true;
+            this._floatText(THROW_ORIGIN_X, THROW_ORIGIN_Y - 30, 'VULNERABLE!', '#bb44cc');
+            msgs.push('You are Vulnerable');
+            break;
+          case 'frail':
+            this.playerFrail = true;
+            this._floatText(THROW_ORIGIN_X, THROW_ORIGIN_Y + 30, 'FRAIL!', '#1abc9c');
+            msgs.push('You are Frail');
+            break;
         }
       });
 
-      this.enemyStrength += newStr;
-      this.poisonStacks  += newPoison;
-      this.vulnerable     = wasVuln;
+      if (this.enemyWeakened)
+        this._floatText(THROW_ORIGIN_X, THROW_ORIGIN_Y - 50, 'WEAKENED!', '#9b59b6');
 
-      if (wasVuln)         eDmg = Math.ceil(eDmg * 1.5);
-      if (this.enemyWeakened) eDmg = Math.floor(eDmg * 0.5);
-      const takenDmg = Math.max(0, eDmg - this.block);
-      this.playerHp  = Math.min(PLAYER_MAX_HP, this.playerHp - takenDmg);
-
-      if (takenDmg > 0)       this._flashDamage(takenDmg);
-      if (newStr    > 0)      this._floatText(this.enemyPos.x, this.enemyPos.y - ENEMY_BUMPER_R - 20, `STR +${newStr}`, '#e67e22');
-      if (newPoison > 0)      this._floatText(THROW_ORIGIN_X, THROW_ORIGIN_Y - 30, `☠ +${newPoison} PSN`, '#58d68d');
-      if (wasVuln)            this._floatText(THROW_ORIGIN_X, THROW_ORIGIN_Y + 30, 'VULNERABLE!', '#bb44cc');
-      if (this.enemyWeakened) this._floatText(THROW_ORIGIN_X, THROW_ORIGIN_Y - 50, 'WEAKENED!', '#9b59b6');
+      this._lastIntentWasBlock = intent?.type === 'block' ||
+        (intent?.type === 'multi' && intent.intents.some(i => i.type === 'block'));
 
       this._refreshEnemyCharacter();
-
-      const msgs = [];
-      if (takenDmg > 0) msgs.push(`-${takenDmg} HP`);
-      if (newPoison > 0) msgs.push(`☠ +${newPoison} PSN`);
-      if (newStr    > 0) msgs.push(`Enemy STR +${newStr}`);
-      if (wasVuln)       msgs.push('Vulnerable!');
-      this._showMsg(msgs.length > 0 ? msgs.join('   ') : 'No damage taken.');
       this._refreshStatusUI();
+      this._showMsg(msgs.length > 0 ? msgs.join('  ·  ') : 'Nothing happened.');
 
       this.time.delayedCall(2000, () => {
         this._clearSurface();
@@ -791,12 +1003,17 @@ export default class BattleScene extends Phaser.Scene {
       lblText  = String(data.currentFaceIdx + 1);
       lblColor = dt ? dt.color : '#ffffff';
       valText  = '';
-    } else {
+    } else if (data.faces) {
       const face = FACES[data.faces[data.currentFaceIdx]];
       const showVal = face?.effect === 'enemy_damage' || face?.effect === 'enemy_block';
       lblText  = (showVal && face.value !== undefined) ? String(face.value) : (face ? face.sym : '--');
       lblColor = face ? face.color : '#ffffff';
       valText  = showVal ? '' : (face?.value !== undefined ? String(face.value) : '');
+    } else {
+      // obstacle die
+      lblText  = '--';
+      lblColor = '#555555';
+      valText  = '';
     }
     const lbl    = this.add.text(x, y - 8, lblText, {
       fontSize: '17px', color: lblColor, fontStyle: 'bold',
@@ -878,7 +1095,8 @@ export default class BattleScene extends Phaser.Scene {
 
     switch (type) {
       case 'attack': {
-        const raw     = this._getModifiedValue(dieRef, value, true);
+        let raw       = this._getModifiedValue(dieRef, value, true);
+        if (this.playerFrail) raw = Math.floor(raw * 0.5);
         const blocked = data.material === 'rock' ? 0 : this._getActiveEnemyBlock();
         const dmg     = Math.max(0, raw - blocked);
         this._laserBeam(dieRef.img.x, dieRef.img.y, this.enemyPos.x, this.enemyPos.y, 0xff4444);
@@ -900,7 +1118,8 @@ export default class BattleScene extends Phaser.Scene {
         break;
       }
       case 'pierce': {
-        const dmg = this._getModifiedValue(dieRef, value, true);
+        let dmg = this._getModifiedValue(dieRef, value, true);
+        if (this.playerFrail) dmg = Math.floor(dmg * 0.5);
         this._laserBeam(dieRef.img.x, dieRef.img.y, this.enemyPos.x, this.enemyPos.y, 0xff9900);
         this.enemyHp = Math.max(0, this.enemyHp - dmg);
         this._refreshEnemyCharacter();
@@ -923,7 +1142,8 @@ export default class BattleScene extends Phaser.Scene {
         break;
       }
       case 'leech': {
-        const dmg  = this._getModifiedValue(dieRef, value, true);
+        let dmg  = this._getModifiedValue(dieRef, value, true);
+        if (this.playerFrail) dmg = Math.floor(dmg * 0.5);
         const heal = Math.min(dmg, PLAYER_MAX_HP - this.playerHp);
         this._laserBeam(dieRef.img.x, dieRef.img.y, this.enemyPos.x, this.enemyPos.y, 0xaa44ff);
         this.enemyHp  = Math.max(0, this.enemyHp - dmg);
@@ -947,7 +1167,8 @@ export default class BattleScene extends Phaser.Scene {
         break;
       }
       case 'bomb': {
-        const raw     = this._getModifiedValue(dieRef, value * 2, true);
+        let raw       = this._getModifiedValue(dieRef, value * 2, true);
+        if (this.playerFrail) raw = Math.floor(raw * 0.5);
         const blocked = this._getActiveEnemyBlock();
         const dmg     = Math.max(0, raw - blocked);
         const recoil  = value;
@@ -1070,12 +1291,7 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   _getActiveEnemyBlock() {
-    return this.enemyDice
-      .filter(d => !d._rolling)
-      .reduce((sum, d) => {
-        const f = FACES[d.data.faces[d.data.currentFaceIdx]];
-        return f?.effect === 'enemy_block' ? sum + (f.value || 0) : sum;
-      }, 0);
+    return this.enemyBlock ?? 0;
   }
 
   _getActiveFaceIndices(dc) {
@@ -1199,9 +1415,10 @@ export default class BattleScene extends Phaser.Scene {
     const { data, isPlayer } = dieRef;
     if (isPlayer) {
       this._buildPlayerInspector(data, data.currentFaceIdx, pickupDieRef);
-    } else {
+    } else if (data.faces) {
       this._buildInspectorPanel(data.faces, data.currentFaceIdx, 0x8b1a1a, pickupDieRef);
     }
+    // obstacle dice have no faces to inspect
   }
 
   _buildInspectorPanel(faces, currentIdx, borderColor, pickupDieRef) {
@@ -1708,14 +1925,14 @@ export default class BattleScene extends Phaser.Scene {
           d.valLbl.setText('');
           this._addToEffectQueue(d);
           if (!this._queueActive) this._startQueue();
-        } else {
+        } else if (d.data.faces) {
           const finalFace   = FACES[d.data.faces[d._finalFaceIdx]];
           const fShowVal    = finalFace?.effect === 'enemy_damage' || finalFace?.effect === 'enemy_block';
           d.lbl.setText((fShowVal && finalFace.value !== undefined) ? String(finalFace.value) : (finalFace ? finalFace.sym : '--'));
           d.lbl.setColor(finalFace ? finalFace.color : '#ffffff');
           d.valLbl.setText(fShowVal ? '' : (finalFace?.value !== undefined ? String(finalFace.value) : ''));
-          if (finalFace?.effect === 'enemy_block') this._startDieShield(d);
         }
+        // obstacle dice: just show '--', no shield, no effects
       } else {
         const interval = Math.max(40, 250 / motion);
         if (now - d._lastCycleMs > interval) {
@@ -1728,6 +1945,7 @@ export default class BattleScene extends Phaser.Scene {
             d.lbl.setColor(dt ? dt.color : '#ffffff');
             d.valLbl.setText('');
           } else {
+            if (!d.data.faces) return; // obstacle die — no face cycling
             const randFace  = FACES[d.data.faces[Phaser.Math.Between(0, d.data.faces.length - 1)]];
             const rShowVal  = randFace?.effect === 'enemy_damage' || randFace?.effect === 'enemy_block';
             d.lbl.setText((rShowVal && randFace.value !== undefined) ? String(randFace.value) : (randFace ? randFace.sym : '--'));
