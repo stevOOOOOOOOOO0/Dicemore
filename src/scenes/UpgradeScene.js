@@ -19,6 +19,7 @@ export default class UpgradeScene extends Phaser.Scene {
     this._upgrades        = [];
     this._screenObjects   = [];
     this._stepLbl         = null;
+    this._navigating      = false;
   }
 
   create() {
@@ -498,6 +499,9 @@ export default class UpgradeScene extends Phaser.Scene {
   }
 
   _continue() {
+    if (this._navigating) return;
+    this._navigating = true;
+    this._clearScreen();
     this.scene.start('BattleScene', {
       playerDiceConfig: this.playerDiceConfig,
       playerHp:         this.playerHp,

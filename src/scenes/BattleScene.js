@@ -461,7 +461,11 @@ export default class BattleScene extends Phaser.Scene {
           const sA = Math.hypot(bodyA.velocity.x, bodyA.velocity.y);
           const sB = Math.hypot(bodyB.velocity.x, bodyB.velocity.y);
           const struck = sA < sB ? dA : dB;
-          if (!rerolled.has(struck)) { rerolled.add(struck); this._rerollDie(struck); }
+          // Don't reroll a player die that has already settled and been queued —
+          // changing its currentFaceIdx would corrupt the pending queue entry.
+          if (!rerolled.has(struck) && (struck._rolling || !struck.isPlayer)) {
+            rerolled.add(struck); this._rerollDie(struck);
+          }
           return;
         }
 
@@ -472,7 +476,9 @@ export default class BattleScene extends Phaser.Scene {
 
         if (dieRef && other.label === 'enemyBumper') {
           this._applyBumperKick(dieBody, this.enemyPos.x, this.enemyPos.y);
-          if (!rerolled.has(dieRef)) { rerolled.add(dieRef); this._rerollDie(dieRef); }
+          if (!rerolled.has(dieRef) && (dieRef._rolling || !dieRef.isPlayer)) {
+            rerolled.add(dieRef); this._rerollDie(dieRef);
+          }
           this._flashEnemyBumper();
           if (dieRef.isPlayer) {
             this.enemyHp = Math.max(0, this.enemyHp - 1);
@@ -484,7 +490,9 @@ export default class BattleScene extends Phaser.Scene {
 
         if (dieRef && other.label === 'playerBumper') {
           this._applyBumperKick(dieBody, THROW_ORIGIN_X, THROW_ORIGIN_Y);
-          if (!rerolled.has(dieRef)) { rerolled.add(dieRef); this._rerollDie(dieRef); }
+          if (!rerolled.has(dieRef) && (dieRef._rolling || !dieRef.isPlayer)) {
+            rerolled.add(dieRef); this._rerollDie(dieRef);
+          }
           this._flashPlayerBumper();
           if (dieRef.isPlayer) {
             this.block += 1;
@@ -1089,10 +1097,13 @@ export default class BattleScene extends Phaser.Scene {
 
   _flashDieImpact(dieRef, msg, color) {
     if (!dieRef.img?.active) return;
+    // Use a separate non-physics overlay so the physics body is never resized,
+    // which would generate phantom collisions against adjacent settled dice.
+    const ring = this.add.circle(dieRef.img.x, dieRef.img.y, DIE_SIZE * 0.5, 0xffffff, 0.4).setDepth(12);
     this.tweens.add({
-      targets: dieRef.img, scaleX: 1.3, scaleY: 1.3,
-      duration: 60, yoyo: true, ease: 'Sine.Out',
-      onComplete: () => dieRef.img?.setScale(1),
+      targets: ring, scaleX: 2.0, scaleY: 2.0, alpha: 0,
+      duration: 220, ease: 'Sine.Out',
+      onComplete: () => ring.destroy(),
     });
     this._floatText(dieRef.img.x, dieRef.img.y - 24, msg, color);
   }
@@ -1610,10 +1621,12 @@ export default class BattleScene extends Phaser.Scene {
     this.add.text(W / 2, H / 2 - 28, 'GAME OVER', {
       fontSize: '34px', color: '#e74c3c', fontStyle: 'bold'
     }).setOrigin(0.5).setDepth(81);
-    const t = this.add.text(W / 2, H / 2 + 28, 'Tap to restart', {
+    this.add.text(W / 2, H / 2 + 28, 'Tap to restart', {
       fontSize: '17px', color: '#aaaaaa'
-    }).setOrigin(0.5).setDepth(81).setInteractive();
-    t.on('pointerdown', () => this.scene.start('BattleScene', {}));
+    }).setOrigin(0.5).setDepth(81);
+    this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0)
+      .setDepth(82).setInteractive()
+      .on('pointerdown', () => this.scene.start('BattleScene', {}));
   }
 
   // ─── UI HELPERS ───────────────────────────────────────────────────────────
