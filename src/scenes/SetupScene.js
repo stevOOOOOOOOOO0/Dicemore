@@ -18,7 +18,8 @@ export default class SetupScene extends Phaser.Scene {
     this._stepGroup       = null;
     this._runeObjs        = [];
     this._picker          = null;
-    this._startingRelic   = null;
+    this._startingRelic        = null;
+    this._selectedCustomRelics = null;
 
     this.add.rectangle(W / 2, H / 2, W, H, 0x111122);
     this.add.rectangle(W / 2, 1, W, 2, 0x1a4a7a);
@@ -425,13 +426,16 @@ export default class SetupScene extends Phaser.Scene {
       this._runeObjs.push({ rBg, rLabel, rSub, mBg, mLabel, mSub, di });
     });
 
+    const isCustom = !this._usedClassPreset;
     const btnBg = this.add.rectangle(W / 2, H - 44, W - 16, 50, 0x163824);
     btnBg.setStrokeStyle(1.5, 0x27ae60, 0.9).setInteractive();
-    btnBg.on('pointerdown', () => this._transitionTo(() => this._showStartingRelicStep()));
+    btnBg.on('pointerdown', () => this._transitionTo(() =>
+      isCustom ? this._showCustomRelicStep() : this._showStartingRelicStep()
+    ));
     btnBg.on('pointerover',  () => btnBg.setFillStyle(0x27ae60));
     btnBg.on('pointerout',   () => btnBg.setFillStyle(0x163824));
     g.add(btnBg);
-    g.add(this.add.text(W / 2, H - 44, 'Begin Battle', {
+    g.add(this.add.text(W / 2, H - 44, isCustom ? 'Next  →' : 'Begin Battle', {
       fontSize: '17px', color: '#aaffaa', fontStyle: 'bold', letterSpacing: 2
     }).setOrigin(0.5));
 
@@ -746,6 +750,131 @@ export default class SetupScene extends Phaser.Scene {
     this._fadeIn(g);
   }
 
+  // ─── CUSTOM RELIC SELECTION ───────────────────────────────────────────────
+
+  _showCustomRelicStep() {
+    const g = this._stepGroup = this.add.container(0, 0);
+    if (this._selectedCustomRelics === null) this._selectedCustomRelics = [];
+
+    const all = getRelics();
+    const RARITY_COLOR = { common: 0x556677, uncommon: 0x2471a3, rare: 0x6c3483, boss: 0x922b21 };
+    const ITEM_H = 96, ITEM_GAP = 8, ITEM_TOTAL = ITEM_H + ITEM_GAP;
+    const LIST_TOP  = 100;
+    const LIST_BTM  = H - 66;
+    const LIST_H    = LIST_BTM - LIST_TOP;
+    const totalH    = all.length * ITEM_TOTAL - ITEM_GAP;
+    const maxScroll = Math.max(0, totalH - LIST_H);
+
+    g.add(this.add.text(W / 2, 36, 'CHOOSE RELICS', {
+      fontSize: '20px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3,
+    }).setOrigin(0.5));
+    g.add(this.add.text(W / 2, 68, 'Select any to take into battle.', {
+      fontSize: '13px', color: '#445566',
+    }).setOrigin(0.5));
+
+    let scrollY = 0;
+    const listCont = this.add.container(0, LIST_TOP);
+    g.add(listCont);
+
+    const maskGfx = this.make.graphics({ add: false });
+    maskGfx.fillRect(0, LIST_TOP, W, LIST_H);
+    listCont.setMask(maskGfx.createGeometryMask());
+
+    const items = [];
+
+    all.forEach((relic, i) => {
+      const iy     = i * ITEM_TOTAL;
+      const cy     = iy + ITEM_H / 2;
+      const fc     = parseInt((relic.color ?? '#ffffff').replace('#', ''), 16);
+      const rarCol = RARITY_COLOR[relic.rarity] ?? RARITY_COLOR.common;
+
+      const bg      = this.add.rectangle(W / 2, cy, W - 32, ITEM_H, 0x0a0a14, 0.5);
+      const dot     = this.add.circle(44, cy, 12, fc, 0.35);
+      const dotLtr  = this.add.text(44, cy, relic.name[0].toUpperCase(), {
+        fontSize: '12px', color: '#444444', fontStyle: 'bold',
+      }).setOrigin(0.5);
+      const nameTxt = this.add.text(72, cy - 22, relic.name, {
+        fontSize: '15px', color: '#334455',
+      }).setOrigin(0, 0.5);
+      const rarTxt  = this.add.text(72, cy - 3, relic.rarity.toUpperCase(), {
+        fontSize: '11px', color: '#1c1c2e', letterSpacing: 1,
+      }).setOrigin(0, 0.5);
+      const descTxt = this.add.text(72, cy + 18, relic.description, {
+        fontSize: '12px', color: '#2a3040', wordWrap: { width: W - 96 },
+      }).setOrigin(0, 0.5);
+
+      listCont.add([bg, dot, dotLtr, nameTxt, rarTxt, descTxt]);
+
+      const refresh = (sel) => {
+        bg.setFillStyle(sel ? 0x1a1a3a : 0x0a0a14, sel ? 1 : 0.5);
+        bg.setStrokeStyle(2, rarCol, sel ? 0.85 : 0.3);
+        dot.setAlpha(sel ? 0.9 : 0.35);
+        dotLtr.setColor(sel ? '#ffffff' : '#444444');
+        nameTxt.setColor(sel ? relic.color : '#334455');
+        rarTxt.setColor(sel ? '#334455' : '#1c1c2e');
+        descTxt.setColor(sel ? '#7788aa' : '#2a3040');
+      };
+      refresh(this._selectedCustomRelics.some(r => r.id === relic.id));
+      items.push({ relic, refresh });
+    });
+
+    // Begin Battle button
+    const btnBg = this.add.rectangle(W / 2, H - 38, W - 16, 46, 0x163824);
+    btnBg.setStrokeStyle(1.5, 0x27ae60, 0.9).setInteractive();
+    const btnTxt = this.add.text(W / 2, H - 38,
+      `Begin Battle · ${this._selectedCustomRelics.length} relics`, {
+        fontSize: '17px', color: '#aaffaa', fontStyle: 'bold', letterSpacing: 2,
+      }).setOrigin(0.5);
+    btnBg.on('pointerdown', () => this._startBattle());
+    btnBg.on('pointerover',  () => btnBg.setFillStyle(0x27ae60));
+    btnBg.on('pointerout',   () => btnBg.setFillStyle(0x163824));
+    g.add(btnBg);
+    g.add(btnTxt);
+
+    // Transparent drag zone sits above the list to capture scroll + tap
+    let ptrDownY = null, scrollAtDown = 0;
+
+    const dragZone = this.add.rectangle(W / 2, LIST_TOP + LIST_H / 2, W, LIST_H, 0, 0)
+      .setInteractive();
+    g.add(dragZone);
+
+    dragZone.on('pointerdown', ptr => {
+      ptrDownY     = ptr.y;
+      scrollAtDown = scrollY;
+    });
+
+    const onMove = ptr => {
+      if (!ptr.isDown || ptrDownY === null) return;
+      scrollY = Phaser.Math.Clamp(scrollAtDown + (ptrDownY - ptr.y), 0, maxScroll);
+      listCont.y = LIST_TOP - scrollY;
+    };
+    this.input.on('pointermove', onMove);
+
+    dragZone.on('pointerup', ptr => {
+      if (ptrDownY !== null && Math.abs(ptr.y - ptrDownY) < 8) {
+        const relY = ptr.y - LIST_TOP + scrollY;
+        const idx  = Math.floor(relY / ITEM_TOTAL);
+        if (idx >= 0 && idx < items.length) {
+          const { relic, refresh } = items[idx];
+          const si = this._selectedCustomRelics.findIndex(r => r.id === relic.id);
+          if (si >= 0) this._selectedCustomRelics.splice(si, 1);
+          else         this._selectedCustomRelics.push(relic);
+          refresh(this._selectedCustomRelics.some(r => r.id === relic.id));
+          btnTxt.setText(`Begin Battle · ${this._selectedCustomRelics.length} relics`);
+        }
+      }
+      ptrDownY = null;
+    });
+
+    g.once('destroy', () => {
+      this.input.off('pointermove', onMove);
+      maskGfx.destroy();
+    });
+
+    this._addBackBtn(g, () => this._showRuneStep());
+    this._fadeIn(g);
+  }
+
   // ─── LAUNCH ───────────────────────────────────────────────────────────────
 
   _startBattle() {
@@ -755,7 +884,9 @@ export default class SetupScene extends Phaser.Scene {
       playerMaxHp:      PLAYER_MAX_HP,
       rerollTokens:     1,
       battleIndex:      BATTLE_SEQUENCE.indexOf(this._enemyKey),
-      activeRelics:     this._startingRelic ? [this._startingRelic] : [],
+      activeRelics:     this._selectedCustomRelics !== null
+                          ? this._selectedCustomRelics
+                          : (this._startingRelic ? [this._startingRelic] : []),
     });
   }
 }
