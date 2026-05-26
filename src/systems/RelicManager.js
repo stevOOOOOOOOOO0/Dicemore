@@ -103,6 +103,14 @@ export default class RelicManager {
     });
   }
 
+  onHitBumper(dieRef) {
+    if (!dieRef.isPlayer) return;
+    const s = this.scene;
+    this._each('ON_HIT_BUMPER', 'MAX_FACE_DAMAGE', () => {
+      s._applyMaxFaceDamage(dieRef);
+    });
+  }
+
   onKill() {
     const s = this.scene;
 

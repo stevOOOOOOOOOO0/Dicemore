@@ -12,29 +12,31 @@ export const SHEET_CSV_URL = '';
 // rarity   : common | uncommon | rare | boss
 export const FALLBACK_RELICS = [
   // ── Common ──────────────────────────────────────────────────────────────────
-  { id: 'burning_blood',     name: 'Burning Blood',      description: 'Heal 4 HP when you defeat an enemy.',              rarity: 'common',   trigger: 'ON_KILL',         effect: 'HEAL_ON_KILL',        value: 4,    color: '#e74c3c' },
-  { id: 'anchor',            name: 'Anchor',             description: 'Start each turn with 3 Block.',                    rarity: 'common',   trigger: 'START_TURN',      effect: 'START_TURN_BLOCK',    value: 3,    color: '#3498db' },
-  { id: 'molten_egg',        name: 'Molten Egg',         description: 'All attacks deal +2 damage.',                      rarity: 'common',   trigger: 'PASSIVE',         effect: 'BONUS_ATTACK_FLAT',   value: 2,    color: '#e67e22' },
-  { id: 'happy_flower',      name: 'Happy Flower',       description: 'Heal 1 HP each time any die settles.',             rarity: 'common',   trigger: 'ON_SETTLE',       effect: 'HEAL_ON_SETTLE',      value: 1,    color: '#f0c040' },
-  { id: 'dead_branch',       name: 'Dead Branch',        description: 'Apply 1 Poison when an attack lands.',             rarity: 'common',   trigger: 'ON_ATTACK_HIT',   effect: 'POISON_ON_HIT',       value: 1,    color: '#58d68d' },
-  { id: 'meditation_stone',  name: 'Meditation Stone',   description: 'Heal 1 HP at the start of each turn.',             rarity: 'common',   trigger: 'START_TURN',      effect: 'START_TURN_HEAL',     value: 1,    color: '#27ae60' },
+  { id: 'burning_blood',     name: 'Burning Blood',      description: 'Heal 4 HP when you defeat an enemy.',              rarity: 'common',   trigger: 'ON_KILL',         effect: 'HEAL_ON_KILL',        value: 4,    color: '#e74c3c', synergies: ['vampiric_blade', 'happy_flower', 'meditation_stone'] },
+  { id: 'anchor',            name: 'Anchor',             description: 'Start each turn with 3 Block.',                    rarity: 'common',   trigger: 'START_TURN',      effect: 'START_TURN_BLOCK',    value: 3,    color: '#3498db', synergies: ['stone_calendar', 'orichalcum', 'booming_shield', 'philosopher_stone'] },
+  { id: 'molten_egg',        name: 'Molten Egg',         description: 'All attacks deal +2 damage.',                      rarity: 'common',   trigger: 'PASSIVE',         effect: 'BONUS_ATTACK_FLAT',   value: 2,    color: '#e67e22', synergies: ['war_paint', 'iron', 'fire', 'cursed_tome'] },
+  { id: 'happy_flower',      name: 'Happy Flower',       description: 'Heal 1 HP each time any die settles.',             rarity: 'common',   trigger: 'ON_SETTLE',       effect: 'HEAL_ON_SETTLE',      value: 1,    color: '#f0c040', synergies: ['burning_blood', 'meditation_stone', 'giants_belt'] },
+  { id: 'dead_branch',       name: 'Dead Branch',        description: 'Apply 1 Poison when an attack lands.',             rarity: 'common',   trigger: 'ON_ATTACK_HIT',   effect: 'POISON_ON_HIT',       value: 1,    color: '#58d68d', synergies: ['mango', 'venom', 'toxic', 'plague', 'poison'] },
+  { id: 'meditation_stone',  name: 'Meditation Stone',   description: 'Heal 1 HP at the start of each turn.',             rarity: 'common',   trigger: 'START_TURN',      effect: 'START_TURN_HEAL',     value: 1,    color: '#27ae60', synergies: ['happy_flower', 'burning_blood', 'giants_belt'] },
   // ── Uncommon ────────────────────────────────────────────────────────────────
-  { id: 'philosopher_stone', name: "Philosopher's Stone",description: 'Heal 2 HP when a block die activates.',            rarity: 'uncommon', trigger: 'ON_BLOCK',        effect: 'HEAL_ON_BLOCK',       value: 2,    color: '#1abc9c' },
-  { id: 'thorned_armor',     name: 'Thorned Armor',      description: 'Deal 3 damage to the enemy when you take damage.', rarity: 'uncommon', trigger: 'ON_DAMAGE_TAKEN', effect: 'THORNS',              value: 3,    color: '#95a5a6' },
-  { id: 'orichalcum',        name: 'Orichalcum',         description: 'All Block amounts are doubled.',                   rarity: 'uncommon', trigger: 'PASSIVE',         effect: 'BLOCK_MULTIPLIER',    value: 2,    color: '#16a085' },
-  { id: 'war_paint',         name: 'War Paint',          description: 'All attacks deal +4 damage.',                      rarity: 'uncommon', trigger: 'PASSIVE',         effect: 'BONUS_ATTACK_FLAT',   value: 4,    color: '#c0392b' },
-  { id: 'stone_calendar',    name: 'Stone Calendar',     description: 'Start each turn with 5 Block.',                    rarity: 'uncommon', trigger: 'START_TURN',      effect: 'START_TURN_BLOCK',    value: 5,    color: '#3498db' },
-  { id: 'mango',             name: 'Mango',              description: 'Apply 2 Poison when an attack lands.',             rarity: 'uncommon', trigger: 'ON_ATTACK_HIT',   effect: 'POISON_ON_HIT',       value: 2,    color: '#58d68d' },
-  { id: 'booming_shield',    name: 'Booming Shield',     description: 'All Block dice gain +3.',                          rarity: 'uncommon', trigger: 'PASSIVE',         effect: 'BONUS_BLOCK_FLAT',    value: 3,    color: '#2980b9' },
-  { id: 'giants_belt',       name: "Giant's Belt",       description: 'Maximum HP +8. Heal 8 HP.',                        rarity: 'uncommon', trigger: 'PASSIVE',         effect: 'MAX_HP_UP',           value: 8,    color: '#2ecc71' },
+  { id: 'philosopher_stone', name: "Philosopher's Stone",description: 'Heal 2 HP when a block die activates.',            rarity: 'uncommon', trigger: 'ON_BLOCK',        effect: 'HEAL_ON_BLOCK',       value: 2,    color: '#1abc9c', synergies: ['anchor', 'orichalcum', 'booming_shield', 'block'] },
+  { id: 'thorned_armor',     name: 'Thorned Armor',      description: 'Deal 3 damage to the enemy when you take damage.', rarity: 'uncommon', trigger: 'ON_DAMAGE_TAKEN', effect: 'THORNS',              value: 3,    color: '#95a5a6', synergies: ['weaken', 'vulnerable_heart'] },
+  { id: 'orichalcum',        name: 'Orichalcum',         description: 'All Block amounts are doubled.',                   rarity: 'uncommon', trigger: 'PASSIVE',         effect: 'BLOCK_MULTIPLIER',    value: 2,    color: '#16a085', synergies: ['anchor', 'stone_calendar', 'booming_shield', 'block'] },
+  { id: 'war_paint',         name: 'War Paint',          description: 'All attacks deal +4 damage.',                      rarity: 'uncommon', trigger: 'PASSIVE',         effect: 'BONUS_ATTACK_FLAT',   value: 4,    color: '#c0392b', synergies: ['molten_egg', 'iron', 'fire', 'steel', 'cursed_tome'] },
+  { id: 'stone_calendar',    name: 'Stone Calendar',     description: 'Start each turn with 5 Block.',                    rarity: 'uncommon', trigger: 'START_TURN',      effect: 'START_TURN_BLOCK',    value: 5,    color: '#3498db', synergies: ['anchor', 'orichalcum', 'booming_shield', 'block'] },
+  { id: 'mango',             name: 'Mango',              description: 'Apply 2 Poison when an attack lands.',             rarity: 'uncommon', trigger: 'ON_ATTACK_HIT',   effect: 'POISON_ON_HIT',       value: 2,    color: '#58d68d', synergies: ['dead_branch', 'venom', 'toxic', 'plague', 'poison'] },
+  { id: 'booming_shield',    name: 'Booming Shield',     description: 'All Block dice gain +3.',                          rarity: 'uncommon', trigger: 'PASSIVE',         effect: 'BONUS_BLOCK_FLAT',    value: 3,    color: '#2980b9', synergies: ['anchor', 'stone_calendar', 'orichalcum', 'block'] },
+  { id: 'giants_belt',       name: "Giant's Belt",       description: 'Maximum HP +8. Heal 8 HP.',                        rarity: 'uncommon', trigger: 'PASSIVE',         effect: 'MAX_HP_UP',           value: 8,    color: '#2ecc71', synergies: ['meditation_stone', 'happy_flower', 'burning_blood'] },
   // ── Uncommon (clean land) ───────────────────────────────────────────────────
-  { id: 'steady_hand',       name: 'Steady Hand',        description: 'Any die that lands without hitting anything adds +4 to its effect.', rarity: 'uncommon', trigger: 'PASSIVE', effect: 'CLEAN_LAND_BONUS', value: 4, color: '#f0c040' },
+  { id: 'steady_hand',       name: 'Steady Hand',        description: 'Any die that lands without hitting anything adds +4 to its effect.', rarity: 'uncommon', trigger: 'PASSIVE', effect: 'CLEAN_LAND_BONUS', value: 4, color: '#f0c040', synergies: ['phantom', 'egyptian'] },
   // ── Rare ────────────────────────────────────────────────────────────────────
-  { id: 'vampiric_blade',    name: 'Vampiric Blade',     description: 'Heal for 25% of attack damage dealt.',             rarity: 'rare',     trigger: 'ON_ATTACK_HIT',   effect: 'LIFE_STEAL',          value: 0.25, color: '#8e44ad' },
-  { id: 'cursed_tome',       name: 'Cursed Tome',        description: 'All attacks deal 1.5× damage.',                   rarity: 'rare',     trigger: 'PASSIVE',         effect: 'ATTACK_MULTIPLIER',   value: 1.5,  color: '#9b59b6' },
-  { id: 'piercing_lance',    name: 'Piercing Lance',     description: 'All attacks ignore enemy block.',                  rarity: 'rare',     trigger: 'PASSIVE',         effect: 'PIERCE_ALL',          value: 1,    color: '#e74c3c' },
+  { id: 'vampiric_blade',    name: 'Vampiric Blade',     description: 'Heal for 25% of attack damage dealt.',             rarity: 'rare',     trigger: 'ON_ATTACK_HIT',   effect: 'LIFE_STEAL',          value: 0.25, color: '#8e44ad', synergies: ['burning_blood', 'leech', 'happy_flower'] },
+  { id: 'cursed_tome',       name: 'Cursed Tome',        description: 'All attacks deal 1.5× damage.',                   rarity: 'rare',     trigger: 'PASSIVE',         effect: 'ATTACK_MULTIPLIER',   value: 1.5,  color: '#9b59b6', synergies: ['war_paint', 'viking', 'steel', 'expose', 'rock'] },
+  { id: 'piercing_lance',    name: 'Piercing Lance',     description: 'All attacks ignore enemy block.',                  rarity: 'rare',     trigger: 'PASSIVE',         effect: 'PIERCE_ALL',          value: 1,    color: '#e74c3c', synergies: ['rock', 'cursed_tome', 'pierce'] },
+  // ── Rare (bumper) ───────────────────────────────────────────────────────────
+  { id: 'spiked_bumper',     name: 'Spiked Bumper',      description: 'When a die hits the enemy bumper, deal its max face value as damage (with material and rune effects).', rarity: 'rare', trigger: 'ON_HIT_BUMPER', effect: 'MAX_FACE_DAMAGE', value: 1, color: '#e74c3c', synergies: ['viking', 'steel', 'cursed'] },
   // ── Boss ────────────────────────────────────────────────────────────────────
-  { id: 'vulnerable_heart',  name: 'Vulnerable Heart',   description: 'The enemy always takes 50% more damage.',          rarity: 'boss',     trigger: 'PASSIVE',         effect: 'ENEMY_WEAKENED',      value: 1,    color: '#ff4488' },
+  { id: 'vulnerable_heart',  name: 'Vulnerable Heart',   description: 'The enemy always takes 50% more damage.',          rarity: 'boss',     trigger: 'PASSIVE',         effect: 'ENEMY_WEAKENED',      value: 1,    color: '#ff4488', synergies: ['expose', 'weaken', 'cursed', 'cursed_tome', 'thorned_armor'] },
 ];
 
 // ─── Effect type registry (documentation / for sheet authors) ─────────────────
@@ -64,6 +66,8 @@ export const EFFECT_TYPES = {
   HEAL_ON_KILL:       'Heal value HP when the enemy is defeated',
   // Clean landing (die settles without any collision)
   CLEAN_LAND_BONUS:   'Add value to effect when the die lands without hitting anything',
+  // On hitting enemy bumper
+  MAX_FACE_DAMAGE:    'Deal the die\'s max face value as damage (material + rune effects) when it hits the enemy bumper',
 };
 
 // ─── Loader ───────────────────────────────────────────────────────────────────

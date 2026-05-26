@@ -4,6 +4,18 @@ import { RUNES, MATERIALS, RUNE_KEYS, MATERIAL_KEYS } from '../data/runes.js';
 import { W, H, PLAYER_MAX_HP } from '../constants.js';
 import { getRelics } from '../data/relics.js';
 
+// Die-type synergy declarations — owning these die types nudges the pool toward connected items.
+const DIE_TYPE_SYNERGIES = [
+  { id: 'poison', synergies: ['venom', 'toxic', 'plague', 'mango', 'dead_branch'] },
+  { id: 'attack', synergies: ['molten_egg', 'war_paint', 'iron', 'fire', 'steel', 'viking', 'cursed_tome'] },
+  { id: 'block',  synergies: ['anchor', 'stone_calendar', 'orichalcum', 'booming_shield', 'philosopher_stone'] },
+  { id: 'pierce', synergies: ['piercing_lance', 'rock', 'cursed_tome'] },
+  { id: 'leech',  synergies: ['vampiric_blade', 'happy_flower'] },
+  { id: 'hex',    synergies: ['weaken'] },
+  { id: 'bomb',   synergies: ['steel', 'iron', 'fire'] },
+  { id: 'copy',   synergies: ['egyptian', 'trojan'] },
+];
+
 const CARD_W      = W - 32;
 const CARD_H      = 110;
 const CARD_GAP    = 12;
@@ -63,25 +75,68 @@ export default class UpgradeScene extends Phaser.Scene {
 
   // ─── POOL GENERATION ─────────────────────────────────────────────────────
 
+  _buildSynergyWeights() {
+    const BOOST = 1.5;
+    const owned = new Set();
+    this.playerDiceConfig.forEach(dc => {
+      if (dc.type)     owned.add(dc.type);
+      if (dc.material) owned.add(dc.material);
+      Object.values(dc.runeMap ?? {}).forEach(id => owned.add(id));
+    });
+    this.activeRelics.forEach(r => owned.add(r.id));
+
+    const weights = {};
+    const allDefs = [
+      ...RUNE_KEYS.map(id => RUNES[id]),
+      ...MATERIAL_KEYS.map(id => MATERIALS[id]),
+      ...getRelics(),
+      ...DIE_TYPE_SYNERGIES,
+    ];
+    for (const item of allDefs) {
+      if (!owned.has(item.id)) continue;
+      for (const synId of item.synergies ?? []) {
+        weights[synId] = (weights[synId] ?? 0) + BOOST;
+      }
+    }
+    return weights;
+  }
+
+  _weightedPick(pool, weights, count = 1) {
+    const rem = pool.map(item => ({ item, w: 1 + (weights[item.id] ?? 0) }));
+    const out = [];
+    for (let i = 0; i < count && rem.length > 0; i++) {
+      const total = rem.reduce((s, x) => s + x.w, 0);
+      let r = Math.random() * total;
+      let idx = 0;
+      while (idx < rem.length - 1) {
+        if (r < rem[idx].w) break;
+        r -= rem[idx].w;
+        idx++;
+      }
+      out.push(rem.splice(idx, 1)[0].item);
+    }
+    return out;
+  }
+
   _buildPool() {
-    const canTier  = this.playerDiceConfig.some(
+    const canTier = this.playerDiceConfig.some(
       dc => SIDES_PROGRESSION.indexOf(dc.sides) < SIDES_PROGRESSION.length - 1
     );
-    const runeOrder = Phaser.Utils.Array.Shuffle([...RUNE_KEYS]);
-    const makeRune  = (id) => { const r = RUNES[id]; return { type: 'add_rune', runeId: id, color: r.color, title: `Add Rune: ${r.label}`, desc: r.desc }; };
-    const makeCull  = ()   => ({ type: 'cull', color: '#ff6644', title: 'Cull a Face', desc: 'Permanently remove one face value from a die' });
-    const makeTier  = ()   => ({ type: 'increase_tier', color: '#f0c040', title: 'Increase Dice Tier', desc: 'Choose a die to advance to the next tier' });
-    const makeMat   = ()   => { const id = MATERIAL_KEYS[Phaser.Math.Between(0, MATERIAL_KEYS.length - 1)]; const m = MATERIALS[id]; return { type: 'add_material', matId: id, color: m.color, title: `Material: ${m.label}`, desc: m.desc }; };
+    const sw = this._buildSynergyWeights();
+
+    const runePool = RUNE_KEYS.map(id => RUNES[id]);
+    const matPool  = MATERIAL_KEYS.map(id => MATERIALS[id]);
+    const [rune1, rune2] = this._weightedPick(runePool, sw, 2);
+
+    const makeRune = (r) => ({ type: 'add_rune', runeId: r.id, color: r.color, title: `Add Rune: ${r.label}`, desc: r.desc });
+    const makeCull = ()  => ({ type: 'cull', color: '#ff6644', title: 'Cull a Face', desc: 'Permanently remove all faces showing a chosen value from a die' });
+    const makeTier = ()  => ({ type: 'increase_tier', color: '#f0c040', title: 'Increase Dice Tier', desc: 'Choose a die to advance to the next tier' });
+    const makeMat  = ()  => { const m = this._weightedPick(matPool, sw)[0]; return { type: 'add_material', matId: m.id, color: m.color, title: `Material: ${m.label}`, desc: m.desc }; };
 
     const pool = [];
+    pool.push(makeRune(rune1));
+    pool.push(Math.random() < 0.5 ? makeRune(rune2) : makeCull());
 
-    // Slot 1: always a rune
-    pool.push(makeRune(runeOrder[0]));
-
-    // Slot 2: 50% second rune, 50% cull
-    pool.push(Math.random() < 0.5 ? makeRune(runeOrder[1]) : makeCull());
-
-    // Slot 3: 25% tier (if available), else cull (only if not already present), else material
     const hasCull = pool.some(c => c.type === 'cull');
     if (canTier && Math.random() < 0.25) {
       pool.push(makeTier());
@@ -263,16 +318,19 @@ export default class UpgradeScene extends Phaser.Scene {
     const originX   = W / 2 - netW / 2;
     const originY   = CARDS_TOP + 30;
 
-    const activeCount = dc.sides - (dc.culledFaces?.length ?? 0);
+    const activeSlots = Array.from({ length: dc.sides }, (_, i) => i + 1)
+      .filter(s => !(dc.culledFaces ?? []).includes(s));
+    const uniqueActiveValues = new Set(activeSlots.map(s => Math.floor((s - 1) / 2) + 1)).size;
 
     facePositions.forEach(({ fx, fy }, fi) => {
       const ax         = originX + fx;
       const ay         = originY + fy;
-      const faceValue  = fi + 1;
-      const isCulled   = (dc.culledFaces ?? []).includes(faceValue);
+      const slotId     = fi + 1;
+      const isCulled   = (dc.culledFaces ?? []).includes(slotId);
       const runeOnFace = !isCulled ? dc.runeMap?.[fi] : null;
-      // Can't cull: already culled, or would leave 0 active faces
-      const isSelectable = !isCulled && !(upg.type === 'cull' && activeCount <= 1);
+      const dispValue  = Math.floor(fi / 2) + 1;
+      // Can't cull: already culled, or only 1 unique value group left
+      const isSelectable = !isCulled && !(upg.type === 'cull' && uniqueActiveValues <= 1);
 
       const fb = this._track(this.add.rectangle(ax, ay, FACE, FACE,
         isCulled ? 0x0a0a14 : 0x141428
@@ -284,7 +342,7 @@ export default class UpgradeScene extends Phaser.Scene {
       );
       if (isSelectable) fb.setInteractive();
 
-      this._track(this.add.text(ax, ay, isCulled ? '✕' : String(faceValue), {
+      this._track(this.add.text(ax, ay, isCulled ? '✕' : String(dispValue), {
         fontSize: '17px',
         color: isCulled ? '#2a2a3a' : '#aaaaaa',
         stroke: '#000000', strokeThickness: 1,
@@ -298,7 +356,7 @@ export default class UpgradeScene extends Phaser.Scene {
       }
 
       if (isSelectable) {
-        fb.on('pointerdown', () => this._onFaceSelected(upg, dieIdx, faceValue));
+        fb.on('pointerdown', () => this._onFaceSelected(upg, dieIdx, slotId));
         fb.on('pointerover',  () => { fb.setFillStyle(0x1a2e4a); fb.setStrokeStyle(2, typeColor, 0.9); });
         fb.on('pointerout',   () => { fb.setFillStyle(0x141428); fb.setStrokeStyle(1, runeOnFace ? 0xf0c040 : typeColor, 0.6); });
       }
@@ -307,20 +365,30 @@ export default class UpgradeScene extends Phaser.Scene {
     this._addBackButton(() => this._showDiePicker(upg));
   }
 
-  _onFaceSelected(upg, dieIdx, faceValue) {
+  _onFaceSelected(upg, dieIdx, slotId) {
     const dc = this.playerDiceConfig[dieIdx];
-    if (upg.type === 'cull' && dc.runeMap?.[faceValue - 1]) {
-      this._showCullWarning(upg, dieIdx, faceValue);
+    if (upg.type === 'cull') {
+      const targetVal = Math.floor((slotId - 1) / 2) + 1;
+      const siblingWithRune = Array.from({ length: dc.sides }, (_, i) => i)
+        .find(fi => Math.floor(fi / 2) + 1 === targetVal && dc.runeMap?.[fi]);
+      if (siblingWithRune !== undefined) {
+        this._showCullWarning(upg, dieIdx, slotId);
+      } else {
+        this._applyUpgrade(upg, dieIdx, slotId);
+      }
     } else {
-      this._applyUpgrade(upg, dieIdx, faceValue);
+      this._applyUpgrade(upg, dieIdx, slotId);
     }
   }
 
   // ─── CULL WARNING ────────────────────────────────────────────────────────
 
-  _showCullWarning(upg, dieIdx, faceValue) {
-    const dc   = this.playerDiceConfig[dieIdx];
-    const rune = RUNES[dc.runeMap[faceValue - 1]];
+  _showCullWarning(upg, dieIdx, slotId) {
+    const dc         = this.playerDiceConfig[dieIdx];
+    const targetVal  = Math.floor((slotId - 1) / 2) + 1;
+    const runeFaceIdx = Array.from({ length: dc.sides }, (_, i) => i)
+      .find(fi => Math.floor(fi / 2) + 1 === targetVal && dc.runeMap?.[fi]);
+    const rune = RUNES[dc.runeMap[runeFaceIdx]];
 
     const dim = this._track(
       this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.65).setInteractive()
@@ -337,8 +405,8 @@ export default class UpgradeScene extends Phaser.Scene {
     }).setOrigin(0.5, 0.5));
 
     this._track(this.add.text(W / 2, py - 24, [
-      `Face ${faceValue} carries the ${rune?.label ?? '?'} rune.`,
-      'Culling it will permanently remove the rune.',
+      `Value ${targetVal} carries the ${rune?.label ?? '?'} rune.`,
+      'Culling removes all faces showing this value.',
     ].join('\n'), {
       fontSize: '14px', color: '#aaaaaa', align: 'center',
       wordWrap: { width: W - 72 },
@@ -359,7 +427,7 @@ export default class UpgradeScene extends Phaser.Scene {
       this.add.rectangle(W / 2 + 72, py + 56, 120, 40, 0x3a1000).setInteractive()
     );
     cullBg.setStrokeStyle(1, 0xff6644, 0.8);
-    cullBg.on('pointerdown', () => this._applyUpgrade(upg, dieIdx, faceValue));
+    cullBg.on('pointerdown', () => this._applyUpgrade(upg, dieIdx, slotId));
     cullBg.on('pointerover',  () => cullBg.setFillStyle(0x6a2200));
     cullBg.on('pointerout',   () => cullBg.setFillStyle(0x3a1000));
     this._track(this.add.text(W / 2 + 72, py + 56, 'Cull Anyway', {
@@ -380,8 +448,13 @@ export default class UpgradeScene extends Phaser.Scene {
       }
       case 'cull': {
         if (!dc.culledFaces) dc.culledFaces = [];
-        dc.culledFaces.push(faceValue);
-        delete dc.runeMap[faceValue - 1];
+        const cullVal = Math.floor((faceValue - 1) / 2) + 1;
+        for (let s = 1; s <= dc.sides; s++) {
+          if (Math.floor((s - 1) / 2) + 1 === cullVal) {
+            if (!dc.culledFaces.includes(s)) dc.culledFaces.push(s);
+            delete dc.runeMap[s - 1];
+          }
+        }
         break;
       }
       case 'add_rune': {
@@ -543,9 +616,10 @@ export default class UpgradeScene extends Phaser.Scene {
 
   _showRelicStep() {
     this._relicChosen = false;
-    const ownedIds    = new Set(this.activeRelics.map(r => r.id));
-    const available   = getRelics().filter(r => !ownedIds.has(r.id));
-    const choices     = Phaser.Math.RND.shuffle([...available]).slice(0, 3);
+    const ownedIds  = new Set(this.activeRelics.map(r => r.id));
+    const available = getRelics().filter(r => !ownedIds.has(r.id));
+    const sw        = this._buildSynergyWeights();
+    const choices   = this._weightedPick(available, sw, 3);
 
     if (choices.length === 0) { this._goToNextBattle(); return; }
 
@@ -629,7 +703,6 @@ export default class UpgradeScene extends Phaser.Scene {
       playerDiceConfig: this.playerDiceConfig,
       playerHp:         this.playerHp,
       playerMaxHp:      this.playerMaxHp,
-      rerollTokens:     1,
       battleIndex:      this.battleIndex,
       activeRelics:     this.activeRelics,
     });

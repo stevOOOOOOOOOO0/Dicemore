@@ -31,3 +31,9 @@ export const MAGICIAN_CONFIG = [
   { id: 'm1', type: 'block',  sides: 6, runeMap: {}, material: null, culledFaces: [] },
   { id: 'm2', type: 'copy',   sides: 6, runeMap: {}, material: null, culledFaces: [] },
 ];
+
+export const ALCHEMIST_CONFIG = [
+  { id: 'al0', type: 'attack', sides: 6, runeMap: {}, material: null, culledFaces: [] },
+  { id: 'al1', type: 'block',  sides: 6, runeMap: {}, material: null, culledFaces: [] },
+  { id: 'al2', type: 'poison', sides: 4, runeMap: {}, material: null, culledFaces: [] },
+];

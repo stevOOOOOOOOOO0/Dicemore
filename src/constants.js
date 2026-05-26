@@ -14,8 +14,8 @@ export const WALL_T   = 24;
 
 // Physics
 export const DIE_FRICTION     = 0.5;
-export const DIE_FRICTION_AIR = 0.036;
-export const DIE_BOUNCE       = 0.75;
+export const DIE_FRICTION_AIR = 0.027;
+export const DIE_BOUNCE       = 0.85;
 export const SETTLE_VEL       = 0.4;   // px/frame — below this = settled
 export const MAX_THROW_SPEED  = 20;
 
