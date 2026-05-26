@@ -4,15 +4,19 @@ export const RUNES = {
   trojan:  { id: 'trojan',  label: 'Trojan',  sym: 'TRJ', color: '#cc8844', desc: 'Triggers this face + opposite face.' },
   greek:   { id: 'greek',   label: 'Greek',   sym: 'GRK', color: '#88aaff', desc: 'Blasts all other dice away.' },
   cosmic:  { id: 'cosmic',  label: 'Cosmic',  sym: 'COS', color: '#cc88ff', desc: 'Pulls all other dice inward.' },
+  venom:   { id: 'venom',   label: 'Venom',   sym: 'VNM', color: '#58d68d', desc: 'Applies 3 poison stacks to the enemy.' },
+  weaken:  { id: 'weaken',  label: 'Weaken',  sym: 'WKN', color: '#9b59b6', desc: 'Weakens the enemy — they deal half damage this turn.' },
+  expose:  { id: 'expose',  label: 'Expose',  sym: 'EXP', color: '#e67e22', desc: 'Exposes the enemy — they take 50% more damage this turn.' },
 };
 
 export const MATERIALS = {
   iron:    { id: 'iron',    label: 'Iron',    sym: 'IRN', color: '#8899aa', desc: '+1 to all effect values.' },
   steel:   { id: 'steel',   label: 'Steel',   sym: 'STL', color: '#bbccdd', desc: '\xd72 to all effect values.' },
   glass:   { id: 'glass',   label: 'Glass',   sym: 'GLS', color: '#aaddff', desc: 'Shatters on first die contact, destroying both.' },
-  uranium: { id: 'uranium', label: 'Uranium', sym: 'URA', color: '#88ff44', desc: 'Contacted dice have their values halved.' },
+  uranium: { id: 'uranium', label: 'Uranium', sym: 'URA', color: '#88ff44', desc: 'Culls the top half of faces and doubles rolled values.' },
   fire:    { id: 'fire',    label: 'Fire',    sym: 'FIR', color: '#ff6622', desc: '+3 to all damage values.' },
   rock:    { id: 'rock',    label: 'Rock',    sym: 'ROK', color: '#997755', desc: 'All damage ignores block.' },
+  phantom: { id: 'phantom', label: 'Phantom', sym: 'PHN', color: '#ccaaff', desc: 'Doubles the effect if the die lands without hitting anything.' },
 };
 
 // Opposite face index pairs for the t-net layout (0=top 1=left 2=center 3=right 4=lower 5=bottom)

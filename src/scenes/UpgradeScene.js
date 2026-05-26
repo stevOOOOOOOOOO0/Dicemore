@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { DIE_TYPES, SIDES_PROGRESSION } from '../data/dice.js';
 import { RUNES, MATERIALS, RUNE_KEYS, MATERIAL_KEYS } from '../data/runes.js';
 import { W, H, PLAYER_MAX_HP } from '../constants.js';
+import { getRelics } from '../data/relics.js';
 
 const CARD_W      = W - 32;
 const CARD_H      = 110;
@@ -14,12 +15,15 @@ export default class UpgradeScene extends Phaser.Scene {
   init(data) {
     this.playerDiceConfig = JSON.parse(JSON.stringify(data.playerDiceConfig));
     this.playerHp         = data.playerHp;
+    this.playerMaxHp      = data.playerMaxHp ?? PLAYER_MAX_HP;
     this.battleIndex      = data.battleIndex;
     this.isBossReward     = data.isBossReward ?? false;
+    this.activeRelics     = data.activeRelics ? [...data.activeRelics] : [];
     this._upgrades        = [];
     this._screenObjects   = [];
     this._stepLbl         = null;
     this._navigating      = false;
+    this._relicChosen     = false;
   }
 
   create() {
@@ -41,8 +45,8 @@ export default class UpgradeScene extends Phaser.Scene {
       fontSize: '22px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 4,
     }).setOrigin(0.5);
 
-    const hpPct = Math.max(0, this.playerHp) / PLAYER_MAX_HP;
-    this.add.text(W / 2, 52, `HP: ${Math.max(0, this.playerHp)} / ${PLAYER_MAX_HP}`, {
+    const hpPct = Math.max(0, this.playerHp) / this.playerMaxHp;
+    this.add.text(W / 2, 52, `HP: ${Math.max(0, this.playerHp)} / ${this.playerMaxHp}`, {
       fontSize: '15px', color: '#2ecc71',
     }).setOrigin(0.5);
 
@@ -60,47 +64,35 @@ export default class UpgradeScene extends Phaser.Scene {
   // ─── POOL GENERATION ─────────────────────────────────────────────────────
 
   _buildPool() {
-    const pool = [];
-
-    // increase_tier — only if at least one die is below max tier
-    const canTier = this.playerDiceConfig.some(
+    const canTier  = this.playerDiceConfig.some(
       dc => SIDES_PROGRESSION.indexOf(dc.sides) < SIDES_PROGRESSION.length - 1
     );
-    if (canTier) {
-      pool.push({
-        type: 'increase_tier', color: '#f0c040',
-        title: 'Increase Dice Tier',
-        desc:  'Choose a die to advance to the next tier',
-      });
+    const runeOrder = Phaser.Utils.Array.Shuffle([...RUNE_KEYS]);
+    const makeRune  = (id) => { const r = RUNES[id]; return { type: 'add_rune', runeId: id, color: r.color, title: `Add Rune: ${r.label}`, desc: r.desc }; };
+    const makeCull  = ()   => ({ type: 'cull', color: '#ff6644', title: 'Cull a Face', desc: 'Permanently remove one face value from a die' });
+    const makeTier  = ()   => ({ type: 'increase_tier', color: '#f0c040', title: 'Increase Dice Tier', desc: 'Choose a die to advance to the next tier' });
+    const makeMat   = ()   => { const id = MATERIAL_KEYS[Phaser.Math.Between(0, MATERIAL_KEYS.length - 1)]; const m = MATERIALS[id]; return { type: 'add_material', matId: id, color: m.color, title: `Material: ${m.label}`, desc: m.desc }; };
+
+    const pool = [];
+
+    // Slot 1: always a rune
+    pool.push(makeRune(runeOrder[0]));
+
+    // Slot 2: 50% second rune, 50% cull
+    pool.push(Math.random() < 0.5 ? makeRune(runeOrder[1]) : makeCull());
+
+    // Slot 3: 25% tier (if available), else cull (only if not already present), else material
+    const hasCull = pool.some(c => c.type === 'cull');
+    if (canTier && Math.random() < 0.25) {
+      pool.push(makeTier());
+    } else if (!hasCull) {
+      pool.push(makeCull());
+    } else {
+      pool.push(makeMat());
     }
 
-    // cull — always available
-    pool.push({
-      type: 'cull', color: '#ff6644',
-      title: 'Cull a Face',
-      desc:  'Permanently remove one face value from a die',
-    });
-
-    // add_rune — random rune
-    const runeId = RUNE_KEYS[Phaser.Math.Between(0, RUNE_KEYS.length - 1)];
-    const rune   = RUNES[runeId];
-    pool.push({
-      type: 'add_rune', runeId, color: rune.color,
-      title: `Add Rune: ${rune.label}`,
-      desc:  rune.desc,
-    });
-
-    // add_material — random material
-    const matId = MATERIAL_KEYS[Phaser.Math.Between(0, MATERIAL_KEYS.length - 1)];
-    const mat   = MATERIALS[matId];
-    pool.push({
-      type: 'add_material', matId, color: mat.color,
-      title: `Material: ${mat.label}`,
-      desc:  mat.desc,
-    });
-
     Phaser.Utils.Array.Shuffle(pool);
-    return pool.slice(0, 3);
+    return pool;
   }
 
   // ─── SCREEN MANAGEMENT ───────────────────────────────────────────────────
@@ -147,7 +139,7 @@ export default class UpgradeScene extends Phaser.Scene {
       bg.on('pointerout',   () => { bg.setFillStyle(0x0d0d1c); bg.setStrokeStyle(1.5, fc, 0.55); arrow.setColor('#2a2a3a'); });
     });
 
-    this._addSkipButton();
+    this._addHealButton();
   }
 
   _onCardSelected(upg) {
@@ -398,7 +390,22 @@ export default class UpgradeScene extends Phaser.Scene {
         break;
       }
       case 'add_material': {
+        // Restore any faces that uranium culled on the old material
+        if (dc.material === 'uranium' && dc.uraniumCulledFaces?.length) {
+          dc.culledFaces = (dc.culledFaces ?? []).filter(f => !dc.uraniumCulledFaces.includes(f));
+          delete dc.uraniumCulledFaces;
+        }
         dc.material = upg.matId;
+        // Apply uranium: cull the top half of currently active faces
+        if (upg.matId === 'uranium') {
+          const halfStart = Math.floor(dc.sides / 2) + 1;
+          const newlyCulled = [];
+          for (let f = halfStart; f <= dc.sides; f++) {
+            if (!(dc.culledFaces ?? []).includes(f)) newlyCulled.push(f);
+          }
+          dc.culledFaces = [...(dc.culledFaces ?? []), ...newlyCulled];
+          dc.uraniumCulledFaces = newlyCulled;
+        }
         break;
       }
     }
@@ -466,13 +473,36 @@ export default class UpgradeScene extends Phaser.Scene {
 
   _onSpecialDieSelected(dieType) {
     this.playerDiceConfig.push({
-      id: `boss_${Date.now()}`, type: dieType, sides: 6,
+      id: `boss_${Date.now()}`, type: dieType, sides: 10,
       runeMap: {}, material: null, culledFaces: [],
     });
     this._continue();
   }
 
   // ─── NAV HELPERS ─────────────────────────────────────────────────────────
+
+  _addHealButton() {
+    const y      = H - 44;
+    const amt    = Math.floor(this.playerMaxHp * 0.2);
+    const atFull = this.playerHp >= this.playerMaxHp;
+    const label  = atFull ? 'Already at full HP' : `Rest — Heal ${amt} HP`;
+    const col    = atFull ? '#2a3040' : '#2ecc71';
+
+    const bg = this._track(this.add.rectangle(W / 2, y, W - 16, 50, 0x0e1a12));
+    bg.setStrokeStyle(1, atFull ? 0x1a2030 : 0x1a6a3a, 0.8);
+    if (!atFull) {
+      bg.setInteractive();
+      bg.on('pointerdown', () => {
+        this.playerHp = Math.min(this.playerMaxHp, this.playerHp + amt);
+        this._continue();
+      });
+      bg.on('pointerover', () => bg.setFillStyle(0x163824));
+      bg.on('pointerout',  () => bg.setFillStyle(0x0e1a12));
+    }
+    this._track(this.add.text(W / 2, y, label, {
+      fontSize: '17px', color: col,
+    }).setOrigin(0.5));
+  }
 
   _addSkipButton() {
     const y = H - 44;
@@ -502,11 +532,106 @@ export default class UpgradeScene extends Phaser.Scene {
     if (this._navigating) return;
     this._navigating = true;
     this._clearScreen();
+    if (Math.random() < 0.1) {
+      this._showRelicStep();
+    } else {
+      this._goToNextBattle();
+    }
+  }
+
+  // ─── RELIC STEP ──────────────────────────────────────────────────────────
+
+  _showRelicStep() {
+    this._relicChosen = false;
+    const ownedIds    = new Set(this.activeRelics.map(r => r.id));
+    const available   = getRelics().filter(r => !ownedIds.has(r.id));
+    const choices     = Phaser.Math.RND.shuffle([...available]).slice(0, 3);
+
+    if (choices.length === 0) { this._goToNextBattle(); return; }
+
+    const g = this.add.container(0, 0);
+    this._screenObjects.push(g);
+
+    g.add(this.add.text(W / 2, 36, 'CHOOSE A RELIC', {
+      fontSize: '20px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3,
+    }).setOrigin(0.5));
+
+    g.add(this.add.text(W / 2, 66, 'Passive items that affect every battle.', {
+      fontSize: '13px', color: '#445566',
+    }).setOrigin(0.5));
+
+    const RARITY_COLOR = { common: 0x556677, uncommon: 0x2471a3, rare: 0x6c3483, boss: 0x922b21 };
+    const cardH = 116, gap = 10, startY = 100;
+
+    choices.forEach((relic, i) => {
+      const cy     = startY + i * (cardH + gap) + cardH / 2;
+      const fc     = parseInt((relic.color ?? '#ffffff').replace('#', ''), 16);
+      const rarCol = RARITY_COLOR[relic.rarity] ?? RARITY_COLOR.common;
+
+      const bg = this.add.rectangle(W / 2, cy, W - 32, cardH, 0x0d0d1c);
+      bg.setStrokeStyle(2, rarCol, 0.85).setInteractive();
+      g.add(bg);
+
+      const dot = this.add.circle(44, cy, 12, fc, 0.9);
+      g.add(dot);
+      g.add(this.add.text(44, cy, relic.name[0].toUpperCase(), {
+        fontSize: '12px', color: '#ffffff', fontStyle: 'bold',
+      }).setOrigin(0.5, 0.5));
+
+      g.add(this.add.text(72, cy - 22, relic.name, {
+        fontSize: '17px', color: relic.color, fontStyle: 'bold',
+      }).setOrigin(0, 0.5));
+
+      g.add(this.add.text(72, cy - 2, relic.rarity.toUpperCase(), {
+        fontSize: '11px', color: '#334455', letterSpacing: 1,
+      }).setOrigin(0, 0.5));
+
+      g.add(this.add.text(72, cy + 20, relic.description, {
+        fontSize: '13px', color: '#8899aa',
+        wordWrap: { width: W - 96 },
+      }).setOrigin(0, 0.5));
+
+      bg.on('pointerover', () => bg.setFillStyle(0x1a1a2e));
+      bg.on('pointerout',  () => bg.setFillStyle(0x0d0d1c));
+      bg.on('pointerdown', () => {
+        if (this._relicChosen) return;
+        this._relicChosen = true;
+
+        // MAX_HP_UP is handled at pick time — heal + increase playerMaxHp
+        if (relic.effect === 'MAX_HP_UP') {
+          this.playerMaxHp += relic.value;
+          this.playerHp     = Math.min(this.playerMaxHp, this.playerHp + relic.value);
+        }
+
+        this.activeRelics.push(relic);
+        this._goToNextBattle();
+      });
+    });
+
+    // Skip button
+    const skipBg = this.add.rectangle(W / 2, startY + choices.length * (cardH + gap) + 30,
+      W - 32, 44, 0x0a0a14);
+    skipBg.setStrokeStyle(1, 0x222233, 0.8).setInteractive();
+    skipBg.on('pointerdown', () => { if (!this._relicChosen) { this._relicChosen = true; this._goToNextBattle(); } });
+    skipBg.on('pointerover', () => skipBg.setFillStyle(0x181828));
+    skipBg.on('pointerout',  () => skipBg.setFillStyle(0x0a0a14));
+    g.add(skipBg);
+    g.add(this.add.text(W / 2, skipBg.y, 'Skip  →', {
+      fontSize: '15px', color: '#2a3848',
+    }).setOrigin(0.5, 0.5));
+
+    g.setAlpha(0);
+    this.tweens.add({ targets: g, alpha: 1, duration: 220, ease: 'Sine.Out' });
+  }
+
+  _goToNextBattle() {
     this.scene.start('BattleScene', {
       playerDiceConfig: this.playerDiceConfig,
       playerHp:         this.playerHp,
+      playerMaxHp:      this.playerMaxHp,
       rerollTokens:     1,
       battleIndex:      this.battleIndex,
+      activeRelics:     this.activeRelics,
     });
   }
 }

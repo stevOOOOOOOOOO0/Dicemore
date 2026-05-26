@@ -20,4 +20,4 @@ export const SETTLE_VEL       = 0.4;   // px/frame — below this = settled
 export const MAX_THROW_SPEED  = 20;
 
 // Game
-export const PLAYER_MAX_HP = 30;
+export const PLAYER_MAX_HP = 30; // base value — relics can increase the per-run effective max

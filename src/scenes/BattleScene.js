@@ -7,6 +7,7 @@ import {
   DIE_FRICTION, DIE_FRICTION_AIR, DIE_BOUNCE, SETTLE_VEL,
   MAX_THROW_SPEED, PLAYER_MAX_HP
 } from '../constants.js';
+import RelicManager from '../systems/RelicManager.js';
 
 const PHASE = { PREP: 0, ENEMY_ROLL: 1, PLAYER_ROLL: 2, COMMIT: 3 };
 
@@ -38,7 +39,9 @@ export default class BattleScene extends Phaser.Scene {
       : JSON.parse(JSON.stringify(STARTER_DICE));
     this.battleIndex  = data.battleIndex  ?? 0;
     this.playerHp     = data.playerHp     ?? PLAYER_MAX_HP;
+    this.playerMaxHp  = data.playerMaxHp  ?? PLAYER_MAX_HP;
     this.rerollTokens = data.rerollTokens ?? 1;
+    this.activeRelics = data.activeRelics ?? [];
   }
 
   // ─── CREATE ───────────────────────────────────────────────────────────────
@@ -68,11 +71,13 @@ export default class BattleScene extends Phaser.Scene {
     this.vulnerable          = false;
     this.enemyPoisonStacks   = 0;
     this.enemyWeakened       = false;
+    this.enemyVulnerable     = false;
     this.playerFrail         = false;
     this.enemyBlock          = 0;
-    this._lastIntentWasBlock = false;
+    this._lastIntentWasPassive = false;
     this.currentIntent       = null;
     this._intentPopup        = null;
+    this._relicPopup         = null;
 
     this.trayCards          = [];
     this.throwCount         = 0;
@@ -92,10 +97,14 @@ export default class BattleScene extends Phaser.Scene {
     this.enemyDef = ENEMIES[key];
     this.enemyHp  = this.enemyDef.hp;
 
+    this.relicManager = new RelicManager(this);
+    this.activeRelics.forEach(r => this.relicManager.addRelic(r));
+
     this._makeTextures();
     this._buildBackground();
     this._buildWalls();
     this._buildHeaderStrip();
+    this._buildRelicStrip();
     this._buildEnemyCharacter();
     this._buildPlayerCharacter();
     this._buildDieStrip();
@@ -153,6 +162,56 @@ export default class BattleScene extends Phaser.Scene {
     this.rtTxt        = this.add.text(W - 10, mid - 16, '', { fontSize: '17px', color: '#e67e22' }).setOrigin(1, 0.5);
 
     this._refreshStatusUI();
+  }
+
+  _buildRelicStrip() {
+    if (!this.activeRelics?.length) return;
+    const r = 7, gap = 4;
+    this.activeRelics.forEach((relic, i) => {
+      const x  = 10 + i * (r * 2 + gap) + r;
+      const fc = parseInt((relic.color ?? '#ffffff').replace('#', ''), 16);
+      const circle = this.add.circle(x, 70, r, fc, 0.85).setDepth(22).setInteractive();
+      this.add.text(x, 70, relic.name[0].toUpperCase(), {
+        fontSize: '8px', color: '#ffffff', fontStyle: 'bold',
+      }).setOrigin(0.5, 0.5).setDepth(23);
+      circle.on('pointerdown', () => this._showRelicPopup(relic));
+    });
+  }
+
+  _showRelicPopup(relic) {
+    if (this._relicPopup) { this._relicPopup.destroy(); this._relicPopup = null; }
+
+    const RARITY_COLOR = { common: 0x556677, uncommon: 0x2471a3, rare: 0x6c3483, boss: 0x922b21 };
+    const rarCol = RARITY_COLOR[relic.rarity] ?? RARITY_COLOR.common;
+    const fc     = parseInt((relic.color ?? '#ffffff').replace('#', ''), 16);
+
+    const panelW = W - 40, panelH = 110;
+    const panelX = W / 2, panelY = 155;
+
+    const pop = this._relicPopup = this.add.container(0, 0).setDepth(60);
+
+    const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.4).setInteractive();
+    dim.on('pointerdown', () => { this._relicPopup?.destroy(); this._relicPopup = null; });
+    pop.add(dim);
+
+    pop.add(this.add.rectangle(panelX, panelY, panelW, panelH, 0x0d0d1c)
+      .setStrokeStyle(2, rarCol, 0.9));
+
+    const dotX = panelX - panelW / 2 + 22;
+    pop.add(this.add.circle(dotX, panelY - 18, 10, fc, 0.9));
+    pop.add(this.add.text(dotX, panelY - 18, relic.name[0].toUpperCase(), {
+      fontSize: '10px', color: '#ffffff', fontStyle: 'bold',
+    }).setOrigin(0.5, 0.5));
+
+    pop.add(this.add.text(dotX + 18, panelY - 20, relic.name, {
+      fontSize: '16px', color: relic.color, fontStyle: 'bold',
+    }).setOrigin(0, 0.5));
+    pop.add(this.add.text(dotX + 18, panelY - 3, relic.rarity.toUpperCase(), {
+      fontSize: '10px', color: '#334455', letterSpacing: 1,
+    }).setOrigin(0, 0.5));
+    pop.add(this.add.text(panelX - panelW / 2 + 14, panelY + 18, relic.description, {
+      fontSize: '13px', color: '#8899aa', wordWrap: { width: panelW - 28 },
+    }).setOrigin(0, 0.5));
   }
 
   // ─── ENEMY CHARACTER (bumper) ─────────────────────────────────────────────
@@ -299,10 +358,16 @@ export default class BattleScene extends Phaser.Scene {
 
   // ─── INTENT SYSTEM ────────────────────────────────────────────────────────
 
+  _isPurelyPassive(intent) {
+    const PASSIVE = new Set(['block', 'strength', 'vulnerable', 'frail']);
+    if (intent.type === 'multi') return intent.intents.every(i => PASSIVE.has(i.type));
+    return PASSIVE.has(intent.type);
+  }
+
   _drawIntent() {
     const pool = this.enemyDef.intents;
-    let candidates = this._lastIntentWasBlock
-      ? pool.filter(e => e.type !== 'block').map(e => {
+    let candidates = this._lastIntentWasPassive
+      ? pool.filter(e => !this._isPurelyPassive(e)).map(e => {
           const aggressive = e.type === 'attack' ||
             (e.type === 'multi' && e.intents?.some(i => i.type === 'attack'));
           return { ...e, weight: aggressive ? e.weight * 2 : e.weight };
@@ -313,10 +378,10 @@ export default class BattleScene extends Phaser.Scene {
     let r = Phaser.Math.FloatBetween(0, total);
     for (const e of candidates) {
       r -= e.weight;
-      if (r <= 0) { this._lastIntentWasBlock = e.type === 'block'; return e; }
+      if (r <= 0) { this._lastIntentWasPassive = this._isPurelyPassive(e); return e; }
     }
     const last = candidates[candidates.length - 1];
-    this._lastIntentWasBlock = last.type === 'block';
+    this._lastIntentWasPassive = this._isPurelyPassive(last);
     return last;
   }
 
@@ -600,7 +665,7 @@ export default class BattleScene extends Phaser.Scene {
 
   _refreshStatusUI() {
     this.rtTxt?.setText(`↺ ${this.rerollTokens}`);
-    this.playerHpTxt?.setText(`${Math.max(0, this.playerHp)}/${PLAYER_MAX_HP}`);
+    this.playerHpTxt?.setText(`${Math.max(0, this.playerHp)}/${this.playerMaxHp}`);
     if (this.playerBlockTxt) {
       if (this.block > 0) {
         this.playerBlockTxt.setText(`BLK ${this.block}`).setVisible(true);
@@ -634,15 +699,6 @@ export default class BattleScene extends Phaser.Scene {
             return;
           }
 
-          // Uranium: debuff the contacted die (once)
-          if (dA.isPlayer && dA.data.material === 'uranium' && !dB._uraniumDebuffed) {
-            dB._uraniumDebuffed = true;
-            this._floatText(dB.img.x, dB.img.y - 24, 'URA ½', '#88ff44');
-          }
-          if (dB.isPlayer && dB.data.material === 'uranium' && !dA._uraniumDebuffed) {
-            dA._uraniumDebuffed = true;
-            this._floatText(dA.img.x, dA.img.y - 24, 'URA ½', '#88ff44');
-          }
 
           // Copy die: remember the last player die type it touched
           if (dA.isPlayer && dA.data.type === 'copy' && dB.isPlayer && dB.data.type !== 'copy') {
@@ -652,6 +708,8 @@ export default class BattleScene extends Phaser.Scene {
             dB._mimicType = dA.data.type;
           }
 
+          dA._hadCollision = true;
+          dB._hadCollision = true;
           const sA = Math.hypot(bodyA.velocity.x, bodyA.velocity.y);
           const sB = Math.hypot(bodyB.velocity.x, bodyB.velocity.y);
           const struck = sA < sB ? dA : dB;
@@ -667,19 +725,24 @@ export default class BattleScene extends Phaser.Scene {
         const other   = dA ? bodyB : bodyA;
 
         if (dieRef && other.label === 'enemyBumper') {
+          dieRef._hadCollision = true;
           this._applyBumperKick(dieBody, this.enemyPos.x, this.enemyPos.y);
           if (!rerolled.has(dieRef)) {
             rerolled.add(dieRef); this._rerollDie(dieRef);
           }
           this._flashEnemyBumper();
-          // Any die contacting the enemy bumper deals 1 chip damage
-          this.enemyHp = Math.max(0, this.enemyHp - 1);
+          // Any die contacting the enemy bumper deals 1 chip damage (absorbed by block)
+          const chipDmg = this._hitEnemyBlock(1);
+          if (chipDmg > 0) {
+            this.enemyHp = Math.max(0, this.enemyHp - chipDmg);
+            this._flashEnemyDamage(chipDmg);
+            if (this.enemyHp <= 0) this._triggerVictory();
+          }
           this._refreshEnemyCharacter();
-          this._flashEnemyDamage(1);
-          if (this.enemyHp <= 0) this._triggerVictory();
         }
 
         if (dieRef && other.label === 'playerBumper') {
+          dieRef._hadCollision = true;
           this._applyBumperKick(dieBody, THROW_ORIGIN_X, THROW_ORIGIN_Y);
           if (!rerolled.has(dieRef)) {
             rerolled.add(dieRef); this._rerollDie(dieRef);
@@ -818,6 +881,7 @@ export default class BattleScene extends Phaser.Scene {
     this.block           = 0;
     this.vulnerable      = false;
     this.enemyWeakened   = false;
+    this.enemyVulnerable = false;
     this.playerFrail     = false;
     this.enemyBlock      = 0;
     this._autoCommitDone = false;
@@ -834,6 +898,8 @@ export default class BattleScene extends Phaser.Scene {
     this._refreshStatusUI();
     this._setPhase('PREPARING...');
     this._showMsg('');
+
+    this.relicManager.onStartTurn();
 
     this._moveEnemyToNewPosition(() => {
       this.time.delayedCall(400, () => this._enemyRollPhase());
@@ -942,6 +1008,7 @@ export default class BattleScene extends Phaser.Scene {
             if (taken > 0) {
               this._flashDamage(taken);
               msgs.push(`-${taken} HP`);
+              this.relicManager.onDamageTaken(taken);
             } else {
               msgs.push('Blocked!');
             }
@@ -972,8 +1039,7 @@ export default class BattleScene extends Phaser.Scene {
       if (this.enemyWeakened)
         this._floatText(THROW_ORIGIN_X, THROW_ORIGIN_Y - 50, 'WEAKENED!', '#9b59b6');
 
-      this._lastIntentWasBlock = intent?.type === 'block' ||
-        (intent?.type === 'multi' && intent.intents.some(i => i.type === 'block'));
+      this._lastIntentWasPassive = intent ? this._isPurelyPassive(intent) : false;
 
       this._refreshEnemyCharacter();
       this._refreshStatusUI();
@@ -1052,10 +1118,11 @@ export default class BattleScene extends Phaser.Scene {
     const data      = { ...dc, currentFaceIdx: fIdx };
 
     const die  = this._spawnDie(data, x, y, vx, vy, true, configIdx);
-    die._finalFaceIdx = fIdx;
-    die._rolling      = true;
-    die._lastCycleMs  = 0;
-    this._throwLocked = true;
+    die._finalFaceIdx  = fIdx;
+    die._rolling       = true;
+    die._lastCycleMs   = 0;
+    die._hadCollision  = false;
+    this._throwLocked  = true;
 
     // Ignore the player bumper until the die has cleared the origin
     die.img.body.collisionFilter.mask = 0xFFFFFFFF & ~0x0002;
@@ -1095,42 +1162,53 @@ export default class BattleScene extends Phaser.Scene {
 
     switch (type) {
       case 'attack': {
-        let raw       = this._getModifiedValue(dieRef, value, true);
-        if (this.playerFrail) raw = Math.floor(raw * 0.5);
-        const blocked = data.material === 'rock' ? 0 : this._getActiveEnemyBlock();
-        const dmg     = Math.max(0, raw - blocked);
+        let raw = this._getModifiedValue(dieRef, value, true);
+        raw += this.relicManager.getAttackBonus();
+        if (!dieRef._hadCollision) raw += this.relicManager.getCleanLandBonus();
+        raw  = Math.floor(raw * this.relicManager.getAttackMultiplier());
+        if (this.playerFrail)    raw = Math.floor(raw * 0.5);
+        if (this.enemyVulnerable) raw = Math.ceil(raw * 1.5);
+        const isPierceAll = data.material === 'rock' || this.relicManager.isPierceAll();
+        const dmg         = isPierceAll ? raw : this._hitEnemyBlock(raw);
         this._laserBeam(dieRef.img.x, dieRef.img.y, this.enemyPos.x, this.enemyPos.y, 0xff4444);
         if (dmg > 0) {
           this.enemyHp = Math.max(0, this.enemyHp - dmg);
           this._refreshEnemyCharacter();
           this._flashEnemyDamage(dmg);
-        } else {
-          this._floatText(this.enemyPos.x, this.enemyPos.y - ENEMY_BUMPER_R - 20, 'BLOCKED', '#3498db');
+          this.relicManager.onAttackHit(dmg);
         }
         if (this.enemyHp <= 0) this._triggerVictory();
         break;
       }
       case 'block': {
-        const blk = this._getModifiedValue(dieRef, value, false);
+        let blk = this._getModifiedValue(dieRef, value, false);
+        blk += this.relicManager.getBlockBonus();
+        if (!dieRef._hadCollision) blk += this.relicManager.getCleanLandBonus();
+        blk  = Math.floor(blk * this.relicManager.getBlockMultiplier());
         this.block += blk;
         this._refreshStatusUI();
         this._flashDieImpact(dieRef, `+${blk} BLK`, '#3498db');
+        this.relicManager.onBlock(blk);
         break;
       }
       case 'pierce': {
         let dmg = this._getModifiedValue(dieRef, value, true);
-        if (this.playerFrail) dmg = Math.floor(dmg * 0.5);
+        dmg += this.relicManager.getAttackBonus();
+        if (!dieRef._hadCollision) dmg += this.relicManager.getCleanLandBonus();
+        dmg  = Math.floor(dmg * this.relicManager.getAttackMultiplier());
+        if (this.playerFrail)    dmg = Math.floor(dmg * 0.5);
+        if (this.enemyVulnerable) dmg = Math.ceil(dmg * 1.5);
         this._laserBeam(dieRef.img.x, dieRef.img.y, this.enemyPos.x, this.enemyPos.y, 0xff9900);
         this.enemyHp = Math.max(0, this.enemyHp - dmg);
         this._refreshEnemyCharacter();
         this._flashEnemyDamage(dmg);
+        if (dmg > 0) this.relicManager.onAttackHit(dmg);
         if (this.enemyHp <= 0) this._triggerVictory();
         break;
       }
       case 'copy': {
-        // No mimic acquired — deal 1 weak attack (subject to block)
-        const blocked = this._getActiveEnemyBlock();
-        const dmg = Math.max(0, 1 - blocked);
+        // No mimic acquired — deal 1 weak attack (absorbed by block)
+        const dmg = this._hitEnemyBlock(1);
         this._floatText(dieRef.img.x, dieRef.img.y - 32, 'NO COPY', '#cc88ff');
         if (dmg > 0) {
           this._laserBeam(dieRef.img.x, dieRef.img.y, this.enemyPos.x, this.enemyPos.y, 0xcc88ff);
@@ -1143,13 +1221,18 @@ export default class BattleScene extends Phaser.Scene {
       }
       case 'leech': {
         let dmg  = this._getModifiedValue(dieRef, value, true);
-        if (this.playerFrail) dmg = Math.floor(dmg * 0.5);
-        const heal = Math.min(dmg, PLAYER_MAX_HP - this.playerHp);
+        dmg += this.relicManager.getAttackBonus();
+        if (!dieRef._hadCollision) dmg += this.relicManager.getCleanLandBonus();
+        dmg  = Math.floor(dmg * this.relicManager.getAttackMultiplier());
+        if (this.playerFrail)    dmg = Math.floor(dmg * 0.5);
+        if (this.enemyVulnerable) dmg = Math.ceil(dmg * 1.5);
+        const heal = Math.min(dmg, this.playerMaxHp - this.playerHp);
         this._laserBeam(dieRef.img.x, dieRef.img.y, this.enemyPos.x, this.enemyPos.y, 0xaa44ff);
         this.enemyHp  = Math.max(0, this.enemyHp - dmg);
-        this.playerHp = Math.min(PLAYER_MAX_HP, this.playerHp + heal);
+        this.playerHp = Math.min(this.playerMaxHp, this.playerHp + heal);
         this._refreshEnemyCharacter();
         this._flashEnemyDamage(dmg);
+        if (dmg > 0) this.relicManager.onAttackHit(dmg);
         if (heal > 0) this._flashHeal(heal);
         if (this.enemyHp <= 0) this._triggerVictory();
         break;
@@ -1167,16 +1250,20 @@ export default class BattleScene extends Phaser.Scene {
         break;
       }
       case 'bomb': {
-        let raw       = this._getModifiedValue(dieRef, value * 2, true);
-        if (this.playerFrail) raw = Math.floor(raw * 0.5);
-        const blocked = this._getActiveEnemyBlock();
-        const dmg     = Math.max(0, raw - blocked);
+        let raw = this._getModifiedValue(dieRef, value * 2, true);
+        raw += this.relicManager.getAttackBonus();
+        if (!dieRef._hadCollision) raw += this.relicManager.getCleanLandBonus();
+        raw  = Math.floor(raw * this.relicManager.getAttackMultiplier());
+        if (this.playerFrail)    raw = Math.floor(raw * 0.5);
+        if (this.enemyVulnerable) raw = Math.ceil(raw * 1.5);
+        const dmg = this.relicManager.isPierceAll() ? raw : this._hitEnemyBlock(raw);
         const recoil  = value;
         this._laserBeam(dieRef.img.x, dieRef.img.y, this.enemyPos.x, this.enemyPos.y, 0xff6622);
         if (dmg > 0) {
           this.enemyHp = Math.max(0, this.enemyHp - dmg);
           this._refreshEnemyCharacter();
           this._flashEnemyDamage(dmg);
+          this.relicManager.onAttackHit(dmg);
         }
         this.playerHp = Math.max(0, this.playerHp - recoil);
         this._floatText(THROW_ORIGIN_X, THROW_ORIGIN_Y - 30, `-${recoil} RECOIL`, '#ff6622');
@@ -1236,6 +1323,22 @@ export default class BattleScene extends Phaser.Scene {
         this._blastDice(dieRef, -1);
         break;
       }
+      case 'venom': {
+        this.enemyPoisonStacks += 3;
+        this._refreshEnemyCharacter();
+        this._floatText(this.enemyPos.x, this.enemyPos.y - ENEMY_BUMPER_R - 20, `${rune.sym} ☠+3`, rune.color);
+        break;
+      }
+      case 'weaken': {
+        this.enemyWeakened = true;
+        this._floatText(this.enemyPos.x, this.enemyPos.y - ENEMY_BUMPER_R - 20, `${rune.sym} WEAKENED`, rune.color);
+        break;
+      }
+      case 'expose': {
+        this.enemyVulnerable = true;
+        this._floatText(this.enemyPos.x, this.enemyPos.y - ENEMY_BUMPER_R - 20, `${rune.sym} EXPOSED`, rune.color);
+        break;
+      }
     }
   }
 
@@ -1261,8 +1364,9 @@ export default class BattleScene extends Phaser.Scene {
     let v = base;
     if (mat === 'iron')             v += 1;
     if (mat === 'steel')            v *= 2;
+    if (mat === 'uranium')          v *= 2;
     if (isDamage && mat === 'fire') v += 3;
-    if (dieRef._uraniumDebuffed)    v = Math.max(1, Math.floor(v / 2));
+    if (mat === 'phantom' && !dieRef._hadCollision) v *= 2;
     return v;
   }
 
@@ -1287,11 +1391,25 @@ export default class BattleScene extends Phaser.Scene {
     if (this.phase === 99) return;
     this.phase = 99;
     this._hideCommitOverlay();
+    this.relicManager.onKill();
     this.time.delayedCall(600, () => this._victory());
   }
 
   _getActiveEnemyBlock() {
     return this.enemyBlock ?? 0;
+  }
+
+  // Absorbs `damage` into enemy block. Returns remaining damage that reaches HP.
+  _hitEnemyBlock(damage) {
+    if (this.enemyBlock <= 0) return damage;
+    const absorbed = Math.min(this.enemyBlock, damage);
+    this.enemyBlock -= absorbed;
+    this._refreshBlockShield();
+    const remaining = damage - absorbed;
+    if (remaining === 0) {
+      this._floatText(this.enemyPos.x, this.enemyPos.y - ENEMY_BUMPER_R - 20, `BLOCKED`, '#3498db');
+    }
+    return remaining;
   }
 
   _getActiveFaceIndices(dc) {
@@ -1826,8 +1944,10 @@ export default class BattleScene extends Phaser.Scene {
     this.time.delayedCall(1400, () => this.scene.start('UpgradeScene', {
       playerDiceConfig: this.playerDiceConfig,
       playerHp:         this.playerHp,
+      playerMaxHp:      this.playerMaxHp,
       battleIndex:      this.battleIndex + 1,
       isBossReward:     this.enemyDef.tier === 'boss',
+      activeRelics:     this.activeRelics,
     }));
   }
 
@@ -1925,6 +2045,7 @@ export default class BattleScene extends Phaser.Scene {
           d.valLbl.setText('');
           this._addToEffectQueue(d);
           if (!this._queueActive) this._startQueue();
+          this.relicManager.onSettle(d);
         } else if (d.data.faces) {
           const finalFace   = FACES[d.data.faces[d._finalFaceIdx]];
           const fShowVal    = finalFace?.effect === 'enemy_damage' || finalFace?.effect === 'enemy_block';

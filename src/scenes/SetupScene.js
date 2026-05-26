@@ -3,6 +3,7 @@ import { FACES, ENEMIES, BATTLE_SEQUENCE } from '../data/faces.js';
 import { DIE_TYPES, DIE_TYPE_KEYS, FIGHTER_CONFIG, MAGICIAN_CONFIG } from '../data/dice.js';
 import { W, H, PLAYER_MAX_HP } from '../constants.js';
 import { RUNES, MATERIALS, RUNE_KEYS, MATERIAL_KEYS } from '../data/runes.js';
+import { getRelics } from '../data/relics.js';
 
 const ENEMY_KEYS = ['red_louse', 'cultist', 'jaw_worm'];
 
@@ -17,6 +18,7 @@ export default class SetupScene extends Phaser.Scene {
     this._stepGroup       = null;
     this._runeObjs        = [];
     this._picker          = null;
+    this._startingRelic   = null;
 
     this.add.rectangle(W / 2, H / 2, W, H, 0x111122);
     this.add.rectangle(W / 2, 1, W, 2, 0x1a4a7a);
@@ -425,7 +427,7 @@ export default class SetupScene extends Phaser.Scene {
 
     const btnBg = this.add.rectangle(W / 2, H - 44, W - 16, 50, 0x163824);
     btnBg.setStrokeStyle(1.5, 0x27ae60, 0.9).setInteractive();
-    btnBg.on('pointerdown', () => this._startBattle());
+    btnBg.on('pointerdown', () => this._transitionTo(() => this._showStartingRelicStep()));
     btnBg.on('pointerover',  () => btnBg.setFillStyle(0x27ae60));
     btnBg.on('pointerout',   () => btnBg.setFillStyle(0x163824));
     g.add(btnBg);
@@ -616,7 +618,23 @@ export default class SetupScene extends Phaser.Scene {
       }).setOrigin(0.5));
 
       tbg.on('pointerdown', () => {
-        dc.material = (dc.material === matId) ? null : matId;
+        // Restore faces culled by uranium if removing it
+        if (dc.material === 'uranium' && dc.uraniumCulledFaces?.length) {
+          dc.culledFaces = (dc.culledFaces ?? []).filter(f => !dc.uraniumCulledFaces.includes(f));
+          delete dc.uraniumCulledFaces;
+        }
+        const newMat = dc.material === matId ? null : matId;
+        dc.material = newMat;
+        // Apply uranium culling when selected
+        if (newMat === 'uranium') {
+          const halfStart = Math.floor(dc.sides / 2) + 1;
+          const newlyCulled = [];
+          for (let f = halfStart; f <= dc.sides; f++) {
+            if (!(dc.culledFaces ?? []).includes(f)) newlyCulled.push(f);
+          }
+          dc.culledFaces = [...(dc.culledFaces ?? []), ...newlyCulled];
+          dc.uraniumCulledFaces = newlyCulled;
+        }
         this._closePicker();
         this._refreshMatSlot(di);
       });
@@ -662,14 +680,82 @@ export default class SetupScene extends Phaser.Scene {
     }
   }
 
+  // ─── STARTING RELIC ───────────────────────────────────────────────────────
+
+  _showStartingRelicStep() {
+    const g = this._stepGroup = this.add.container(0, 0);
+
+    g.add(this.add.text(W / 2, 36, 'STARTING RELIC', {
+      fontSize: '20px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3,
+    }).setOrigin(0.5));
+    g.add(this.add.text(W / 2, 66, 'Pick one to carry into your first battle — or skip.', {
+      fontSize: '13px', color: '#445566', wordWrap: { width: W - 40 }, align: 'center',
+    }).setOrigin(0.5));
+
+    const all = getRelics();
+    const choices = Phaser.Math.RND.shuffle([...all]).slice(0, 3);
+
+    const RARITY_COLOR = { common: 0x556677, uncommon: 0x2471a3, rare: 0x6c3483, boss: 0x922b21 };
+    const cardH = 116, gap = 10, startY = 90;
+
+    choices.forEach((relic, i) => {
+      const cy     = startY + i * (cardH + gap) + cardH / 2;
+      const fc     = parseInt((relic.color ?? '#ffffff').replace('#', ''), 16);
+      const rarCol = RARITY_COLOR[relic.rarity] ?? RARITY_COLOR.common;
+
+      const bg = this.add.rectangle(W / 2, cy, W - 32, cardH, 0x0d0d1c);
+      bg.setStrokeStyle(2, rarCol, 0.85).setInteractive();
+      g.add(bg);
+
+      const dot = this.add.circle(44, cy, 12, fc, 0.9);
+      g.add(dot);
+      g.add(this.add.text(44, cy, relic.name[0].toUpperCase(), {
+        fontSize: '12px', color: '#ffffff', fontStyle: 'bold',
+      }).setOrigin(0.5, 0.5));
+
+      g.add(this.add.text(72, cy - 22, relic.name, {
+        fontSize: '17px', color: relic.color, fontStyle: 'bold',
+      }).setOrigin(0, 0.5));
+      g.add(this.add.text(72, cy - 2, relic.rarity.toUpperCase(), {
+        fontSize: '11px', color: '#334455', letterSpacing: 1,
+      }).setOrigin(0, 0.5));
+      g.add(this.add.text(72, cy + 20, relic.description, {
+        fontSize: '13px', color: '#8899aa', wordWrap: { width: W - 96 },
+      }).setOrigin(0, 0.5));
+
+      bg.on('pointerover', () => bg.setFillStyle(0x1a1a2e));
+      bg.on('pointerout',  () => bg.setFillStyle(0x0d0d1c));
+      bg.on('pointerdown', () => {
+        this._startingRelic = relic;
+        this._startBattle();
+      });
+    });
+
+    const skipY = startY + choices.length * (cardH + gap) + 30;
+    const skipBg = this.add.rectangle(W / 2, skipY, W - 32, 44, 0x0a0a14);
+    skipBg.setStrokeStyle(1, 0x222233, 0.8).setInteractive();
+    skipBg.on('pointerdown', () => this._startBattle());
+    skipBg.on('pointerover', () => skipBg.setFillStyle(0x181828));
+    skipBg.on('pointerout',  () => skipBg.setFillStyle(0x0a0a14));
+    g.add(skipBg);
+    g.add(this.add.text(W / 2, skipY, 'Skip  →', {
+      fontSize: '15px', color: '#2a3848',
+    }).setOrigin(0.5, 0.5));
+
+    this._addBackBtn(g, () => this._showRuneStep());
+    this._fadeIn(g);
+  }
+
   // ─── LAUNCH ───────────────────────────────────────────────────────────────
 
   _startBattle() {
     this.scene.start('BattleScene', {
       playerDiceConfig: this._diceConfig,
       playerHp:         PLAYER_MAX_HP,
+      playerMaxHp:      PLAYER_MAX_HP,
       rerollTokens:     1,
       battleIndex:      BATTLE_SEQUENCE.indexOf(this._enemyKey),
+      activeRelics:     this._startingRelic ? [this._startingRelic] : [],
     });
   }
 }
