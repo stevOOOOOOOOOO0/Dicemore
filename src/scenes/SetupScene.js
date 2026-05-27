@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { FACES, ENEMIES, BATTLE_SEQUENCE } from '../data/faces.js';
-import { DIE_TYPES, DIE_TYPE_KEYS, FIGHTER_CONFIG, MAGICIAN_CONFIG, ALCHEMIST_CONFIG } from '../data/dice.js';
+import { DIE_TYPES, DIE_TYPE_KEYS, FIGHTER_CONFIG, MAGICIAN_CONFIG, ALCHEMIST_CONFIG, BRUTE_CONFIG } from '../data/dice.js';
 import { W, H, PLAYER_MAX_HP } from '../constants.js';
 import { RUNES, MATERIALS, RUNE_KEYS, MATERIAL_KEYS } from '../data/runes.js';
 import { getRelics } from '../data/relics.js';
@@ -136,12 +136,11 @@ export default class SetupScene extends Phaser.Scene {
       fontSize: '17px', color: '#2a3848'
     }).setOrigin(0.5));
 
-    const cardW = W - 40, cardH = 120;
+    const cardW = W - 40, cardH = 108;
     const cx = W / 2;
 
     // Fighter card
-    const fy = 155;
-    this._makeClassCard(g, cx, fy, cardW, cardH, {
+    this._makeClassCard(g, cx, 130, cardW, cardH, {
       title: 'FIGHTER',
       titleColor: '#ff8844',
       borderColor: 0xff6622,
@@ -162,8 +161,7 @@ export default class SetupScene extends Phaser.Scene {
     });
 
     // Magician card
-    const my = 285;
-    this._makeClassCard(g, cx, my, cardW, cardH, {
+    this._makeClassCard(g, cx, 246, cardW, cardH, {
       title: 'MAGICIAN',
       titleColor: '#cc88ff',
       borderColor: 0x8844cc,
@@ -184,8 +182,7 @@ export default class SetupScene extends Phaser.Scene {
     });
 
     // Alchemist card
-    const ay = 415;
-    this._makeClassCard(g, cx, ay, cardW, cardH, {
+    this._makeClassCard(g, cx, 362, cardW, cardH, {
       title: 'ALCHEMIST',
       titleColor: '#58d68d',
       borderColor: 0x27ae60,
@@ -205,11 +202,34 @@ export default class SetupScene extends Phaser.Scene {
       }
     });
 
+    // Brute card
+    this._makeClassCard(g, cx, 478, cardW, cardH, {
+      title: 'BRUTE',
+      titleColor: '#e74c3c',
+      borderColor: 0xc0392b,
+      bgColor: 0x130808,
+      bgHover: 0x1e0e0e,
+      subtitle: 'The unstoppable force',
+      dice: [
+        { type: 'attack', label: 'ATK d6' },
+        { type: 'block',  label: 'BLK d6' },
+      ],
+      startingRelicName: 'Spiked Bumper',
+      startingRelicColor: '#e74c3c',
+      onTap: () => {
+        this._usedClassPreset = true;
+        this._diceCount  = 2;
+        this._diceConfig = JSON.parse(JSON.stringify(BRUTE_CONFIG));
+        this._startingRelic = getRelics().find(r => r.id === 'spiked_bumper') ?? null;
+        this._startBattle();
+      }
+    });
+
     // Custom button
-    const customBg = this.add.rectangle(cx, 522, cardW, 46, 0x0d0d1c);
+    const customBg = this.add.rectangle(cx, 572, cardW, 46, 0x0d0d1c);
     customBg.setStrokeStyle(1.5, 0x2a3a5a, 0.9).setInteractive();
     g.add(customBg);
-    g.add(this.add.text(cx, 522, 'Build Custom  →', {
+    g.add(this.add.text(cx, 572, 'Build Custom  →', {
       fontSize: '17px', color: '#2a3848', letterSpacing: 1
     }).setOrigin(0.5));
     customBg.on('pointerdown', () => {
@@ -219,6 +239,24 @@ export default class SetupScene extends Phaser.Scene {
     customBg.on('pointerover',  () => { customBg.setFillStyle(0x1e2840); customBg.setStrokeStyle(1.5, 0x4466aa); });
     customBg.on('pointerout',   () => { customBg.setFillStyle(0x0d0d1c); customBg.setStrokeStyle(1.5, 0x2a3a5a, 0.9); });
 
+    // Tutorial link
+    const tutTxt = this.add.text(cx, 628, '? First time? Try the Tutorial', {
+      fontSize: '13px', color: '#2a3848',
+    }).setOrigin(0.5).setInteractive();
+    g.add(tutTxt);
+    tutTxt.on('pointerover', () => tutTxt.setColor('#5588aa'));
+    tutTxt.on('pointerout',  () => tutTxt.setColor('#2a3848'));
+    tutTxt.on('pointerdown', () => {
+      this.scene.start('BattleScene', {
+        playerDiceConfig: JSON.parse(JSON.stringify(BRUTE_CONFIG)),
+        playerHp:    PLAYER_MAX_HP,
+        playerMaxHp: PLAYER_MAX_HP,
+        enemyKey:    'training_dummy',
+        tutorial:    true,
+        battleIndex: 0,
+        activeRelics: [],
+      });
+    });
 
     this._fadeIn(g);
   }
@@ -236,21 +274,33 @@ export default class SetupScene extends Phaser.Scene {
     }).setOrigin(0.5));
 
     // Die type pills
+    const hasRelic = !!opts.startingRelicName;
+    const pillsY   = hasRelic ? cy + 2 : cy + 12;
     const pillW = 76, pillGap = 8;
     const totalW = opts.dice.length * pillW + (opts.dice.length - 1) * pillGap;
     opts.dice.forEach((d, i) => {
       const dt = DIE_TYPES[d.type];
       const fc = dt ? parseInt(dt.color.replace('#', ''), 16) : 0x555555;
       const px = cx - totalW / 2 + i * (pillW + pillGap) + pillW / 2;
-      const pill = this.add.rectangle(px, cy + 12, pillW, 30, 0x0a0a18);
+      const pill = this.add.rectangle(px, pillsY, pillW, 30, 0x0a0a18);
       pill.setStrokeStyle(1, fc, 0.7);
       g.add(pill);
-      g.add(this.add.text(px, cy + 12, d.label, {
+      g.add(this.add.text(px, pillsY, d.label, {
         fontSize: '17px', color: dt ? dt.color : '#777777', fontStyle: 'bold'
       }).setOrigin(0.5));
     });
 
-    g.add(this.add.text(cx, cy + 44, 'tap to play  →', {
+    if (hasRelic) {
+      const rc = parseInt((opts.startingRelicColor ?? '#e74c3c').replace('#', ''), 16);
+      const relicPill = this.add.rectangle(cx, cy + 32, 170, 22, 0x0a0a18);
+      relicPill.setStrokeStyle(1, rc, 0.7);
+      g.add(relicPill);
+      g.add(this.add.text(cx, cy + 32, `⬟ ${opts.startingRelicName}`, {
+        fontSize: '12px', color: opts.startingRelicColor ?? '#e74c3c', fontStyle: 'bold',
+      }).setOrigin(0.5));
+    }
+
+    g.add(this.add.text(cx, hasRelic ? cy + 48 : cy + 44, 'tap to play  →', {
       fontSize: '17px', color: '#2a2a3a'
     }).setOrigin(0.5));
 

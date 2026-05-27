@@ -37,3 +37,8 @@ export const ALCHEMIST_CONFIG = [
   { id: 'al1', type: 'block',  sides: 6, runeMap: {}, material: null, culledFaces: [] },
   { id: 'al2', type: 'poison', sides: 4, runeMap: {}, material: null, culledFaces: [] },
 ];
+
+export const BRUTE_CONFIG = [
+  { id: 'br0', type: 'attack', sides: 6, runeMap: {}, material: null, culledFaces: [] },
+  { id: 'br1', type: 'block',  sides: 6, runeMap: {}, material: null, culledFaces: [] },
+];

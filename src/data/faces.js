@@ -36,6 +36,17 @@ export const FACES = {
 
 export const ENEMIES = {
 
+  // ── TUTORIAL ────────────────────────────────────────────────────────────
+
+  training_dummy: {
+    name: 'Training Dummy', hp: 10, tier: 'minion', color: '#f39c12', obstacleCount: 0,
+    intents: [
+      { type: 'attack', value: 2, weight: 3 },
+      { type: 'attack', value: 3, weight: 2 },
+      { type: 'block',  value: 3, weight: 2 },
+    ],
+  },
+
   // ── MINIONS (1 obstacle · HP 16-28) ────────────────────────────────────
 
   red_louse: {
@@ -136,7 +147,7 @@ export const ENEMIES = {
   // ── BOSSES (4 obstacles · HP 92-104) ───────────────────────────────────
 
   slime_lord: {
-    name: 'Slime Lord', hp: 92, tier: 'boss', color: '#2ecc71', obstacleCount: 4,
+    name: 'Slime Lord', hp: 92, tier: 'elite', color: '#2ecc71', obstacleCount: 4,
     intents: [
       { type: 'multi', weight: 3, intents: [{ type: 'vulnerable', value: 1 }, { type: 'attack', value: 12 }] },
       { type: 'attack',   value: 17, weight: 3 },

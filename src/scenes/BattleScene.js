@@ -38,10 +38,12 @@ export default class BattleScene extends Phaser.Scene {
     this.playerDiceConfig = data.playerDiceConfig
       ? JSON.parse(JSON.stringify(data.playerDiceConfig))
       : JSON.parse(JSON.stringify(STARTER_DICE));
-    this.battleIndex  = data.battleIndex  ?? 0;
-    this.playerHp     = data.playerHp     ?? PLAYER_MAX_HP;
-    this.playerMaxHp  = data.playerMaxHp  ?? PLAYER_MAX_HP;
-    this.activeRelics = data.activeRelics ?? [];
+    this.battleIndex    = data.battleIndex  ?? 0;
+    this.playerHp       = data.playerHp     ?? PLAYER_MAX_HP;
+    this.playerMaxHp    = data.playerMaxHp  ?? PLAYER_MAX_HP;
+    this.activeRelics   = data.activeRelics ?? [];
+    this._enemyKeyOverride = data.enemyKey  ?? null;
+    this._tutorialMode     = data.tutorial  ?? false;
   }
 
   // ─── CREATE ───────────────────────────────────────────────────────────────
@@ -84,6 +86,9 @@ export default class BattleScene extends Phaser.Scene {
     this._dragCard    = null;
     this._dragOffsetX = 0;
     this._dragMoved   = false;
+    this._downDieRef        = null;
+    this._downOnEnemyBumper = false;
+    this._downOnPlayerBumper = false;
 
     this.enemyPos           = { x: W / 2, y: 270 };
     this.enemyPhysicsBody   = null;
@@ -95,7 +100,7 @@ export default class BattleScene extends Phaser.Scene {
     this._playerPillsCont   = null;
     this._playerStatusPopup = null;
 
-    const key = BATTLE_SEQUENCE[this.battleIndex % BATTLE_SEQUENCE.length];
+    const key = this._enemyKeyOverride ?? BATTLE_SEQUENCE[this.battleIndex % BATTLE_SEQUENCE.length];
     this.enemyDef = ENEMIES[key];
     this.enemyHp  = this.enemyDef.hp;
 
@@ -114,6 +119,7 @@ export default class BattleScene extends Phaser.Scene {
     this._setupCollisions();
     this._setupPointer();
 
+    if (this._tutorialMode) this._initTutorial();
     this.time.delayedCall(400, () => this._startTurn());
   }
 
@@ -260,7 +266,13 @@ export default class BattleScene extends Phaser.Scene {
 
     // Tap zone
     const tapZone = this.add.rectangle(0, 0, (R + 24) * 2, (R + 48) * 2, 0xffffff, 0).setInteractive();
-    tapZone.on('pointerdown', (ptr) => { ptr.event.stopPropagation(); this._toggleIntentPopup(); });
+    tapZone.on('pointerdown', (ptr) => {
+      ptr.event.stopPropagation();
+      this._suppressThrow      = true;
+      this.aimActive           = false;
+      this.aimGfx?.clear();
+      this._downOnEnemyBumper  = true;
+    });
     this.enemyCharContainer.add(tapZone);
 
     // HP number below circle
@@ -497,7 +509,10 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   _hideIntentPopup() {
-    if (this._intentPopup) { this._intentPopup.destroy(true); this._intentPopup = null; }
+    if (!this._intentPopup) return;
+    this._intentPopup.destroy(true);
+    this._intentPopup = null;
+    if (this._tutorialMode && this._tutStep === 2) this._tutIntentViewed = true;
   }
 
   _describeIntent(intent) {
@@ -607,7 +622,12 @@ export default class BattleScene extends Phaser.Scene {
     // Tap hit zone — shows status popup
     const hitZone = this.add.circle(THROW_ORIGIN_X, THROW_ORIGIN_Y, PLAYER_BUMPER_R + 8, 0, 0)
       .setInteractive().setDepth(22);
-    hitZone.on('pointerdown', () => this._showPlayerStatusPopup());
+    hitZone.on('pointerdown', () => {
+      this._suppressThrow       = true;
+      this.aimActive            = false;
+      this.aimGfx?.clear();
+      this._downOnPlayerBumper  = true;
+    });
 
     this.playerPhysicsBody = this.matter.add.circle(
       THROW_ORIGIN_X, THROW_ORIGIN_Y, PLAYER_BUMPER_R,
@@ -890,6 +910,7 @@ export default class BattleScene extends Phaser.Scene {
   _setupPointer() {
     this.input.on('pointerdown', (ptr) => {
       if (this.inspectorPanel) return;
+      if (this._suppressThrow)  return;
       if (this.phase !== PHASE.PLAYER_ROLL) return;
       if (ptr.y > THROW_ZONE_BOTTOM) return;
       if (this.throwCount >= this.trayCards.length) return;
@@ -941,6 +962,36 @@ export default class BattleScene extends Phaser.Scene {
     });
 
     this.input.on('pointerup', (ptr) => {
+      const wasTap = Math.hypot(ptr.x - ptr.downX, ptr.y - ptr.downY) < 14;
+
+      if (this._downDieRef) {
+        const dr = this._downDieRef;
+        this._downDieRef    = null;
+        this._suppressThrow = false;
+        this.aimActive      = false;
+        this.aimGfx.clear();
+        if (wasTap) this._showInspector(dr);
+        return;
+      }
+
+      if (this._downOnEnemyBumper) {
+        this._downOnEnemyBumper = false;
+        this._suppressThrow     = false;
+        this.aimActive          = false;
+        this.aimGfx.clear();
+        if (wasTap) this._toggleIntentPopup();
+        return;
+      }
+
+      if (this._downOnPlayerBumper) {
+        this._downOnPlayerBumper = false;
+        this._suppressThrow      = false;
+        this.aimActive           = false;
+        this.aimGfx.clear();
+        if (wasTap) this._showPlayerStatusPopup();
+        return;
+      }
+
       if (this._suppressThrow) {
         this._suppressThrow = false;
         this.aimActive = false;
@@ -1009,6 +1060,7 @@ export default class BattleScene extends Phaser.Scene {
   // ─── TURN FLOW ────────────────────────────────────────────────────────────
 
   _startTurn() {
+    if (this._tutorialMode) this._tutTurnCount = (this._tutTurnCount ?? 0) + 1;
     this.phase           = PHASE.PREP;
     this.block           = 0;
     if (this.vulnerable > 0)   this.vulnerable--;
@@ -1244,7 +1296,10 @@ export default class BattleScene extends Phaser.Scene {
     img.setInteractive();
     img.on('pointerdown', (ptr) => {
       ptr.event.stopPropagation();
-      this._showInspector(dieRef);
+      this._suppressThrow  = true;
+      this.aimActive       = false;
+      this.aimGfx?.clear();
+      this._downDieRef     = dieRef;
     });
 
     this.allDice.push(dieRef);
@@ -2018,6 +2073,7 @@ export default class BattleScene extends Phaser.Scene {
   // ─── EFFECT QUEUE ─────────────────────────────────────────────────────────
 
   _addToEffectQueue(dieRef) {
+    if (this._tutorialMode && !this._tutFirstSettled) this._tutFirstSettled = true;
     const { data } = dieRef;
     const value = Math.floor(data.currentFaceIdx / 2) + 1;
     const type  = dieRef._mimicType ?? data.type;
@@ -2157,6 +2213,24 @@ export default class BattleScene extends Phaser.Scene {
     this.phase = 99;
     this._setPhase('VICTORY!');
     this._showMsg(`${this.enemyDef.name} defeated!`);
+    if (this._tutorialMode) {
+      this._tutPollTimer?.remove();
+      this.time.delayedCall(1000, () => {
+        this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.7).setDepth(80);
+        this.add.text(W / 2, H / 2 - 32, 'Tutorial Complete!', {
+          fontSize: '26px', color: '#f0c040', fontStyle: 'bold',
+        }).setOrigin(0.5).setDepth(81);
+        this.add.text(W / 2, H / 2 + 8, "You're ready for the real thing.", {
+          fontSize: '16px', color: '#aabbcc',
+        }).setOrigin(0.5).setDepth(81);
+        this.add.text(W / 2, H / 2 + 42, 'Tap to choose your class', {
+          fontSize: '14px', color: '#556677',
+        }).setOrigin(0.5).setDepth(81);
+        this.add.rectangle(W / 2, H / 2, W, H, 0, 0).setDepth(82).setInteractive()
+          .on('pointerdown', () => this.scene.start('SetupScene'));
+      });
+      return;
+    }
     this.time.delayedCall(1400, () => this.scene.start('UpgradeScene', {
       playerDiceConfig: this.playerDiceConfig,
       playerHp:         this.playerHp,
@@ -2179,7 +2253,13 @@ export default class BattleScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(81);
     this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0)
       .setDepth(82).setInteractive()
-      .on('pointerdown', () => this.scene.start('BattleScene', {}));
+      .on('pointerdown', () => this.scene.start('BattleScene',
+        this._tutorialMode
+          ? { enemyKey: 'training_dummy', tutorial: true,
+              playerDiceConfig: this.playerDiceConfig,
+              playerHp: this.playerMaxHp, playerMaxHp: this.playerMaxHp }
+          : {}
+      ));
   }
 
   // ─── UI HELPERS ───────────────────────────────────────────────────────────
@@ -2292,5 +2372,136 @@ export default class BattleScene extends Phaser.Scene {
         }
       }
     });
+  }
+
+  // ─── TUTORIAL ─────────────────────────────────────────────────────────────
+
+  _initTutorial() {
+    this._tutStep         = -1;
+    this._tutPanel        = null;
+    this._tutFirstSettled = false;
+    this._tutIntentViewed = false;
+    this._tutTurnCount    = 0;
+    this._throwLocked     = true;
+
+    this.time.delayedCall(700, () => this._showTutPanel(0));
+
+    this._tutPollTimer = this.time.addEvent({ delay: 350, loop: true, callback: () => {
+      if (this._tutPanel) return;
+      if (this._tutStep === 2 && this._tutIntentViewed)                                         this._showTutPanel(3);
+      if (this._tutStep === 4 && this._tutFirstSettled)                                         this._showTutPanel(5);
+      if (this._tutStep === 5 && !this._queueActive && this.throwCount >= this.trayCards.length) this._showTutPanel(6);
+      if (this._tutStep === 6 && this.phase === PHASE.COMMIT)                                   this._showTutPanel(7);
+      if (this._tutStep === 7 && this._tutTurnCount >= 2)                                       this._showTutPanel(8);
+    }});
+  }
+
+  _showTutPanel(step) {
+    this._closeTutPanel();
+    this._tutStep = step;
+
+    const STEPS = [
+      {
+        title: 'Welcome to Dicemore!',
+        body:  'Defeat the enemy by throwing your dice at them. Tap anywhere to step through this guide.',
+        y:     H / 2,
+      },
+      {
+        title: 'Your Enemy',
+        body:  'That glowing circle above is the enemy. The arc around it shows their remaining HP — drain it to zero to win.',
+        y:     490,
+      },
+      {
+        title: 'Enemy Intent',
+        body:  'See the text inside the glowing circle? That\'s their INTENT — what they\'ll do at the end of your turn. Tap the enemy circle now to inspect it in detail.',
+        y:     490,
+      },
+      {
+        title: 'Throwing Dice',
+        body:  'Tap and drag from anywhere on the screen to aim, then release to throw. Hitting the enemy deals extra damage!',
+        y:     580,
+      },
+      {
+        title: 'Bonus Tip — Rerolls!',
+        body:  'If your die collides with another die mid-air, it rerolls and may land on a higher value. Use your throws to chain collisions for bonus results!',
+        y:     580,
+        onDismiss: () => { this._throwLocked = false; },
+      },
+      {
+        title: 'Nice Throw!',
+        body:  'The number the die lands on is its effect value. ATK dice deal that much damage. BLK dice give you that much shield. Throw your remaining dice!',
+        y:     H / 2,
+      },
+      {
+        title: 'Commit Your Turn',
+        body:  'All your dice have resolved. Tap COMMIT to end your turn — the enemy will then act on their intent.',
+        y:     H / 2,
+      },
+      {
+        title: 'Enemy Turn',
+        body:  'The enemy acted! Your shield absorbs damage first. Once it\'s gone, the damage hits your HP. Shield resets at the start of each turn.',
+        y:     490,
+      },
+      {
+        title: "You've got it!",
+        body:  'Throw dice, build shield, deal damage, watch the enemy intent — repeat until one side falls. Good luck!',
+        y:     H / 2,
+        onDismiss: () => { this._tutorialMode = false; this._tutPollTimer?.remove(); },
+      },
+    ];
+
+    const cfg = STEPS[step];
+    if (!cfg) return;
+
+    const advance = () => {
+      cfg.onDismiss?.();
+      this._closeTutPanel();
+      if (step === 0 || step === 1 || step === 3) this._showTutPanel(step + 1);
+    };
+
+    const panW = W - 40, panH = 148;
+    const panY = cfg.y;
+
+    this._tutPanel = this.add.container(0, 0).setDepth(85);
+
+    // Full-screen dim — tap anywhere advances
+    const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.55).setInteractive();
+    dim.on('pointerdown', advance);
+    this._tutPanel.add(dim);
+
+    const bg = this.add.rectangle(W / 2, panY, panW, panH, 0x07090f).setInteractive();
+    bg.setStrokeStyle(2, 0xf0c040, 0.85);
+    bg.on('pointerdown', advance);
+    this._tutPanel.add(bg);
+
+    this._tutPanel.add(this.add.text(W / 2, panY - panH / 2 + 24, cfg.title, {
+      fontSize: '17px', color: '#f0c040', fontStyle: 'bold',
+    }).setOrigin(0.5, 0.5));
+
+    this._tutPanel.add(this.add.text(W / 2, panY, cfg.body, {
+      fontSize: '13px', color: '#aabbcc', wordWrap: { width: panW - 32 }, align: 'center',
+      lineSpacing: 4,
+    }).setOrigin(0.5, 0.5));
+
+    this._tutPanel.add(this.add.text(W / 2, panY + panH / 2 - 16, 'tap anywhere to continue', {
+      fontSize: '10px', color: '#334455', fontStyle: 'italic',
+    }).setOrigin(0.5, 0.5));
+
+    this._tutPanel.add(this.add.text(W / 2 + panW / 2 - 12, panY - panH / 2 + 12,
+      `${step + 1}/${STEPS.length}`, {
+      fontSize: '10px', color: '#2a3448',
+    }).setOrigin(1, 0.5));
+
+    this._tutPanel.setAlpha(0);
+    this._tutPanel.y = 12;
+    this.tweens.add({ targets: this._tutPanel, alpha: 1, y: 0, duration: 180, ease: 'Sine.Out' });
+  }
+
+  _closeTutPanel() {
+    if (!this._tutPanel) return;
+    const p = this._tutPanel;
+    this._tutPanel = null;
+    this.tweens.add({ targets: p, alpha: 0, y: -10, duration: 140,
+      onComplete: () => p.destroy(true) });
   }
 }
