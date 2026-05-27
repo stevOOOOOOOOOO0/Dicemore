@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { FACES, ENEMIES, BATTLE_SEQUENCE } from '../data/faces.js';
-import { DIE_TYPES, DIE_TYPE_KEYS, FIGHTER_CONFIG, MAGICIAN_CONFIG, ALCHEMIST_CONFIG, BRUTE_CONFIG } from '../data/dice.js';
+import { DIE_TYPES, DIE_TYPE_KEYS, SPECIAL_DIE_KEYS, SIDES_PROGRESSION, FIGHTER_CONFIG, MAGICIAN_CONFIG, ALCHEMIST_CONFIG, BRUTE_CONFIG } from '../data/dice.js';
 import { W, H, PLAYER_MAX_HP } from '../constants.js';
 import { RUNES, MATERIALS, RUNE_KEYS, MATERIAL_KEYS } from '../data/runes.js';
 import { getRelics } from '../data/relics.js';
@@ -369,38 +369,70 @@ export default class SetupScene extends Phaser.Scene {
       fontSize: '17px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3
     }).setOrigin(0.5));
 
-    const startY = 76;
-    const rowH   = 70;
-    const btnW   = 70, btnH = 50, btnGap = 6;
-    const bxStart = 52;
+    const startY   = 76;
+    const rowH     = 114;
+    const typeW    = 70, typeH = 28, typeGap = 6;
+    const sidesW   = 46, sidesH = 22, sidesGap = 4;
+    const bxStart  = 52;
+    const TYPE_ROWS = [DIE_TYPE_KEYS, SPECIAL_DIE_KEYS];
 
     this._diceConfig.forEach((dc, di) => {
-      const rowCy = startY + di * rowH + rowH / 2;
+      const base   = startY + di * rowH;
+      const labelY = base + 10;
+      const type1Y = base + 36;
+      const type2Y = base + 66;
+      const sidesY = base + 94;
 
-      g.add(this.add.text(16, rowCy, `Die ${di + 1}`, {
-        fontSize: '17px', color: '#2a3848'
+      g.add(this.add.text(16, labelY, `Die ${di + 1}`, {
+        fontSize: '13px', color: '#445566', letterSpacing: 1,
       }).setOrigin(0, 0.5));
 
-      DIE_TYPE_KEYS.forEach((typeId, ti) => {
-        const dt  = DIE_TYPES[typeId];
-        const fc  = parseInt(dt.color.replace('#', ''), 16);
-        const bx  = bxStart + ti * (btnW + btnGap) + btnW / 2;
-        const sel = dc.type === typeId;
+      TYPE_ROWS.forEach((keys, rowIdx) => {
+        const subY = rowIdx === 0 ? type1Y : type2Y;
+        keys.forEach((typeId, ti) => {
+          const dt  = DIE_TYPES[typeId];
+          const fc  = parseInt(dt.color.replace('#', ''), 16);
+          const bx  = bxStart + ti * (typeW + typeGap) + typeW / 2;
+          const sel = dc.type === typeId;
 
-        const bbg = this.add.rectangle(bx, rowCy, btnW, btnH, sel ? 0x1a2030 : 0x0d0d1c);
-        bbg.setStrokeStyle(sel ? 2 : 1, fc, sel ? 1 : 0.35).setInteractive();
-        g.add(bbg);
-        g.add(this.add.text(bx, rowCy, dt.sym, {
-          fontSize: '17px', color: sel ? dt.color : '#334455', fontStyle: sel ? 'bold' : 'normal'
+          const bbg = this.add.rectangle(bx, subY, typeW, typeH, sel ? 0x1a2030 : 0x0d0d1c);
+          bbg.setStrokeStyle(sel ? 2 : 1, fc, sel ? 1 : 0.35).setInteractive();
+          g.add(bbg);
+          g.add(this.add.text(bx, subY, dt.sym, {
+            fontSize: '13px', color: sel ? dt.color : '#334455', fontStyle: sel ? 'bold' : 'normal',
+          }).setOrigin(0.5));
+
+          bbg.on('pointerdown', () => {
+            dc.type = typeId;
+            this._transitionTo(() => this._showTypeStep());
+          });
+          bbg.on('pointerover',  () => { if (!sel) bbg.setFillStyle(0x181828); });
+          bbg.on('pointerout',   () => { if (!sel) bbg.setFillStyle(0x0d0d1c); });
+        });
+      });
+
+      SIDES_PROGRESSION.forEach((sides, si) => {
+        const bx  = bxStart + si * (sidesW + sidesGap) + sidesW / 2;
+        const sel = dc.sides === sides;
+
+        const sbg = this.add.rectangle(bx, sidesY, sidesW, sidesH, sel ? 0x1a2030 : 0x0d0d1c);
+        sbg.setStrokeStyle(sel ? 2 : 1, 0xf0c040, sel ? 0.9 : 0.2).setInteractive();
+        g.add(sbg);
+        g.add(this.add.text(bx, sidesY, `d${sides}`, {
+          fontSize: '12px', color: sel ? '#f0c040' : '#334455', fontStyle: sel ? 'bold' : 'normal',
         }).setOrigin(0.5));
 
-        bbg.on('pointerdown', () => {
-          dc.type = typeId;
+        sbg.on('pointerdown', () => {
+          dc.sides = sides;
           this._transitionTo(() => this._showTypeStep());
         });
-        bbg.on('pointerover',  () => { if (!sel) bbg.setFillStyle(0x181828); });
-        bbg.on('pointerout',   () => { if (!sel) bbg.setFillStyle(0x0d0d1c); });
+        sbg.on('pointerover',  () => { if (!sel) sbg.setFillStyle(0x181828); });
+        sbg.on('pointerout',   () => { if (!sel) sbg.setFillStyle(0x0d0d1c); });
       });
+
+      if (di < this._diceConfig.length - 1) {
+        g.add(this.add.rectangle(W / 2, base + rowH, W - 24, 1, 0x1e2840));
+      }
     });
 
     const allAssigned = this._diceConfig.every(dc => dc.type !== null);
@@ -768,7 +800,7 @@ export default class SetupScene extends Phaser.Scene {
       fontSize: '13px', color: '#445566', wordWrap: { width: W - 40 }, align: 'center',
     }).setOrigin(0.5));
 
-    const all = getRelics();
+    const all = getRelics().filter(r => !r.exclusive);
     const choices = Phaser.Math.RND.shuffle([...all]).slice(0, 3);
 
     const RARITY_COLOR = { common: 0x556677, uncommon: 0x2471a3, rare: 0x6c3483, boss: 0x922b21 };
@@ -950,14 +982,16 @@ export default class SetupScene extends Phaser.Scene {
   // ─── LAUNCH ───────────────────────────────────────────────────────────────
 
   _startBattle() {
+    const relics = this._selectedCustomRelics !== null
+      ? this._selectedCustomRelics
+      : (this._startingRelic ? [this._startingRelic] : []);
+    const hasSiphon = relics.some(r => r.effect === 'SIPHON_HP');
     this.scene.start('BattleScene', {
       playerDiceConfig: this._diceConfig,
-      playerHp:         PLAYER_MAX_HP,
-      playerMaxHp:      PLAYER_MAX_HP,
+      playerHp:         hasSiphon ? 15 : PLAYER_MAX_HP,
+      playerMaxHp:      hasSiphon ? Infinity : PLAYER_MAX_HP,
       battleIndex:      BATTLE_SEQUENCE.indexOf(this._enemyKey),
-      activeRelics:     this._selectedCustomRelics !== null
-                          ? this._selectedCustomRelics
-                          : (this._startingRelic ? [this._startingRelic] : []),
+      activeRelics:     relics,
     });
   }
 }

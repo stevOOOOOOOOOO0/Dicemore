@@ -13,7 +13,7 @@ export const DIE_TYPES = {
 export const DIE_TYPE_KEYS    = ['attack', 'block', 'pierce', 'copy'];
 export const SPECIAL_DIE_KEYS = ['leech', 'poison', 'hex', 'bomb'];
 
-export const SIDES_PROGRESSION = [6, 8, 10, 12, 20];
+export const SIDES_PROGRESSION = [4, 6, 8, 10, 12, 20];
 
 export const STARTER_DICE = [
   { id: 's0', type: 'attack', sides: 6, runeMap: {}, material: null, culledFaces: [] },

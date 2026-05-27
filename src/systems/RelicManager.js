@@ -21,6 +21,15 @@ export default class RelicManager {
   isPierceAll()          { return this._has('PIERCE_ALL'); }
   isEnemyPassiveWeakened() { return this._has('ENEMY_WEAKENED'); }
   getCleanLandBonus()    { return this._sum('CLEAN_LAND_BONUS'); }
+  hasSiphon()            { return this._has('SIPHON_HP'); }
+
+  onSiphonDamage(damage) {
+    if (!this.hasSiphon() || damage <= 0) return;
+    const s = this.scene;
+    s.playerHp += damage;
+    s._refreshStatusUI();
+    s._floatText(W / 2, 575, `+${damage}`, '#cc2244');
+  }
 
   // ── Triggers (called by BattleScene at key moments) ─────────────────────────
 
@@ -99,6 +108,7 @@ export default class RelicManager {
       s._refreshEnemyCharacter();
       s._flashEnemyDamage(dmg);
       s._floatText(s.enemyPos.x, s.enemyPos.y - 50, `THORNS ${dmg}`, '#aaaaaa');
+      s._siphonHeal(dmg);
       if (s.enemyHp <= 0) s._triggerVictory();
     });
   }

@@ -76,6 +76,7 @@ export default class BattleScene extends Phaser.Scene {
     this.enemyVulnerable     = false;
     this.playerFrail         = 0;
     this.enemyBlock          = 0;
+    this._pendingEnemyBlock  = 0;
     this._lastIntentWasPassive = false;
     this.currentIntent       = null;
     this._intentPopup        = null;
@@ -717,8 +718,14 @@ export default class BattleScene extends Phaser.Scene {
 
   // ─── STATUS UI ────────────────────────────────────────────────────────────
 
+  _siphonHeal(dmg) {
+    this.relicManager.onSiphonDamage(dmg);
+  }
+
   _refreshStatusUI() {
-    this.playerHpTxt?.setText(`${Math.max(0, this.playerHp)}/${this.playerMaxHp}`);
+    const hp = Math.max(0, this.playerHp);
+    const label = this.relicManager?.hasSiphon() ? `${hp}` : `${hp}/${this.playerMaxHp}`;
+    this.playerHpTxt?.setText(label);
     if (this.playerBlockTxt) {
       if (this.block > 0) {
         this.playerBlockTxt.setText(`BLK ${this.block}`).setVisible(true);
@@ -883,6 +890,7 @@ export default class BattleScene extends Phaser.Scene {
           if (chipDmg > 0) {
             this.enemyHp = Math.max(0, this.enemyHp - chipDmg);
             this._flashEnemyDamage(chipDmg);
+            this._siphonHeal(chipDmg);
             if (this.enemyHp <= 0) this._triggerVictory();
           }
           if (dieRef.isPlayer && dieRef.data.material === 'cursed') {
@@ -1067,7 +1075,8 @@ export default class BattleScene extends Phaser.Scene {
     this.enemyWeakened   = false;
     this.enemyVulnerable = false;
     if (this.playerFrail > 0) this.playerFrail--;
-    this.enemyBlock      = 0;
+    this.enemyBlock         = this._pendingEnemyBlock ?? 0;
+    this._pendingEnemyBlock = 0;
     this._autoCommitDone = false;
     this._hideIntentPopup();
 
@@ -1100,6 +1109,7 @@ export default class BattleScene extends Phaser.Scene {
       this.enemyHp = Math.max(0, this.enemyHp - psn);
       this.enemyPoisonStacks = Math.max(0, this.enemyPoisonStacks - 1);
       this._floatText(this.enemyPos.x, this.enemyPos.y - ENEMY_BUMPER_R - 20, `☠ -${psn}`, '#58d68d');
+      this._siphonHeal(psn);
       this._refreshEnemyCharacter();
       if (this.enemyHp <= 0) { this._triggerVictory(); return; }
     }
@@ -1107,11 +1117,11 @@ export default class BattleScene extends Phaser.Scene {
     // Draw intent for this turn
     this.currentIntent = this._drawIntent();
 
-    // Apply block intent immediately so it's active during the player's turn
+    // Queue block intent — activates next turn so it doesn't shield the enemy this turn
     const allIntents = this.currentIntent.type === 'multi'
       ? this.currentIntent.intents : [this.currentIntent];
     const blockSub = allIntents.find(i => i.type === 'block');
-    if (blockSub) this.enemyBlock = blockSub.value;
+    if (blockSub) this._pendingEnemyBlock = blockSub.value;
 
     this._refreshEnemyCharacter();
     this._showMsg('Enemy is acting — tap the enemy to see intent');
@@ -1377,6 +1387,7 @@ export default class BattleScene extends Phaser.Scene {
           this._refreshEnemyCharacter();
           this._flashEnemyDamage(dmg);
           this.relicManager.onAttackHit(dmg);
+          this._siphonHeal(dmg);
         }
         if (this.enemyHp <= 0) this._triggerVictory();
         break;
@@ -1403,7 +1414,7 @@ export default class BattleScene extends Phaser.Scene {
         this.enemyHp = Math.max(0, this.enemyHp - dmg);
         this._refreshEnemyCharacter();
         this._flashEnemyDamage(dmg);
-        if (dmg > 0) this.relicManager.onAttackHit(dmg);
+        if (dmg > 0) { this.relicManager.onAttackHit(dmg); this._siphonHeal(dmg); }
         if (this.enemyHp <= 0) this._triggerVictory();
         break;
       }
@@ -1416,6 +1427,7 @@ export default class BattleScene extends Phaser.Scene {
           this.enemyHp = Math.max(0, this.enemyHp - dmg);
           this._refreshEnemyCharacter();
           this._flashEnemyDamage(dmg);
+          this._siphonHeal(dmg);
           if (this.enemyHp <= 0) this._triggerVictory();
         }
         break;
@@ -1427,14 +1439,14 @@ export default class BattleScene extends Phaser.Scene {
         dmg  = Math.floor(dmg * this.relicManager.getAttackMultiplier());
         if (this.playerFrail > 0) dmg = Math.floor(dmg * 0.5);
         if (this.enemyVulnerable) dmg = Math.ceil(dmg * 1.5);
-        const heal = Math.min(dmg, this.playerMaxHp - this.playerHp);
+        const heal = this.relicManager.hasSiphon() ? dmg : Math.min(dmg, this.playerMaxHp - this.playerHp);
         this._laserBeam(dieRef.img.x, dieRef.img.y, this.enemyPos.x, this.enemyPos.y, 0xaa44ff);
         this.enemyHp  = Math.max(0, this.enemyHp - dmg);
-        this.playerHp = Math.min(this.playerMaxHp, this.playerHp + heal);
+        this.playerHp += heal;
         this._refreshEnemyCharacter();
         this._flashEnemyDamage(dmg);
         if (dmg > 0) this.relicManager.onAttackHit(dmg);
-        if (heal > 0) this._flashHeal(heal);
+        if (heal > 0) { this._flashHeal(heal); this._refreshStatusUI(); }
         if (this.enemyHp <= 0) this._triggerVictory();
         break;
       }
@@ -1465,6 +1477,7 @@ export default class BattleScene extends Phaser.Scene {
           this._refreshEnemyCharacter();
           this._flashEnemyDamage(dmg);
           this.relicManager.onAttackHit(dmg);
+          this._siphonHeal(dmg);
         }
         this.playerHp = Math.max(0, this.playerHp - recoil);
         this._floatText(THROW_ORIGIN_X, THROW_ORIGIN_Y - 30, `-${recoil} RECOIL`, '#ff6622');
@@ -1604,6 +1617,7 @@ export default class BattleScene extends Phaser.Scene {
         this._flashEnemyDamage(actual);
         this._floatText(dieRef.img.x, dieRef.img.y - 24, `★${actual}`, '#e74c3c');
         this.relicManager.onAttackHit(actual);
+        this._siphonHeal(actual);
         this._refreshEnemyCharacter();
       }
       if (this.enemyHp <= 0) this._triggerVictory();
@@ -2187,8 +2201,13 @@ export default class BattleScene extends Phaser.Scene {
 
     if (this.throwCount >= this.trayCards.length && !this._autoCommitDone) {
       this._autoCommitDone = true;
-      this._showMsg('All dice settled — commit when ready');
-      this._showCommitOverlay();
+      this._showMsg('All dice settled…');
+      this.time.delayedCall(800, () => {
+        if (this.phase === PHASE.PLAYER_ROLL) {
+          this._hideCommitOverlay();
+          this._commitPhase();
+        }
+      });
     } else if (this.throwCount < this.trayCards.length) {
       const remaining = this.trayCards.length - this.throwCount;
       this._showMsg(`${remaining} ${remaining === 1 ? 'die' : 'dice'} remaining — drag to throw`);
@@ -2433,8 +2452,8 @@ export default class BattleScene extends Phaser.Scene {
         y:     H / 2,
       },
       {
-        title: 'Commit Your Turn',
-        body:  'All your dice have resolved. Tap COMMIT to end your turn — the enemy will then act on their intent.',
+        title: 'End of Turn',
+        body:  'Once all your dice have resolved, the turn ends automatically — the enemy will then act on their intent.',
         y:     H / 2,
       },
       {
