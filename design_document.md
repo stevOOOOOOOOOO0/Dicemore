@@ -523,3 +523,165 @@ The full roguelike run structure is not yet implemented. The current prototype i
 5. **Queue card count cap** — No limit on how many cards can stack in the queue (e.g. many Egyptian re-settles). Should there be a visual cap?
 
 6. **Relic mid-run rewards** — Currently relics are only obtained at setup. Should additional relics be available as run rewards (e.g. after boss kills)?
+
+---
+
+## 20. **[PLANNED]** Thematic Overhaul — The Gambling Championship
+
+> This section describes a full thematic redesign of Dicemore agreed upon in design. None of it is implemented yet. Gameplay mechanics remain identical — this is a thematic overlay. Refer to this section when implementing the overhaul.
+
+### 20.1 Premise
+
+Dicemore is being rethemed from a fantasy combat roguelike into a **western-themed dice gambling championship**. Everyone in the championship is cheating. The player is a newcomer working their way up the bracket against increasingly slimy opponents. The Devil himself runs the event and has never lost — because nobody who beats him leaves to tell about it.
+
+The core fantasy shifts from warrior to con-artist: you're not killing enemies, you're **busting them out** of the tournament by stealing their money.
+
+---
+
+### 20.2 Core Mechanic Reframe
+
+| Old | New |
+| --- | --- |
+| HP | **Money pool** (visible for both player and opponent at all times) |
+| Attack | **Steal money** from opponent |
+| Block | **Protect your stack** (a game mechanic buffer — no deep narrative justification needed) |
+| Pierce | **Clean steal** — bypasses opponent's protection |
+| Poison | **Pickpocketing** — slow money drain each round, they don't notice until it's too late |
+| Vulnerable | **Distracted** — easier to steal from |
+| Dying / losing | **Going bust** — knocked out of the tournament |
+
+**Money transfer is delayed.** Stolen money does not transfer to the player's stack immediately on settle. It settles at end of round during the commit phase. This prevents attack dice from acting as sustain and keeps the round feeling like a scored hand rather than a running tally.
+
+**Money doubles as shop currency.** The player spends their money pool at the shop between fights. Spending to upgrade means arriving at the next fight with a thinner stack — a real risk.
+
+**Round order:**
+1. Ante deducted from both players
+2. Player rolls their dice
+3. Enemy commits their intent
+4. End of round: net theft settled, money transfers resolve
+5. Check if either player can cover the next ante
+
+---
+
+### 20.3 The Ante System
+
+Every turn, both the player AND the opponent pay an ante to the house. The ante disappears — the house always takes its cut.
+
+- Ante size is determined by which blind table the player chose (see §20.5)
+- If either player's money pool falls below the current ante, they automatically lose and the opponent keeps the difference
+- This creates a ticking clock: you cannot stall behind block dice forever
+- Long fights that go unresolved bleed both players dry — aggressive play is rewarded
+
+**Win conditions:**
+- Drain the opponent's pool to 0 through theft → player wins
+- Opponent's pool falls below the ante → player wins
+- Player's pool falls below the ante → player loses
+
+---
+
+### 20.4 The Shop — The Man in the Trench Coat
+
+Every 3 rounds the player visits a mysterious man in a trench coat. He is secretly the Devil in disguise, though he maintains a reasonable cover. He sells chips, dice, brands, and materials.
+
+This **replaces the current post-battle upgrade screen entirely**. Between shop visits there are no upgrade rewards — just fights and ante pressure.
+
+---
+
+### 20.5 Blind Table System
+
+After each fight the player chooses their next table. This replaces the current linear battle sequence and is the foundation for a future branching map.
+
+| Table | Opponent Difficulty | Ante Speed | Reward |
+| ----- | ------------------- | ---------- | ------ |
+| **Small Blind** | Easy | Slow | Low |
+| **Medium Blind** | Standard | Standard | Standard |
+| **Big Blind** | Tough | Fast | High |
+
+A big blind table is dangerous on two axes: a stronger opponent AND a faster ante clock. A large money pool going in is a significant advantage.
+
+---
+
+### 20.6 Terminology Changes
+
+| Old Term | New Term | Notes |
+| -------- | -------- | ----- |
+| Runes | **Brands** | Demonic marks burned into dice, taught by the Devil himself |
+| Relics | **Chips** | Picked at setup; passive bonuses carried through the run |
+| Materials | Materials | Unchanged |
+
+**Brand names (partial — 7 TBD):**
+
+| Old Name | New Name | Effect |
+| -------- | -------- | ------ |
+| Viking | **Devil's Due** | Face triggers twice |
+| Egyptian | **Snake Eyes** | Triggers face effect, then die rerolls |
+| Trojan | **The Deceiver** | Triggers this face + opposite face index |
+| Greek | **Hellfire** | Blasts all other dice away |
+| Cosmic | **Soul Snare** | Pulls all other dice inward |
+
+---
+
+### 20.7 Class Renames
+
+| Old Name | New Name |
+| -------- | -------- |
+| Fighter | **Dice Slinger** |
+| Magician | **Illusionist** |
+| Alchemist | **Pickpocket** |
+| Brute | **The Muscle** |
+| Custom | **The Drifter** |
+
+---
+
+### 20.8 Enemy Roster
+
+All enemies are slimy western cheaters. The obstacle count per enemy remains the same as the original roster.
+
+| # | New Name | Character |
+| --- | --- | --- |
+| Tutorial | **The Greenhorn** | The one honest player. Doesn't last long. |
+| 1 | **Two-Bit Hank** | Small-time saloon hustler, nervous hands |
+| 2 | **Snake Eyes Sally** | Loaded dice, mean streak |
+| 3 | **The Dandy** | Overdressed, underqualified, makes up for it with tricks |
+| 4 | **The Reverend** | Uses the good-lord act as cover; absolutely ruthless |
+| 5 | **Mad-Eye McGee** | Unhinged, chaotic, hard to read |
+| 6 | **The Widow** | Plays sympathy while picking your pocket clean |
+| 7 | **The Baron** | Old money, owns half the tournament, openly corrupt |
+| 8 | **Iron Iris** | Mechanical arm; weighted dice are literally built into her hand |
+| 9 | **The House** | Represents the casino itself. The casino always cheats. |
+| 10 | **The House** | TBD — second elite slot |
+| 11 | **The Devil** | Runs the whole championship. Has never lost. |
+
+---
+
+### 20.9 Obstacle Objects
+
+Obstacle dice are replaced with **unique personal objects per opponent** — physical clutter on the table that blocks the player's dice. Each opponent's objects reflect their personality. Objects are purely physics obstacles with no effect on settle.
+
+| Opponent | Obstacle Object(s) |
+| -------- | ------------------ |
+| The Greenhorn | A single nervous drink |
+| Two-Bit Hank | A beat-up tin cup |
+| Snake Eyes Sally | TBD |
+| The Dandy | TBD |
+| The Reverend | A bible |
+| Mad-Eye McGee | TBD |
+| The Widow | A perfume bottle |
+| The Baron | A crystal glass |
+| Iron Iris | Her gun, laid on the table |
+| The House | TBD |
+| The Devil | Four objects — he's been at this table since the beginning of time |
+
+Specific objects for remaining opponents are TBD.
+
+---
+
+### 20.10 Still To Figure Out
+
+1. Remaining 7 brand names
+2. Chip names (42 total, replacing relic names)
+3. UI/visual reskin — all labels, button text, scene text
+4. Specific obstacle objects for each opponent (see §20.9)
+5. Exact ante values per blind tier
+6. Other node types beyond blind tables (events, rest stops, etc.) — future feature
+7. Second elite slot enemy name and character
