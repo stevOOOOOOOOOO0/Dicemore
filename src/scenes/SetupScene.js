@@ -262,7 +262,7 @@ export default class SetupScene extends Phaser.Scene {
       this.scene.start('BattleScene', {
         playerDiceConfig: JSON.parse(JSON.stringify(BRUTE_CONFIG)),
         playerHp:    PLAYER_MAX_HP,
-        playerMaxHp: Infinity,
+        playerMaxHp: PLAYER_MAX_HP,
         enemyKey:    'training_dummy',
         tutorial:    true,
         battleIndex: 0,
@@ -1000,7 +1000,7 @@ export default class SetupScene extends Phaser.Scene {
     this.scene.start('BattleScene', {
       playerDiceConfig: this._diceConfig,
       playerHp:         PLAYER_MAX_HP,
-      playerMaxHp:      Infinity,
+      playerMaxHp:      PLAYER_MAX_HP,
       battleIndex:      BATTLE_SEQUENCE.indexOf(this._enemyKey),
       activeRelics:     relics,
     });

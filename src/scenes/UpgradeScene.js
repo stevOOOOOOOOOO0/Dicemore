@@ -479,7 +479,7 @@ export default class UpgradeScene extends Phaser.Scene {
     const bg = this._track(this.add.rectangle(W / 2, y, W - 16, 50, 0x0e1a12));
     bg.setStrokeStyle(1, 0x1a6a3a, 0.8).setInteractive();
     bg.on('pointerdown', () => {
-      this.playerHp += amt;
+      this.playerHp = Math.min(this.playerMaxHp, this.playerHp + amt);
       this._continue();
     });
     bg.on('pointerover', () => bg.setFillStyle(0x163824));

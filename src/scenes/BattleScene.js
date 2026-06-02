@@ -745,7 +745,7 @@ export default class BattleScene extends Phaser.Scene {
 
   _refreshStatusUI() {
     const hp = Math.max(0, this.playerHp);
-    this.playerHpTxt?.setText(`${hp}`);
+    this.playerHpTxt?.setText(`${hp} / ${this.playerMaxHp}`);
     this.potTxt?.setText(`${this.pot}`);
     if (this.playerBlockTxt) {
       if (this.block > 0) {
@@ -2252,12 +2252,6 @@ export default class BattleScene extends Phaser.Scene {
 
   _victory() {
     this.phase = 99;
-    // Award the pot to the player
-    if (this.pot > 0) {
-      this.playerHp += this.pot;
-      this._refreshStatusUI();
-      this._floatText(W / 2, 52, `+${this.pot} POT`, '#f0c040');
-    }
     this._setPhase('VICTORY!');
     this._showMsg(`${this.enemyDef.name} defeated!`);
     if (this._tutorialMode) {
