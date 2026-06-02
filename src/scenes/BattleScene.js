@@ -12,11 +12,11 @@ import RelicManager from '../systems/RelicManager.js';
 const PHASE = { PREP: 0, ENEMY_ROLL: 1, PLAYER_ROLL: 2, COMMIT: 3 };
 
 const INTENT = {
-  attack:     { label: 'ATK', color: '#e74c3c' },
-  block:      { label: 'BLK', color: '#3498db' },
-  strength:   { label: 'STR', color: '#e67e22' },
-  vulnerable: { label: 'VLN', color: '#bb44cc' },
-  frail:      { label: 'FRL', color: '#1abc9c' },
+  attack:     { label: 'STEAL',   color: '#e74c3c' },
+  block:      { label: 'PROTECT', color: '#3498db' },
+  strength:   { label: 'LOADED',  color: '#e67e22' },
+  vulnerable: { label: 'HUSTLE',  color: '#bb44cc' },
+  frail:      { label: 'RATTLE',  color: '#1abc9c' },
 };
 const THROW_ZONE_BOTTOM  = SURFACE_BOTTOM - 8;
 const THROW_ORIGIN_X     = W / 2;
@@ -42,6 +42,9 @@ export default class BattleScene extends Phaser.Scene {
     this.playerHp       = data.playerHp     ?? PLAYER_MAX_HP;
     this.playerMaxHp    = data.playerMaxHp  ?? PLAYER_MAX_HP;
     this.activeRelics   = data.activeRelics ?? [];
+    this.playerGold     = data.playerGold   ?? 0;
+    this.cullCount      = data.cullCount    ?? 0;
+    this.witchRunes     = data.witchRunes   ?? [];
     this._enemyKeyOverride = data.enemyKey  ?? null;
     this._tutorialMode     = data.tutorial  ?? false;
   }
@@ -68,9 +71,11 @@ export default class BattleScene extends Phaser.Scene {
     this._queueActive = false;
     this._throwLocked = false;
 
+    this.pot                 = 0;
     this.poisonStacks        = 0;
     this.enemyStrength       = 0;
     this.vulnerable          = 0;
+    this.cleanBonus          = 0;
     this.enemyPoisonStacks   = 0;
     this.enemyWeakened       = false;
     this.enemyVulnerable     = false;
@@ -168,6 +173,8 @@ export default class BattleScene extends Phaser.Scene {
     const mid = SURFACE_TOP / 2;
     this.phaseTxt     = this.add.text(W / 2, mid - 16, '', { fontSize: '17px', color: '#556677', letterSpacing: 2 }).setOrigin(0.5, 0.5);
     this.battleMsgTxt = this.add.text(W / 2, mid + 16, '', { fontSize: '17px', color: '#ffffff', wordWrap: { width: W - 60 } }).setOrigin(0.5, 0.5);
+    this.potLabelTxt  = this.add.text(W - 8, 6, 'POT', { fontSize: '10px', color: '#8b7a40', letterSpacing: 1 }).setOrigin(1, 0);
+    this.potTxt       = this.add.text(W - 8, 18, '0', { fontSize: '22px', color: '#f0c040', fontStyle: 'bold' }).setOrigin(1, 0);
     this._refreshStatusUI();
   }
 
@@ -347,7 +354,7 @@ export default class BattleScene extends Phaser.Scene {
     const R     = ENEMY_BUMPER_R;
     const col   = parseInt(this.enemyDef.color.replace('#', ''), 16);
 
-    this._enemyHpTxt?.setText(`${Math.max(0, this.enemyHp)} / ${maxHp}`);
+    this._enemyHpTxt?.setText(`${Math.max(0, this.enemyHp)}`);
 
     // Circular HP fill — floods from the bottom up proportional to remaining HP
     this._enemyHpFillGfx?.clear();
@@ -372,7 +379,7 @@ export default class BattleScene extends Phaser.Scene {
       }
     }
 
-    this._enemyStrTxt?.setText(this.enemyStrength > 0 ? `STR +${this.enemyStrength}` : '');
+    this._enemyStrTxt?.setText(this.enemyStrength > 0 ? `LOADED +${this.enemyStrength}` : '');
     this._enemyPsnTxt?.setText(this.enemyPoisonStacks > 0 ? `☠ ${this.enemyPoisonStacks}` : '');
     this._refreshIntentDisplay();
     this._refreshBlockShield();
@@ -431,12 +438,21 @@ export default class BattleScene extends Phaser.Scene {
     return last;
   }
 
+  _calcIntentDamage(baseValue) {
+    let dmg = baseValue + (this.enemyStrength ?? 0);
+    if (this.vulnerable > 0) dmg = Math.ceil(dmg * 1.5);
+    if (this.enemyWeakened)  dmg = Math.floor(dmg * 0.5);
+    return dmg;
+  }
+
   _refreshIntentDisplay() {
     if (!this._intentTxt) return;
     if (!this.currentIntent) { this._intentTxt.setText(''); return; }
     const intent = this.currentIntent;
     if (intent.type === 'multi') {
       const parts = intent.intents.map(sub => {
+        if (sub.type === 'attack') return `STL ${this._calcIntentDamage(sub.value)}`;
+        if (sub.type === 'block')  return `PRO ${sub.value}`;
         const cfg = INTENT[sub.type];
         return cfg ? cfg.label : sub.type.toUpperCase();
       });
@@ -447,9 +463,9 @@ export default class BattleScene extends Phaser.Scene {
       if (cfg) {
         let label = cfg.label;
         if (intent.type === 'attack') {
-          label = `ATK ${intent.value + (this.enemyStrength ?? 0)}`;
+          label = `STL ${this._calcIntentDamage(intent.value)}`;
         } else if (intent.type === 'block') {
-          label = `BLK ${intent.value}`;
+          label = `PRO ${intent.value}`;
         } else if (intent.value !== undefined) {
           label = `${cfg.label} +${intent.value}`;
         }
@@ -477,8 +493,7 @@ export default class BattleScene extends Phaser.Scene {
     this._intentPopup.add(dim);
 
     const lines = this._describeIntent(this.currentIntent);
-    const strBonus = this.enemyStrength > 0;
-    const panelH = 44 + lines.length * 22 + (strBonus ? 22 : 0) + 16;
+    const panelH = 44 + lines.length * 22 + 16;
     const panelW = 280;
 
     const bg = this.add.rectangle(0, 0, panelW, panelH, 0x0d0d1e, 0.97);
@@ -499,14 +514,6 @@ export default class BattleScene extends Phaser.Scene {
         }).setOrigin(0.5, 0.5)
       );
     });
-
-    if (strBonus) {
-      this._intentPopup.add(
-        this.add.text(0, panelH / 2 - 16, `STR +${this.enemyStrength} added to attacks`, {
-          fontSize: '11px', color: '#e67e22',
-        }).setOrigin(0.5, 0.5)
-      );
-    }
   }
 
   _hideIntentPopup() {
@@ -526,17 +533,25 @@ export default class BattleScene extends Phaser.Scene {
   _describeSingleIntent(sub) {
     switch (sub.type) {
       case 'attack': {
-        const total = sub.value + (this.enemyStrength ?? 0);
-        return [{ text: `Attack  ${total} damage`, color: '#e74c3c' }];
+        const dmg = this._calcIntentDamage(sub.value);
+        const hasModifiers = this.enemyStrength > 0 || this.vulnerable > 0 || this.enemyWeakened;
+        if (hasModifiers) {
+          const notes = [`${sub.value} base`];
+          if (this.enemyStrength > 0) notes.push(`+${this.enemyStrength} loaded`);
+          if (this.vulnerable > 0)    notes.push(`+50% distracted`);
+          if (this.enemyWeakened)     notes.push(`−50% weakened`);
+          return [{ text: `Steal  ${dmg} chips  (${notes.join(', ')})`, color: '#e74c3c' }];
+        }
+        return [{ text: `Steal  ${dmg} chips`, color: '#e74c3c' }];
       }
       case 'block':
-        return [{ text: `Block  ${sub.value} damage`, color: '#3498db' }];
+        return [{ text: `Protect  ${sub.value} chips next turn`, color: '#3498db' }];
       case 'strength':
-        return [{ text: `Gain +${sub.value} Strength`, color: '#e67e22' }];
+        return [{ text: `Loaded dice  (+${sub.value} to all steals)`, color: '#e67e22' }];
       case 'vulnerable':
-        return [{ text: `Vulnerable  (+50% damage taken)`, color: '#bb44cc' }];
+        return [{ text: `Hustle you  (+25% chips stolen from you)`, color: '#bb44cc' }];
       case 'frail':
-        return [{ text: `Frail  (-50% damage dealt)`, color: '#1abc9c' }];
+        return [{ text: `Rattle you  (−25% protection)`, color: '#1abc9c' }];
       default:
         return [{ text: sub.type.toUpperCase(), color: '#aaaaaa' }];
     }
@@ -722,10 +737,16 @@ export default class BattleScene extends Phaser.Scene {
     this.relicManager.onSiphonDamage(dmg);
   }
 
+  _addToPot(amount) {
+    if (amount <= 0) return;
+    this.pot += amount;
+    this.potTxt?.setText(`${this.pot}`);
+  }
+
   _refreshStatusUI() {
     const hp = Math.max(0, this.playerHp);
-    const label = this.relicManager?.hasSiphon() ? `${hp}` : `${hp}/${this.playerMaxHp}`;
-    this.playerHpTxt?.setText(label);
+    this.playerHpTxt?.setText(`${hp}`);
+    this.potTxt?.setText(`${this.pot}`);
     if (this.playerBlockTxt) {
       if (this.block > 0) {
         this.playerBlockTxt.setText(`BLK ${this.block}`).setVisible(true);
@@ -746,7 +767,7 @@ export default class BattleScene extends Phaser.Scene {
     if (this.playerFrail > 0)
       active.push({ label: `FRAIL ×${this.playerFrail}`, color: '#1abc9c' });
     if (this.vulnerable > 0)
-      active.push({ label: `VLN ×${this.vulnerable}`, color: '#bb44cc' });
+      active.push({ label: `DISTRACTED ×${this.vulnerable}`, color: '#bb44cc' });
     if (active.length === 0) return;
 
     const PILL_H = 18, PAD = 7, GAP = 5;
@@ -786,8 +807,8 @@ export default class BattleScene extends Phaser.Scene {
       rows.push({ label: `Frail  ×${this.playerFrail}`, color: '#1abc9c',
         desc: `Your dice deal half damage. ${this.playerFrail} turn${this.playerFrail > 1 ? 's' : ''} remaining.` });
     if (this.vulnerable > 0)
-      rows.push({ label: `Vulnerable  ×${this.vulnerable}`, color: '#bb44cc',
-        desc: `You take 50% more damage. ${this.vulnerable} turn${this.vulnerable > 1 ? 's' : ''} remaining.` });
+      rows.push({ label: `Distracted  ×${this.vulnerable}`, color: '#bb44cc',
+        desc: `You take 50% more chips stolen. ${this.vulnerable} turn${this.vulnerable > 1 ? 's' : ''} remaining.` });
     if (rows.length === 0)
       rows.push({ label: 'No active effects', color: '#445566',
         desc: 'You have no status effects right now.' });
@@ -889,6 +910,7 @@ export default class BattleScene extends Phaser.Scene {
           const chipDmg = this._hitEnemyBlock(1);
           if (chipDmg > 0) {
             this.enemyHp = Math.max(0, this.enemyHp - chipDmg);
+            this._addToPot(chipDmg);
             this._flashEnemyDamage(chipDmg);
             this._siphonHeal(chipDmg);
             if (this.enemyHp <= 0) this._triggerVictory();
@@ -1071,6 +1093,7 @@ export default class BattleScene extends Phaser.Scene {
     if (this._tutorialMode) this._tutTurnCount = (this._tutTurnCount ?? 0) + 1;
     this.phase           = PHASE.PREP;
     this.block           = 0;
+    this.cleanBonus      = 0;
     if (this.vulnerable > 0)   this.vulnerable--;
     this.enemyWeakened   = false;
     this.enemyVulnerable = false;
@@ -1107,6 +1130,7 @@ export default class BattleScene extends Phaser.Scene {
     if (this.enemyPoisonStacks > 0) {
       const psn    = this.enemyPoisonStacks;
       this.enemyHp = Math.max(0, this.enemyHp - psn);
+      this._addToPot(psn);
       this.enemyPoisonStacks = Math.max(0, this.enemyPoisonStacks - 1);
       this._floatText(this.enemyPos.x, this.enemyPos.y - ENEMY_BUMPER_R - 20, `☠ -${psn}`, '#58d68d');
       this._siphonHeal(psn);
@@ -1231,24 +1255,24 @@ export default class BattleScene extends Phaser.Scene {
             break;
           case 'strength':
             this.enemyStrength += sub.value;
-            this._floatText(this.enemyPos.x, this.enemyPos.y - ENEMY_BUMPER_R - 20, `STR +${sub.value}`, '#e67e22');
-            msgs.push(`Enemy STR +${sub.value}`);
+            this._floatText(this.enemyPos.x, this.enemyPos.y - ENEMY_BUMPER_R - 20, `LOADED +${sub.value}`, '#e67e22');
+            msgs.push(`Loaded dice +${sub.value}`);
             break;
           case 'vulnerable':
             this.vulnerable = Math.max(this.vulnerable, 3);
-            this._floatText(THROW_ORIGIN_X, THROW_ORIGIN_Y - 30, 'VULNERABLE!', '#bb44cc');
-            msgs.push('You are Vulnerable');
+            this._floatText(THROW_ORIGIN_X, THROW_ORIGIN_Y - 30, 'HUSTLED!', '#bb44cc');
+            msgs.push('You\'re distracted');
             break;
           case 'frail':
             this.playerFrail = Math.max(this.playerFrail, 3);
-            this._floatText(THROW_ORIGIN_X, THROW_ORIGIN_Y + 30, 'FRAIL!', '#1abc9c');
-            msgs.push('You are Frail');
+            this._floatText(THROW_ORIGIN_X, THROW_ORIGIN_Y + 30, 'RATTLED!', '#1abc9c');
+            msgs.push('You\'re rattled');
             break;
         }
       });
 
       if (this.enemyWeakened)
-        this._floatText(THROW_ORIGIN_X, THROW_ORIGIN_Y - 50, 'WEAKENED!', '#9b59b6');
+        this._floatText(THROW_ORIGIN_X, THROW_ORIGIN_Y - 50, 'OPPONENT EXPOSED!', '#9b59b6');
 
       this._lastIntentWasPassive = intent ? this._isPurelyPassive(intent) : false;
 
@@ -1369,12 +1393,13 @@ export default class BattleScene extends Phaser.Scene {
     const { data } = dieRef;
     const value = Math.floor(data.currentFaceIdx / 2) + 1;
     const type  = dieRef._mimicType ?? data.type;
-    const isDmg = type === 'attack' || type === 'pierce';
+    const isDmg = type === 'attack';
 
     switch (type) {
       case 'attack': {
         let raw = this._getModifiedValue(dieRef, value, true);
         raw += this.relicManager.getAttackBonus();
+        raw += this.cleanBonus;
         if (!dieRef._hadCollision) raw += this.relicManager.getCleanLandBonus();
         raw  = Math.floor(raw * this.relicManager.getAttackMultiplier());
         if (this.playerFrail > 0) raw = Math.floor(raw * 0.5);
@@ -1384,6 +1409,7 @@ export default class BattleScene extends Phaser.Scene {
         this._laserBeam(dieRef.img.x, dieRef.img.y, this.enemyPos.x, this.enemyPos.y, 0xff4444);
         if (dmg > 0) {
           this.enemyHp = Math.max(0, this.enemyHp - dmg);
+          this._addToPot(dmg);
           this._refreshEnemyCharacter();
           this._flashEnemyDamage(dmg);
           this.relicManager.onAttackHit(dmg);
@@ -1395,6 +1421,7 @@ export default class BattleScene extends Phaser.Scene {
       case 'block': {
         let blk = this._getModifiedValue(dieRef, value, false);
         blk += this.relicManager.getBlockBonus();
+        blk += this.cleanBonus;
         if (!dieRef._hadCollision) blk += this.relicManager.getCleanLandBonus();
         blk  = Math.floor(blk * this.relicManager.getBlockMultiplier());
         this.block += blk;
@@ -1404,18 +1431,9 @@ export default class BattleScene extends Phaser.Scene {
         break;
       }
       case 'pierce': {
-        let dmg = this._getModifiedValue(dieRef, value, true);
-        dmg += this.relicManager.getAttackBonus();
-        if (!dieRef._hadCollision) dmg += this.relicManager.getCleanLandBonus();
-        dmg  = Math.floor(dmg * this.relicManager.getAttackMultiplier());
-        if (this.playerFrail > 0) dmg = Math.floor(dmg * 0.5);
-        if (this.enemyVulnerable) dmg = Math.ceil(dmg * 1.5);
-        this._laserBeam(dieRef.img.x, dieRef.img.y, this.enemyPos.x, this.enemyPos.y, 0xff9900);
-        this.enemyHp = Math.max(0, this.enemyHp - dmg);
-        this._refreshEnemyCharacter();
-        this._flashEnemyDamage(dmg);
-        if (dmg > 0) { this.relicManager.onAttackHit(dmg); this._siphonHeal(dmg); }
-        if (this.enemyHp <= 0) this._triggerVictory();
+        const boost = this._getModifiedValue(dieRef, value, false);
+        this.cleanBonus += boost;
+        this._flashDieImpact(dieRef, `+${boost} BOOST`, '#ff9900');
         break;
       }
       case 'copy': {
@@ -1425,6 +1443,7 @@ export default class BattleScene extends Phaser.Scene {
         if (dmg > 0) {
           this._laserBeam(dieRef.img.x, dieRef.img.y, this.enemyPos.x, this.enemyPos.y, 0xcc88ff);
           this.enemyHp = Math.max(0, this.enemyHp - dmg);
+          this._addToPot(dmg);
           this._refreshEnemyCharacter();
           this._flashEnemyDamage(dmg);
           this._siphonHeal(dmg);
@@ -1442,6 +1461,7 @@ export default class BattleScene extends Phaser.Scene {
         const heal = this.relicManager.hasSiphon() ? dmg : Math.min(dmg, this.playerMaxHp - this.playerHp);
         this._laserBeam(dieRef.img.x, dieRef.img.y, this.enemyPos.x, this.enemyPos.y, 0xaa44ff);
         this.enemyHp  = Math.max(0, this.enemyHp - dmg);
+        this._addToPot(dmg);
         this.playerHp += heal;
         this._refreshEnemyCharacter();
         this._flashEnemyDamage(dmg);
@@ -1474,6 +1494,7 @@ export default class BattleScene extends Phaser.Scene {
         this._laserBeam(dieRef.img.x, dieRef.img.y, this.enemyPos.x, this.enemyPos.y, 0xff6622);
         if (dmg > 0) {
           this.enemyHp = Math.max(0, this.enemyHp - dmg);
+          this._addToPot(dmg);
           this._refreshEnemyCharacter();
           this._flashEnemyDamage(dmg);
           this.relicManager.onAttackHit(dmg);
@@ -1614,6 +1635,7 @@ export default class BattleScene extends Phaser.Scene {
       const actual = this.relicManager.isPierceAll() ? dmg : this._hitEnemyBlock(dmg);
       if (actual > 0) {
         this.enemyHp = Math.max(0, this.enemyHp - actual);
+        this._addToPot(actual);
         this._flashEnemyDamage(actual);
         this._floatText(dieRef.img.x, dieRef.img.y - 24, `★${actual}`, '#e74c3c');
         this.relicManager.onAttackHit(actual);
@@ -2230,6 +2252,12 @@ export default class BattleScene extends Phaser.Scene {
 
   _victory() {
     this.phase = 99;
+    // Award the pot to the player
+    if (this.pot > 0) {
+      this.playerHp += this.pot;
+      this._refreshStatusUI();
+      this._floatText(W / 2, 52, `+${this.pot} POT`, '#f0c040');
+    }
     this._setPhase('VICTORY!');
     this._showMsg(`${this.enemyDef.name} defeated!`);
     if (this._tutorialMode) {
@@ -2250,6 +2278,7 @@ export default class BattleScene extends Phaser.Scene {
       });
       return;
     }
+    this.playerGold += 10;
     this.time.delayedCall(1400, () => this.scene.start('UpgradeScene', {
       playerDiceConfig: this.playerDiceConfig,
       playerHp:         this.playerHp,
@@ -2257,6 +2286,9 @@ export default class BattleScene extends Phaser.Scene {
       battleIndex:      this.battleIndex + 1,
       isBossReward:     this.enemyDef.tier === 'boss',
       activeRelics:     this.activeRelics,
+      playerGold:       this.playerGold,
+      cullCount:        this.cullCount,
+      witchRunes:       this.witchRunes,
     }));
   }
 

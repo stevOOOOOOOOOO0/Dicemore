@@ -550,36 +550,60 @@ The core fantasy shifts from warrior to con-artist: you're not killing enemies, 
 | Vulnerable | **Distracted** — easier to steal from |
 | Dying / losing | **Going bust** — knocked out of the tournament |
 
-**Money transfer is delayed.** Stolen money does not transfer to the player's stack immediately on settle. It settles at end of round during the commit phase. This prevents attack dice from acting as sustain and keeps the round feeling like a scored hand rather than a running tally.
+**Die type renames:**
+
+| Old Name | New Name | Notes |
+| -------- | -------- | ----- |
+| Attack | **Steal** | Core die |
+| Block | **Protect** | Core die |
+| Pierce | **Clean Steal** | Core die |
+| Copy | **Copy** | Unchanged for now |
+| Poison | **Pickpocket** | Renamed |
+| Leech | *(removed)* | Cut from playable set |
+| Hex | *(removed)* | Cut from playable set |
+| Bomb | *(removed)* | Cut from playable set |
+
+**Starting stacks:** Player starts with **30 chips**. Enemy money pools use their existing HP values from the roster (see §8.2).
+
+**Money goes into the pot.** When a player die steals from an opponent, the stolen amount immediately leaves the opponent's stack and is added to **the pot** — a shared neutral pool displayed in the top-right corner of the screen. Stolen money does NOT transfer directly to the player's stack during a fight. At the end of the fight (opponent goes bust), the winning player claims the entire pot.
+
+- Both players' stacks are displayed next to their respective bumpers on the play surface.
+- Pot fills every time either player steals — aggressive play builds a bigger prize.
+- The pot accumulates ante payments too (see §20.3).
 
 **Money doubles as shop currency.** The player spends their money pool at the shop between fights. Spending to upgrade means arriving at the next fight with a thinner stack — a real risk.
 
 **Round order:**
-1. Ante deducted from both players
+1. **[PLANNED]** Ante deducted from both players (see §20.3)
 2. Player rolls their dice
 3. Enemy commits their intent
-4. End of round: net theft settled, money transfers resolve
-5. Check if either player can cover the next ante
+4. Stolen money leaves opponent stack → enters the pot
+5. Check if either player is bust (stack = 0)
 
 ---
 
-### 20.3 The Ante System
+### 20.3 The Ante System **[PLANNED]**
 
-Every turn, both the player AND the opponent pay an ante to the house. The ante disappears — the house always takes its cut.
+> Not implemented yet. Keep in design only. Ante values are decided; trigger logic is TBD.
 
-- Ante size is determined by which blind table the player chose (see §20.5)
-- If either player's money pool falls below the current ante, they automatically lose and the opponent keeps the difference
-- This creates a ticking clock: you cannot stall behind block dice forever
+Every turn, both the player AND the opponent pay an ante to the house. The ante disappears into the pot — the house always takes its cut.
+
+- Ante size is fixed per blind table tier:
+  - **Small Blind:** 10 chips/turn
+  - **Medium Blind:** 20 chips/turn
+  - **Big Blind:** 30 chips/turn
+- If either player's money pool falls below the current ante, they automatically bust and lose the fight
+- This creates a ticking clock: you cannot stall behind protect dice forever
 - Long fights that go unresolved bleed both players dry — aggressive play is rewarded
 
 **Win conditions:**
 - Drain the opponent's pool to 0 through theft → player wins
-- Opponent's pool falls below the ante → player wins
-- Player's pool falls below the ante → player loses
+- **[PLANNED]** Opponent's pool falls below the ante → player wins
+- **[PLANNED]** Player's pool falls below the ante → player loses
 
 ---
 
-### 20.4 The Shop — The Man in the Trench Coat
+### 20.4 The Shop — The Man in the Trench Coat **[PLANNED]**
 
 Every 3 rounds the player visits a mysterious man in a trench coat. He is secretly the Devil in disguise, though he maintains a reasonable cover. He sells chips, dice, brands, and materials.
 
@@ -587,15 +611,15 @@ This **replaces the current post-battle upgrade screen entirely**. Between shop 
 
 ---
 
-### 20.5 Blind Table System
+### 20.5 Blind Table System **[PLANNED]**
 
 After each fight the player chooses their next table. This replaces the current linear battle sequence and is the foundation for a future branching map.
 
-| Table | Opponent Difficulty | Ante Speed | Reward |
-| ----- | ------------------- | ---------- | ------ |
-| **Small Blind** | Easy | Slow | Low |
-| **Medium Blind** | Standard | Standard | Standard |
-| **Big Blind** | Tough | Fast | High |
+| Table | Opponent Difficulty | Ante per turn | Reward |
+| ----- | ------------------- | ------------- | ------ |
+| **Small Blind** | Easy | 10 chips | Low |
+| **Medium Blind** | Standard | 20 chips | Standard |
+| **Big Blind** | Tough | 30 chips | High |
 
 A big blind table is dangerous on two axes: a stronger opponent AND a faster ante clock. A large money pool going in is a significant advantage.
 
@@ -621,15 +645,17 @@ A big blind table is dangerous on two axes: a stronger opponent AND a faster ant
 
 ---
 
-### 20.7 Class Renames
+### 20.7 Class Configurations
 
-| Old Name | New Name |
-| -------- | -------- |
-| Fighter | **Dice Slinger** |
-| Magician | **Illusionist** |
-| Alchemist | **Pickpocket** |
-| Brute | **The Muscle** |
-| Custom | **The Drifter** |
+| Old Name | New Name | Dice | Starting Chip | Notes |
+| -------- | -------- | ---- | ------------- | ----- |
+| Fighter | **Dice Slinger** | d6 Steal, d6 Clean Steal, d6 Protect | Happy Flower | |
+| Magician | **Illusionist** | d6 Steal, d6 Copy, d6 Protect | Anchor | |
+| Alchemist | **Pickpocket** | d6 Steal, d6 Pickpocket, d6 Protect | Dead Branch | |
+| Brute | **The Muscle** | d8 Protect × 2 | Spiked Bumper (auto) | Skips chip selection |
+| Custom | **The Drifter** | Player-configured | Player's choice | Button at bottom of class select screen |
+
+**The Drifter** is not displayed inline with the other four classes. It appears as a distinct button at the bottom of the class selection screen, visually separated from the preset options.
 
 ---
 
@@ -679,9 +705,9 @@ Specific objects for remaining opponents are TBD.
 ### 20.10 Still To Figure Out
 
 1. Remaining 7 brand names
-2. Chip names (42 total, replacing relic names)
+2. Chip names — relic names are unchanged for now; rename pass is a future task
 3. UI/visual reskin — all labels, button text, scene text
-4. Specific obstacle objects for each opponent (see §20.9)
-5. Exact ante values per blind tier
+4. Specific obstacle objects for each opponent (see §20.9) — TBDs remain
+5. ~~Exact ante values per blind tier~~ — **Decided:** small=10, medium=20, big=30 (see §20.3)
 6. Other node types beyond blind tables (events, rest stops, etc.) — future feature
-7. Second elite slot enemy name and character
+7. Second elite slot enemy name and character (currently "The House" × 2 as placeholder)

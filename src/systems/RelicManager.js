@@ -105,6 +105,7 @@ export default class RelicManager {
     this._each('ON_DAMAGE_TAKEN', 'THORNS', r => {
       const dmg = r.value;
       s.enemyHp = Math.max(0, s.enemyHp - dmg);
+      s._addToPot(dmg);
       s._refreshEnemyCharacter();
       s._flashEnemyDamage(dmg);
       s._floatText(s.enemyPos.x, s.enemyPos.y - 50, `THORNS ${dmg}`, '#aaaaaa');

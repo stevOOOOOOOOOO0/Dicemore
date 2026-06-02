@@ -1,8 +1,10 @@
 import Phaser from 'phaser';
-import BootScene    from './scenes/BootScene.js';
-import SetupScene   from './scenes/SetupScene.js';
-import BattleScene  from './scenes/BattleScene.js';
-import UpgradeScene from './scenes/UpgradeScene.js';
+import BootScene        from './scenes/BootScene.js';
+import SetupScene       from './scenes/SetupScene.js';
+import BattleScene      from './scenes/BattleScene.js';
+import UpgradeScene     from './scenes/UpgradeScene.js';
+import ShopSelectScene  from './scenes/ShopSelectScene.js';
+import ShopScene        from './scenes/ShopScene.js';
 
 const config = {
   type: Phaser.AUTO,
@@ -22,7 +24,7 @@ const config = {
       debug: false
     }
   },
-  scene: [BootScene, SetupScene, BattleScene, UpgradeScene]
+  scene: [BootScene, SetupScene, BattleScene, UpgradeScene, ShopSelectScene, ShopScene]
 };
 
 new Phaser.Game(config);

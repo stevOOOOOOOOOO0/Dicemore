@@ -1,20 +1,8 @@
 import Phaser from 'phaser';
 import { DIE_TYPES, SIDES_PROGRESSION } from '../data/dice.js';
-import { RUNES, MATERIALS, RUNE_KEYS, MATERIAL_KEYS } from '../data/runes.js';
+import { RUNES, MATERIALS, RUNE_KEYS } from '../data/runes.js';
 import { W, H, PLAYER_MAX_HP } from '../constants.js';
-import { getRelics } from '../data/relics.js';
-
-// Die-type synergy declarations — owning these die types nudges the pool toward connected items.
-const DIE_TYPE_SYNERGIES = [
-  { id: 'poison', synergies: ['venom', 'toxic', 'plague', 'mango', 'dead_branch'] },
-  { id: 'attack', synergies: ['molten_egg', 'war_paint', 'iron', 'fire', 'steel', 'viking', 'cursed_tome'] },
-  { id: 'block',  synergies: ['anchor', 'stone_calendar', 'orichalcum', 'booming_shield', 'philosopher_stone'] },
-  { id: 'pierce', synergies: ['piercing_lance', 'rock', 'cursed_tome'] },
-  { id: 'leech',  synergies: ['vampiric_blade', 'happy_flower'] },
-  { id: 'hex',    synergies: ['weaken'] },
-  { id: 'bomb',   synergies: ['steel', 'iron', 'fire'] },
-  { id: 'copy',   synergies: ['egyptian', 'trojan'] },
-];
+import LotterySystem from '../systems/LotterySystem.js';
 
 const CARD_W      = W - 32;
 const CARD_H      = 110;
@@ -31,11 +19,13 @@ export default class UpgradeScene extends Phaser.Scene {
     this.battleIndex      = data.battleIndex;
     this.isBossReward     = data.isBossReward ?? false;
     this.activeRelics     = data.activeRelics ? [...data.activeRelics] : [];
+    this.playerGold       = data.playerGold   ?? 0;
+    this.cullCount        = data.cullCount    ?? 0;
+    this.witchRunes       = data.witchRunes   ?? [];
     this._upgrades        = [];
     this._screenObjects   = [];
     this._stepLbl         = null;
     this._navigating      = false;
-    this._relicChosen     = false;
   }
 
   create() {
@@ -75,79 +65,22 @@ export default class UpgradeScene extends Phaser.Scene {
 
   // ─── POOL GENERATION ─────────────────────────────────────────────────────
 
-  _buildSynergyWeights() {
-    const BOOST = 1.5;
-    const owned = new Set();
+  _buildOwnedIds() {
+    const ids = [];
     this.playerDiceConfig.forEach(dc => {
-      if (dc.type)     owned.add(dc.type);
-      if (dc.material) owned.add(dc.material);
-      Object.values(dc.runeMap ?? {}).forEach(id => owned.add(id));
+      if (dc.type)     ids.push(dc.type);
+      if (dc.material) ids.push(dc.material);
+      Object.values(dc.runeMap ?? {}).forEach(id => ids.push(id));
     });
-    this.activeRelics.forEach(r => owned.add(r.id));
-
-    const weights = {};
-    const allDefs = [
-      ...RUNE_KEYS.map(id => RUNES[id]),
-      ...MATERIAL_KEYS.map(id => MATERIALS[id]),
-      ...getRelics(),
-      ...DIE_TYPE_SYNERGIES,
-    ];
-    for (const item of allDefs) {
-      if (!owned.has(item.id)) continue;
-      for (const synId of item.synergies ?? []) {
-        weights[synId] = (weights[synId] ?? 0) + BOOST;
-      }
-    }
-    return weights;
-  }
-
-  _weightedPick(pool, weights, count = 1) {
-    const rem = pool.map(item => ({ item, w: 1 + (weights[item.id] ?? 0) }));
-    const out = [];
-    for (let i = 0; i < count && rem.length > 0; i++) {
-      const total = rem.reduce((s, x) => s + x.w, 0);
-      let r = Math.random() * total;
-      let idx = 0;
-      while (idx < rem.length - 1) {
-        if (r < rem[idx].w) break;
-        r -= rem[idx].w;
-        idx++;
-      }
-      out.push(rem.splice(idx, 1)[0].item);
-    }
-    return out;
+    this.activeRelics.forEach(r => ids.push(r.id));
+    return ids;
   }
 
   _buildPool() {
-    const canTier = this.playerDiceConfig.some(
-      dc => SIDES_PROGRESSION.indexOf(dc.sides) < SIDES_PROGRESSION.length - 1
-    );
-    const sw = this._buildSynergyWeights();
-
-    const runePool = RUNE_KEYS.map(id => RUNES[id]);
-    const matPool  = MATERIAL_KEYS.map(id => MATERIALS[id]);
-    const [rune1, rune2] = this._weightedPick(runePool, sw, 2);
-
-    const makeRune = (r) => ({ type: 'add_rune', runeId: r.id, color: r.color, title: `Add Rune: ${r.label}`, desc: r.desc });
-    const makeCull = ()  => ({ type: 'cull', color: '#ff6644', title: 'Cull a Face', desc: 'Permanently remove all faces showing a chosen value from a die' });
-    const makeTier = ()  => ({ type: 'increase_tier', color: '#f0c040', title: 'Increase Dice Tier', desc: 'Choose a die to advance to the next tier' });
-    const makeMat  = ()  => { const m = this._weightedPick(matPool, sw)[0]; return { type: 'add_material', matId: m.id, color: m.color, title: `Material: ${m.label}`, desc: m.desc }; };
-
-    const pool = [];
-    pool.push(makeRune(rune1));
-    pool.push(Math.random() < 0.5 ? makeRune(rune2) : makeCull());
-
-    const hasCull = pool.some(c => c.type === 'cull');
-    if (canTier && Math.random() < 0.25) {
-      pool.push(makeTier());
-    } else if (!hasCull) {
-      pool.push(makeCull());
-    } else {
-      pool.push(makeMat());
-    }
-
-    Phaser.Utils.Array.Shuffle(pool);
-    return pool;
+    const ownedIds  = this._buildOwnedIds();
+    const runeItems = RUNE_KEYS.map(id => RUNES[id]);
+    const drawn     = new LotterySystem(runeItems, ownedIds).draw(3);
+    return drawn.map(r => ({ type: 'add_rune', runeId: r.id, color: r.color, title: `Brand: ${r.label}`, desc: r.desc }));
   }
 
   // ─── SCREEN MANAGEMENT ───────────────────────────────────────────────────
@@ -494,24 +427,9 @@ export default class UpgradeScene extends Phaser.Scene {
 
     const SPECIAL_DICE = [
       {
-        type: 'leech',  color: '#aa44ff',
-        title: 'Leech Die',
-        desc:  'Deals piercing damage and heals you for every point drained',
-      },
-      {
         type: 'poison', color: '#58d68d',
-        title: 'Poison Die',
-        desc:  'Stacks poison on the enemy — they take damage each turn and it decays slowly',
-      },
-      {
-        type: 'hex',    color: '#9b59b6',
-        title: 'Hex Die',
-        desc:  'Curses the enemy this turn, halving all damage they deal when they commit',
-      },
-      {
-        type: 'bomb',   color: '#ff6622',
-        title: 'Bomb Die',
-        desc:  'Deals double damage — but the explosion recoils back onto you',
+        title: 'Pickpocket Die',
+        desc:  'Stacks a slow drain on the opponent — they lose money each turn and it decays slowly',
       },
     ];
 
@@ -555,25 +473,19 @@ export default class UpgradeScene extends Phaser.Scene {
   // ─── NAV HELPERS ─────────────────────────────────────────────────────────
 
   _addHealButton() {
-    const y      = H - 44;
-    const amt    = Math.floor(this.playerMaxHp * 0.2);
-    const atFull = this.playerHp >= this.playerMaxHp;
-    const label  = atFull ? 'Already at full HP' : `Rest — Heal ${amt} HP`;
-    const col    = atFull ? '#2a3040' : '#2ecc71';
+    const y   = H - 44;
+    const amt = 5;
 
     const bg = this._track(this.add.rectangle(W / 2, y, W - 16, 50, 0x0e1a12));
-    bg.setStrokeStyle(1, atFull ? 0x1a2030 : 0x1a6a3a, 0.8);
-    if (!atFull) {
-      bg.setInteractive();
-      bg.on('pointerdown', () => {
-        this.playerHp = Math.min(this.playerMaxHp, this.playerHp + amt);
-        this._continue();
-      });
-      bg.on('pointerover', () => bg.setFillStyle(0x163824));
-      bg.on('pointerout',  () => bg.setFillStyle(0x0e1a12));
-    }
-    this._track(this.add.text(W / 2, y, label, {
-      fontSize: '17px', color: col,
+    bg.setStrokeStyle(1, 0x1a6a3a, 0.8).setInteractive();
+    bg.on('pointerdown', () => {
+      this.playerHp += amt;
+      this._continue();
+    });
+    bg.on('pointerover', () => bg.setFillStyle(0x163824));
+    bg.on('pointerout',  () => bg.setFillStyle(0x0e1a12));
+    this._track(this.add.text(W / 2, y, `Rest — Recover ${amt} chips`, {
+      fontSize: '17px', color: '#2ecc71',
     }).setOrigin(0.5));
   }
 
@@ -605,106 +517,24 @@ export default class UpgradeScene extends Phaser.Scene {
     if (this._navigating) return;
     this._navigating = true;
     this._clearScreen();
-    if (Math.random() < 0.1) {
-      this._showRelicStep();
-    } else {
-      this._goToNextBattle();
-    }
-  }
-
-  // ─── RELIC STEP ──────────────────────────────────────────────────────────
-
-  _showRelicStep() {
-    this._relicChosen = false;
-    const ownedIds  = new Set(this.activeRelics.map(r => r.id));
-    const available = getRelics().filter(r => !ownedIds.has(r.id));
-    const sw        = this._buildSynergyWeights();
-    const choices   = this._weightedPick(available, sw, 3);
-
-    if (choices.length === 0) { this._goToNextBattle(); return; }
-
-    const g = this.add.container(0, 0);
-    this._screenObjects.push(g);
-
-    g.add(this.add.text(W / 2, 36, 'CHOOSE A RELIC', {
-      fontSize: '20px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3,
-    }).setOrigin(0.5));
-
-    g.add(this.add.text(W / 2, 66, 'Passive items that affect every battle.', {
-      fontSize: '13px', color: '#445566',
-    }).setOrigin(0.5));
-
-    const RARITY_COLOR = { common: 0x556677, uncommon: 0x2471a3, rare: 0x6c3483, boss: 0x922b21 };
-    const cardH = 116, gap = 10, startY = 100;
-
-    choices.forEach((relic, i) => {
-      const cy     = startY + i * (cardH + gap) + cardH / 2;
-      const fc     = parseInt((relic.color ?? '#ffffff').replace('#', ''), 16);
-      const rarCol = RARITY_COLOR[relic.rarity] ?? RARITY_COLOR.common;
-
-      const bg = this.add.rectangle(W / 2, cy, W - 32, cardH, 0x0d0d1c);
-      bg.setStrokeStyle(2, rarCol, 0.85).setInteractive();
-      g.add(bg);
-
-      const dot = this.add.circle(44, cy, 12, fc, 0.9);
-      g.add(dot);
-      g.add(this.add.text(44, cy, relic.name[0].toUpperCase(), {
-        fontSize: '12px', color: '#ffffff', fontStyle: 'bold',
-      }).setOrigin(0.5, 0.5));
-
-      g.add(this.add.text(72, cy - 22, relic.name, {
-        fontSize: '17px', color: relic.color, fontStyle: 'bold',
-      }).setOrigin(0, 0.5));
-
-      g.add(this.add.text(72, cy - 2, relic.rarity.toUpperCase(), {
-        fontSize: '11px', color: '#334455', letterSpacing: 1,
-      }).setOrigin(0, 0.5));
-
-      g.add(this.add.text(72, cy + 20, relic.description, {
-        fontSize: '13px', color: '#8899aa',
-        wordWrap: { width: W - 96 },
-      }).setOrigin(0, 0.5));
-
-      bg.on('pointerover', () => bg.setFillStyle(0x1a1a2e));
-      bg.on('pointerout',  () => bg.setFillStyle(0x0d0d1c));
-      bg.on('pointerdown', () => {
-        if (this._relicChosen) return;
-        this._relicChosen = true;
-
-        // MAX_HP_UP is handled at pick time — heal + increase playerMaxHp
-        if (relic.effect === 'MAX_HP_UP') {
-          this.playerMaxHp += relic.value;
-          this.playerHp     = Math.min(this.playerMaxHp, this.playerHp + relic.value);
-        }
-
-        this.activeRelics.push(relic);
-        this._goToNextBattle();
-      });
-    });
-
-    // Skip button
-    const skipBg = this.add.rectangle(W / 2, startY + choices.length * (cardH + gap) + 30,
-      W - 32, 44, 0x0a0a14);
-    skipBg.setStrokeStyle(1, 0x222233, 0.8).setInteractive();
-    skipBg.on('pointerdown', () => { if (!this._relicChosen) { this._relicChosen = true; this._goToNextBattle(); } });
-    skipBg.on('pointerover', () => skipBg.setFillStyle(0x181828));
-    skipBg.on('pointerout',  () => skipBg.setFillStyle(0x0a0a14));
-    g.add(skipBg);
-    g.add(this.add.text(W / 2, skipBg.y, 'Skip  →', {
-      fontSize: '15px', color: '#2a3848',
-    }).setOrigin(0.5, 0.5));
-
-    g.setAlpha(0);
-    this.tweens.add({ targets: g, alpha: 1, duration: 220, ease: 'Sine.Out' });
+    this._goToNextBattle();
   }
 
   _goToNextBattle() {
-    this.scene.start('BattleScene', {
+    const base = {
       playerDiceConfig: this.playerDiceConfig,
       playerHp:         this.playerHp,
       playerMaxHp:      this.playerMaxHp,
       battleIndex:      this.battleIndex,
       activeRelics:     this.activeRelics,
-    });
+      playerGold:       this.playerGold,
+      cullCount:        this.cullCount,
+      witchRunes:       this.witchRunes,
+    };
+    if (this.battleIndex > 0 && this.battleIndex % 3 === 0) {
+      this.scene.start('ShopSelectScene', base);
+    } else {
+      this.scene.start('BattleScene', base);
+    }
   }
 }

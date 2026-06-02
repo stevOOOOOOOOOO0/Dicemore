@@ -37,8 +37,6 @@ export const FALLBACK_RELICS = [
   { id: 'spiked_bumper',     name: 'Spiked Bumper',      description: 'When a die hits the enemy bumper, deal its max face value as damage (with material and rune effects).', rarity: 'rare', trigger: 'ON_HIT_BUMPER', effect: 'MAX_FACE_DAMAGE', value: 1, color: '#e74c3c', synergies: ['viking', 'steel', 'cursed'] },
   // ── Boss ────────────────────────────────────────────────────────────────────
   { id: 'vulnerable_heart',  name: 'Vulnerable Heart',   description: 'The enemy always takes 50% more damage.',          rarity: 'boss',     trigger: 'PASSIVE',         effect: 'ENEMY_WEAKENED',      value: 1,    color: '#ff4488', synergies: ['expose', 'weaken', 'cursed', 'cursed_tome', 'thorned_armor'] },
-  // ── Custom-exclusive ─────────────────────────────────────────────────────────
-  { id: 'blood_harvest',     name: 'Blood Harvest',      description: 'No maximum HP. Every point of damage you deal siphons into your health. Start with 15 HP.', rarity: 'rare', trigger: 'PASSIVE', effect: 'SIPHON_HP', value: 1, color: '#cc2244', exclusive: 'custom' },
 ];
 
 // ─── Effect type registry (documentation / for sheet authors) ─────────────────

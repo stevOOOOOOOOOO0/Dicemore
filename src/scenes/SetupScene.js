@@ -139,80 +139,89 @@ export default class SetupScene extends Phaser.Scene {
     const cardW = W - 40, cardH = 108;
     const cx = W / 2;
 
-    // Fighter card
+    // Dice Slinger card
     this._makeClassCard(g, cx, 130, cardW, cardH, {
-      title: 'FIGHTER',
+      title: 'DICE SLINGER',
       titleColor: '#ff8844',
       borderColor: 0xff6622,
       bgColor: 0x130e08,
       bgHover: 0x1e160a,
-      subtitle: 'The relentless brawler',
+      subtitle: 'The card sharp with a quick draw',
       dice: [
-        { type: 'attack', label: 'ATK d6' },
-        { type: 'block',  label: 'BLK d6' },
-        { type: 'pierce', label: 'PRC d6' },
+        { type: 'attack', label: 'STE d6' },
+        { type: 'pierce', label: 'CLN d6' },
+        { type: 'block',  label: 'PRO d6' },
       ],
+      startingRelicName: 'Happy Flower',
+      startingRelicColor: '#f0c040',
       onTap: () => {
         this._usedClassPreset = true;
         this._diceCount  = 3;
         this._diceConfig = JSON.parse(JSON.stringify(FIGHTER_CONFIG));
-        this._transitionTo(() => this._showStartingRelicStep());
+        this._startingRelic = getRelics().find(r => r.id === 'happy_flower') ?? null;
+        this._startBattle();
       }
     });
 
-    // Magician card
+    // Illusionist card
     this._makeClassCard(g, cx, 246, cardW, cardH, {
-      title: 'MAGICIAN',
+      title: 'ILLUSIONIST',
       titleColor: '#cc88ff',
       borderColor: 0x8844cc,
       bgColor: 0x100a18,
       bgHover: 0x1a1028,
-      subtitle: 'The arcane trickster',
+      subtitle: 'A master of misdirection',
       dice: [
-        { type: 'attack', label: 'ATK d6' },
-        { type: 'block',  label: 'BLK d6' },
+        { type: 'attack', label: 'STE d6' },
         { type: 'copy',   label: 'CPY d6' },
+        { type: 'block',  label: 'PRO d6' },
       ],
+      startingRelicName: 'Anchor',
+      startingRelicColor: '#3498db',
       onTap: () => {
         this._usedClassPreset = true;
         this._diceCount  = 3;
         this._diceConfig = JSON.parse(JSON.stringify(MAGICIAN_CONFIG));
-        this._transitionTo(() => this._showStartingRelicStep());
+        this._startingRelic = getRelics().find(r => r.id === 'anchor') ?? null;
+        this._startBattle();
       }
     });
 
-    // Alchemist card
+    // Pickpocket card
     this._makeClassCard(g, cx, 362, cardW, cardH, {
-      title: 'ALCHEMIST',
+      title: 'PICKPOCKET',
       titleColor: '#58d68d',
       borderColor: 0x27ae60,
       bgColor: 0x081208,
       bgHover: 0x0e1e0e,
-      subtitle: 'The venomous trickster',
+      subtitle: 'Lifts your chips while shaking your hand',
       dice: [
-        { type: 'attack', label: 'ATK d6' },
-        { type: 'block',  label: 'BLK d6' },
-        { type: 'poison', label: 'PSN d4' },
+        { type: 'attack', label: 'STE d6' },
+        { type: 'poison', label: 'PKP d4' },
+        { type: 'block',  label: 'PRO d6' },
       ],
+      startingRelicName: 'Dead Branch',
+      startingRelicColor: '#58d68d',
       onTap: () => {
         this._usedClassPreset = true;
         this._diceCount  = 3;
         this._diceConfig = JSON.parse(JSON.stringify(ALCHEMIST_CONFIG));
-        this._transitionTo(() => this._showStartingRelicStep());
+        this._startingRelic = getRelics().find(r => r.id === 'dead_branch') ?? null;
+        this._startBattle();
       }
     });
 
-    // Brute card
+    // The Muscle card
     this._makeClassCard(g, cx, 478, cardW, cardH, {
-      title: 'BRUTE',
+      title: 'THE MUSCLE',
       titleColor: '#e74c3c',
       borderColor: 0xc0392b,
       bgColor: 0x130808,
       bgHover: 0x1e0e0e,
-      subtitle: 'The unstoppable force',
+      subtitle: 'Built like a brick, moves like one too',
       dice: [
-        { type: 'attack', label: 'ATK d6' },
-        { type: 'block',  label: 'BLK d6' },
+        { type: 'block', label: 'PRO d8' },
+        { type: 'block', label: 'PRO d8' },
       ],
       startingRelicName: 'Spiked Bumper',
       startingRelicColor: '#e74c3c',
@@ -225,22 +234,25 @@ export default class SetupScene extends Phaser.Scene {
       }
     });
 
-    // Custom button
-    const customBg = this.add.rectangle(cx, 572, cardW, 46, 0x0d0d1c);
-    customBg.setStrokeStyle(1.5, 0x2a3a5a, 0.9).setInteractive();
+    // Separator
+    g.add(this.add.rectangle(cx, 537, cardW, 1, 0x1e2840));
+
+    // The Drifter button
+    const customBg = this.add.rectangle(cx, 562, cardW - 40, 40, 0x0a0a14);
+    customBg.setStrokeStyle(1, 0x2a3a5a, 0.7).setInteractive();
     g.add(customBg);
-    g.add(this.add.text(cx, 572, 'Build Custom  →', {
-      fontSize: '17px', color: '#2a3848', letterSpacing: 1
+    g.add(this.add.text(cx, 562, 'The Drifter  — build custom', {
+      fontSize: '14px', color: '#2a3848', letterSpacing: 1
     }).setOrigin(0.5));
     customBg.on('pointerdown', () => {
       this._usedClassPreset = false;
       this._transitionTo(() => this._showCountStep());
     });
-    customBg.on('pointerover',  () => { customBg.setFillStyle(0x1e2840); customBg.setStrokeStyle(1.5, 0x4466aa); });
-    customBg.on('pointerout',   () => { customBg.setFillStyle(0x0d0d1c); customBg.setStrokeStyle(1.5, 0x2a3a5a, 0.9); });
+    customBg.on('pointerover',  () => { customBg.setFillStyle(0x141424); customBg.setStrokeStyle(1, 0x4466aa); });
+    customBg.on('pointerout',   () => { customBg.setFillStyle(0x0a0a14); customBg.setStrokeStyle(1, 0x2a3a5a, 0.7); });
 
     // Tutorial link
-    const tutTxt = this.add.text(cx, 628, '? First time? Try the Tutorial', {
+    const tutTxt = this.add.text(cx, 612, '? First time? Try the Tutorial', {
       fontSize: '13px', color: '#2a3848',
     }).setOrigin(0.5).setInteractive();
     g.add(tutTxt);
@@ -250,7 +262,7 @@ export default class SetupScene extends Phaser.Scene {
       this.scene.start('BattleScene', {
         playerDiceConfig: JSON.parse(JSON.stringify(BRUTE_CONFIG)),
         playerHp:    PLAYER_MAX_HP,
-        playerMaxHp: PLAYER_MAX_HP,
+        playerMaxHp: Infinity,
         enemyKey:    'training_dummy',
         tutorial:    true,
         battleIndex: 0,
@@ -461,7 +473,7 @@ export default class SetupScene extends Phaser.Scene {
     const g = this._stepGroup = this.add.container(0, 0);
     this._runeObjs = [];
 
-    g.add(this.add.text(W / 2, 36, 'RUNES & MATERIALS', {
+    g.add(this.add.text(W / 2, 36, 'BRANDS & MATERIALS', {
       fontSize: '17px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3
     }).setOrigin(0.5));
 
@@ -534,7 +546,7 @@ export default class SetupScene extends Phaser.Scene {
     const btnBg = this.add.rectangle(W / 2, H - 44, W - 16, 50, 0x163824);
     btnBg.setStrokeStyle(1.5, 0x27ae60, 0.9).setInteractive();
     btnBg.on('pointerdown', () => this._transitionTo(() =>
-      isCustom ? this._showCustomRelicStep() : this._showStartingRelicStep()
+      isCustom ? this._showCustomRelicStep() : this._startBattle()
     ));
     btnBg.on('pointerover',  () => btnBg.setFillStyle(0x27ae60));
     btnBg.on('pointerout',   () => btnBg.setFillStyle(0x163824));
@@ -793,7 +805,7 @@ export default class SetupScene extends Phaser.Scene {
   _showStartingRelicStep() {
     const g = this._stepGroup = this.add.container(0, 0);
 
-    g.add(this.add.text(W / 2, 36, 'STARTING RELIC', {
+    g.add(this.add.text(W / 2, 36, 'STARTING CHIP', {
       fontSize: '20px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3,
     }).setOrigin(0.5));
     g.add(this.add.text(W / 2, 66, 'Pick one to carry into your first battle — or skip.', {
@@ -869,7 +881,7 @@ export default class SetupScene extends Phaser.Scene {
     const totalH    = all.length * ITEM_TOTAL - ITEM_GAP;
     const maxScroll = Math.max(0, totalH - LIST_H);
 
-    g.add(this.add.text(W / 2, 36, 'CHOOSE RELICS', {
+    g.add(this.add.text(W / 2, 36, 'CHOOSE CHIPS', {
       fontSize: '20px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3,
     }).setOrigin(0.5));
     g.add(this.add.text(W / 2, 68, 'Select any to take into battle.', {
@@ -926,7 +938,7 @@ export default class SetupScene extends Phaser.Scene {
     const btnBg = this.add.rectangle(W / 2, H - 38, W - 16, 46, 0x163824);
     btnBg.setStrokeStyle(1.5, 0x27ae60, 0.9).setInteractive();
     const btnTxt = this.add.text(W / 2, H - 38,
-      `Begin Battle · ${this._selectedCustomRelics.length} relics`, {
+      `Begin Battle · ${this._selectedCustomRelics.length} chips`, {
         fontSize: '17px', color: '#aaffaa', fontStyle: 'bold', letterSpacing: 2,
       }).setOrigin(0.5);
     btnBg.on('pointerdown', () => this._startBattle());
@@ -964,7 +976,7 @@ export default class SetupScene extends Phaser.Scene {
           if (si >= 0) this._selectedCustomRelics.splice(si, 1);
           else         this._selectedCustomRelics.push(relic);
           refresh(this._selectedCustomRelics.some(r => r.id === relic.id));
-          btnTxt.setText(`Begin Battle · ${this._selectedCustomRelics.length} relics`);
+          btnTxt.setText(`Begin Battle · ${this._selectedCustomRelics.length} chips`);
         }
       }
       ptrDownY = null;
@@ -985,11 +997,10 @@ export default class SetupScene extends Phaser.Scene {
     const relics = this._selectedCustomRelics !== null
       ? this._selectedCustomRelics
       : (this._startingRelic ? [this._startingRelic] : []);
-    const hasSiphon = relics.some(r => r.effect === 'SIPHON_HP');
     this.scene.start('BattleScene', {
       playerDiceConfig: this._diceConfig,
-      playerHp:         hasSiphon ? 15 : PLAYER_MAX_HP,
-      playerMaxHp:      hasSiphon ? Infinity : PLAYER_MAX_HP,
+      playerHp:         PLAYER_MAX_HP,
+      playerMaxHp:      Infinity,
       battleIndex:      BATTLE_SEQUENCE.indexOf(this._enemyKey),
       activeRelics:     relics,
     });
