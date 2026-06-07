@@ -1,4 +1,5 @@
 node_modules/
+ITEM_REFERENCE.md
 dist/
 .vite/
 *.local

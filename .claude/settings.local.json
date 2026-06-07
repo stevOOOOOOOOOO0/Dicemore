@@ -10,10 +10,22 @@
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\steph\\\\OneDrive\\\\Documents\\\\BiologyTheaterClub\\\\Dicemore\" -Recurse -File)",
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(git -C \"c:\\\\Users\\\\steph\\\\OneDrive\\\\Documents\\\\BiologyTheaterClub\\\\Dicemore\" log --oneline -15)",
-      "Bash(npx vite *)"
+      "Bash(npx vite *)",
+      "Bash(ls \"c:\\\\Users\\\\steph\\\\Downloads\\\\dicemore-dist\")",
+      "Read(//c/Users/steph/Downloads/dicemore-dist/**)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173)",
+      "Bash(where chromium-cli *)",
+      "Bash(where chromium *)",
+      "Bash(where chrome *)",
+      "Read(//c/Program Files/Google/Chrome/Application/**)",
+      "Read(//c/Program Files \\(x86\\)/Google/Chrome/Application/**)",
+      "Read(//c/Users/steph/AppData/Local/Temp/**)",
+      "PowerShell(Stop-Process -Id 21232 -Force -Confirm:$false 2>$null)",
+      "PowerShell($true)"
     ],
     "additionalDirectories": [
-      "c:\\Users\\steph\\.claude\\projects\\c--Users-steph-Documents-Repositories-Dicemore\\memory"
+      "c:\\Users\\steph\\.claude\\projects\\c--Users-steph-Documents-Repositories-Dicemore\\memory",
+      "c:\\Users\\steph\\Documents\\Repositories\\Dicemore\\dist"
     ]
   }
 }

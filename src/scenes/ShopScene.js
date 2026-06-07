@@ -154,17 +154,22 @@ export default class ShopScene extends Phaser.Scene {
 
   _track(obj) { this._screenObjs.push(obj); return obj; }
 
+  _nav(fn) { this.time.delayedCall(1, fn); }
+
   _showTab(idx) {
-    this._clearContent();
-    this._setActiveTab(idx);
-    if (idx === 0) this._showBrandsTab();
-    else if (idx === 1) this._showSec2Tab();
-    else                this._showSpecialTab();
+    this._nav(() => {
+      this._clearContent();
+      this._setActiveTab(idx);
+      if (idx === 0) this._showBrandsTab();
+      else if (idx === 1) this._showSec2Tab();
+      else                this._showSpecialTab();
+    });
   }
 
   // ─── TAB 1: BRANDS (10 runes in 2-col grid) ───────────────────────────────
 
   _showBrandsTab() {
+    const BRAND_PRICE = this.shopType === 'witch' ? 10 : 15;
     const COLS = 2, CELL_H = 54, CELL_W = (W - 24) / 2, PAD = 6;
     const startY = this._contentY + 8;
 
@@ -186,26 +191,23 @@ export default class ShopScene extends Phaser.Scene {
         fontSize: '10px', color: '#556677', wordWrap: { width: CELL_W - 40 },
       }).setOrigin(0, 0.5));
 
-      const priceTxt = this._track(this.add.text(cx + CELL_W / 2 - PAD, cy + 14, '15g', {
+      const priceTxt = this._track(this.add.text(cx + CELL_W / 2 - PAD, cy + 14, `${BRAND_PRICE}g`, {
         fontSize: '11px', color: '#f0c040',
       }).setOrigin(1, 0.5));
 
       bg.on('pointerover', () => { bg.setFillStyle(0x181828); bg.setStrokeStyle(1.5, fc, 0.9); });
       bg.on('pointerout',  () => { bg.setFillStyle(0x0d0d1c); bg.setStrokeStyle(1, fc, 0.5); });
-      bg.on('pointerdown', () => this._buyRune(rune, bg, priceTxt));
+      bg.on('pointerdown', () => this._buyRune(rune, bg, priceTxt, BRAND_PRICE));
     });
   }
 
-  _buyRune(rune, bg, priceTxt) {
-    if (this.playerGold < 15) { this._flashCantAfford(priceTxt); return; }
-    this.playerGold -= 15;
+  _buyRune(rune, bg, priceTxt, price) {
+    if (this.playerGold < price) { this._flashCantAfford(priceTxt); return; }
+    this.playerGold -= price;
     this._refreshGold();
     // Go to die picker to place the rune
     this._pendingRune = rune;
-    this._clearContent();
-    this._showRuneDiePicker();
-    bg.disableInteractive();
-    priceTxt.setText('✓').setColor('#2ecc71');
+    this._nav(() => { this._clearContent(); this._showRuneDiePicker(); });
   }
 
   _showRuneDiePicker() {
@@ -236,7 +238,7 @@ export default class ShopScene extends Phaser.Scene {
         fontSize: '12px', color: '#aaaaaa',
       }).setOrigin(0.5));
 
-      bg.on('pointerdown',  () => this._showRuneFacePicker(dieIdx));
+      bg.on('pointerdown',  () => this._nav(() => this._showRuneFacePicker(dieIdx)));
       bg.on('pointerover',  () => bg.setFillStyle(0x181828));
       bg.on('pointerout',   () => bg.setFillStyle(0x0d0d1c));
     });
@@ -311,7 +313,7 @@ export default class ShopScene extends Phaser.Scene {
 
     const backBg = this._track(this.add.rectangle(W / 2, this._contentY + this._contentH - 20, W - 32, 40, 0x1a1a2e).setInteractive());
     backBg.setStrokeStyle(1, 0x2a2a4a, 0.8);
-    backBg.on('pointerdown', () => { this._clearContent(); this._showRuneDiePicker(); });
+    backBg.on('pointerdown', () => this._nav(() => { this._clearContent(); this._showRuneDiePicker(); }));
     backBg.on('pointerover',  () => backBg.setFillStyle(0x2a2a44));
     backBg.on('pointerout',   () => backBg.setFillStyle(0x1a1a2e));
     this._track(this.add.text(W / 2, this._contentY + this._contentH - 20, '← Back', {
@@ -409,8 +411,7 @@ export default class ShopScene extends Phaser.Scene {
         this._refreshGold();
         bg.disableInteractive();
         priceTxt.setText('✓').setColor('#2ecc71');
-        this._clearContent();
-        this._showMaterialDiePicker();
+        this._nav(() => { this._clearContent(); this._showMaterialDiePicker(); });
       });
     });
   }
@@ -549,7 +550,7 @@ export default class ShopScene extends Phaser.Scene {
         fontSize: '11px', color: '#aaaaaa',
       }).setOrigin(0.5));
 
-      bg.on('pointerdown',  () => this._showWitchFacePicker(dieIdx));
+      bg.on('pointerdown',  () => this._nav(() => this._showWitchFacePicker(dieIdx)));
       bg.on('pointerover',  () => bg.setFillStyle(0x181828));
       bg.on('pointerout',   () => bg.setFillStyle(0x0d0d1c));
     });
@@ -598,7 +599,7 @@ export default class ShopScene extends Phaser.Scene {
 
       if (!isCulled) {
         fb.setInteractive();
-        fb.on('pointerdown',  () => this._showWitchFaceActions(dieIdx, fi, runeOnFace));
+        fb.on('pointerdown',  () => this._nav(() => this._showWitchFaceActions(dieIdx, fi, runeOnFace)));
         fb.on('pointerover',  () => { fb.setFillStyle(0x1a2e4a); fb.setStrokeStyle(2, typeColor, 0.9); });
         fb.on('pointerout',   () => { fb.setFillStyle(0x141428); fb.setStrokeStyle(1, runeOnFace ? 0xf0c040 : typeColor, 0.6); });
       }
@@ -641,7 +642,7 @@ export default class ShopScene extends Phaser.Scene {
         dc.runeMap = dc.runeMap ?? {};
         delete dc.runeMap[faceIdx];
         this.witchRunes.push(currentRuneId);
-        this._showWitchFacePicker(dieIdx);
+        this._nav(() => this._showWitchFacePicker(dieIdx));
       });
 
       // Move to another face on any die
@@ -651,7 +652,7 @@ export default class ShopScene extends Phaser.Scene {
         this._witchMoveFromFace = faceIdx;
         dc.runeMap = dc.runeMap ?? {};
         delete dc.runeMap[faceIdx];
-        this._showWitchMovePicker();
+        this._nav(() => this._showWitchMovePicker());
       });
     }
 
@@ -668,7 +669,7 @@ export default class ShopScene extends Phaser.Scene {
           if (currentRuneId) this.witchRunes.push(currentRuneId); // swap: old rune back to inv
           dc.runeMap[faceIdx] = runeId;
           this.witchRunes.splice(invIdx, 1);
-          this._showWitchFacePicker(dieIdx);
+          this._nav(() => this._showWitchFacePicker(dieIdx));
         });
       });
     }
@@ -682,7 +683,7 @@ export default class ShopScene extends Phaser.Scene {
 
     const backBg = this._track(this.add.rectangle(W / 2, this._contentY + this._contentH - 20, W - 32, 40, 0x1a1a2e).setInteractive());
     backBg.setStrokeStyle(1, 0x2a2a4a, 0.8);
-    backBg.on('pointerdown', () => this._showWitchFacePicker(dieIdx));
+    backBg.on('pointerdown', () => this._nav(() => this._showWitchFacePicker(dieIdx)));
     backBg.on('pointerover',  () => backBg.setFillStyle(0x2a2a44));
     backBg.on('pointerout',   () => backBg.setFillStyle(0x1a1a2e));
     this._track(this.add.text(W / 2, this._contentY + this._contentH - 20, '← Back', {
@@ -719,7 +720,7 @@ export default class ShopScene extends Phaser.Scene {
         fontSize: '11px', color: '#aaaaaa',
       }).setOrigin(0.5));
 
-      bg.on('pointerdown',  () => this._showWitchMoveTargetFace(dieIdx));
+      bg.on('pointerdown',  () => this._nav(() => this._showWitchMoveTargetFace(dieIdx)));
       bg.on('pointerover',  () => bg.setFillStyle(0x181828));
       bg.on('pointerout',   () => bg.setFillStyle(0x0d0d1c));
     });
@@ -732,7 +733,7 @@ export default class ShopScene extends Phaser.Scene {
       dc.runeMap = dc.runeMap ?? {};
       dc.runeMap[this._witchMoveFromFace] = this._witchMovingRune;
       this._witchMovingRune = null;
-      this._showWitchFacePicker(this._witchMoveFromDie);
+      this._nav(() => this._showWitchFacePicker(this._witchMoveFromDie));
     });
     backBg.on('pointerover',  () => backBg.setFillStyle(0x2a2a44));
     backBg.on('pointerout',   () => backBg.setFillStyle(0x1a1a2e));
@@ -799,7 +800,7 @@ export default class ShopScene extends Phaser.Scene {
 
     const backBg = this._track(this.add.rectangle(W / 2, this._contentY + this._contentH - 20, W - 32, 40, 0x1a1a2e).setInteractive());
     backBg.setStrokeStyle(1, 0x2a2a4a, 0.8);
-    backBg.on('pointerdown', () => this._showWitchMovePicker());
+    backBg.on('pointerdown', () => this._nav(() => this._showWitchMovePicker()));
     backBg.on('pointerover',  () => backBg.setFillStyle(0x2a2a44));
     backBg.on('pointerout',   () => backBg.setFillStyle(0x1a1a2e));
     this._track(this.add.text(W / 2, this._contentY + this._contentH - 20, '← Back', {
@@ -842,8 +843,7 @@ export default class ShopScene extends Phaser.Scene {
       this._refreshGold();
       buyBg.disableInteractive();
       priceTxt.setText('✓').setColor('#2ecc71');
-      this._clearContent();
-      this._showCullDiePicker();
+      this._nav(() => { this._clearContent(); this._showCullDiePicker(); });
     });
     this._track(this.add.text(W / 2, startY + 168, 'Purchase  →', {
       fontSize: '15px', color: '#ff6644',
@@ -877,7 +877,7 @@ export default class ShopScene extends Phaser.Scene {
         fontSize: '12px', color: '#aaaaaa',
       }).setOrigin(0.5));
 
-      bg.on('pointerdown',  () => this._showCullFacePicker(dieIdx));
+      bg.on('pointerdown',  () => this._nav(() => this._showCullFacePicker(dieIdx)));
       bg.on('pointerover',  () => bg.setFillStyle(0x181828));
       bg.on('pointerout',   () => bg.setFillStyle(0x0d0d1c));
     });
@@ -950,7 +950,7 @@ export default class ShopScene extends Phaser.Scene {
 
     const backBg = this._track(this.add.rectangle(W / 2, this._contentY + this._contentH - 20, W - 32, 40, 0x1a1a2e).setInteractive());
     backBg.setStrokeStyle(1, 0x2a2a4a, 0.8);
-    backBg.on('pointerdown', () => this._showCullDiePicker());
+    backBg.on('pointerdown', () => this._nav(() => this._showCullDiePicker()));
     backBg.on('pointerover',  () => backBg.setFillStyle(0x2a2a44));
     backBg.on('pointerout',   () => backBg.setFillStyle(0x1a1a2e));
     this._track(this.add.text(W / 2, this._contentY + this._contentH - 20, '← Back', {
@@ -976,7 +976,7 @@ export default class ShopScene extends Phaser.Scene {
   }
 
   _leaveShop() {
-    this.scene.start('BattleScene', {
+    this.time.delayedCall(1, () => this.scene.start('BattleScene', {
       playerDiceConfig: this.playerDiceConfig,
       playerHp:         this.playerHp,
       playerMaxHp:      this.playerMaxHp,
@@ -985,7 +985,7 @@ export default class ShopScene extends Phaser.Scene {
       playerGold:       this.playerGold,
       cullCount:        this.cullCount,
       witchRunes:       this.witchRunes,
-    });
+    }));
   }
 
   // ─── HELPERS ──────────────────────────────────────────────────────────────

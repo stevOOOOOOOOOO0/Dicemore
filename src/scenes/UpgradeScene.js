@@ -85,6 +85,8 @@ export default class UpgradeScene extends Phaser.Scene {
 
   // ─── SCREEN MANAGEMENT ───────────────────────────────────────────────────
 
+  _nav(fn) { this.time.delayedCall(1, fn); }
+
   _clearScreen() {
     this._screenObjects.forEach(o => { try { o?.destroy(); } catch (_) {} });
     this._screenObjects = [];
@@ -122,7 +124,7 @@ export default class UpgradeScene extends Phaser.Scene {
         fontSize: '20px', color: '#2a2a3a',
       }).setOrigin(0.5));
 
-      bg.on('pointerdown', () => this._onCardSelected(upg));
+      bg.on('pointerdown', () => this._nav(() => this._onCardSelected(upg)));
       bg.on('pointerover',  () => { bg.setFillStyle(0x181828); bg.setStrokeStyle(2, fc, 0.9); arrow.setColor(upg.color); });
       bg.on('pointerout',   () => { bg.setFillStyle(0x0d0d1c); bg.setStrokeStyle(1.5, fc, 0.55); arrow.setColor('#2a2a3a'); });
     });
@@ -187,7 +189,7 @@ export default class UpgradeScene extends Phaser.Scene {
       }
 
       if (!isDisabled) {
-        bg.on('pointerdown', () => this._onDieSelected(upg, dieIdx));
+        bg.on('pointerdown', () => this._nav(() => this._onDieSelected(upg, dieIdx)));
         bg.on('pointerover',  () => bg.setFillStyle(0x181828));
         bg.on('pointerout',   () => bg.setFillStyle(0x0d0d1c));
       }
@@ -349,7 +351,7 @@ export default class UpgradeScene extends Phaser.Scene {
       this.add.rectangle(W / 2 - 72, py + 56, 120, 40, 0x1a1a2e).setInteractive()
     );
     cancelBg.setStrokeStyle(1, 0x446688, 0.8);
-    cancelBg.on('pointerdown', () => this._showFacePicker(upg, dieIdx));
+    cancelBg.on('pointerdown', () => this._nav(() => this._showFacePicker(upg, dieIdx)));
     cancelBg.on('pointerover',  () => cancelBg.setFillStyle(0x2a2a44));
     cancelBg.on('pointerout',   () => cancelBg.setFillStyle(0x1a1a2e));
     this._track(this.add.text(W / 2 - 72, py + 56, 'Cancel', {
@@ -505,7 +507,7 @@ export default class UpgradeScene extends Phaser.Scene {
     const y = H - 44;
     const bg = this._track(this.add.rectangle(W / 2, y, W - 16, 50, 0x1a1a2e).setInteractive());
     bg.setStrokeStyle(1, 0x2a2a4a, 0.8);
-    bg.on('pointerdown', onBack);
+    bg.on('pointerdown', () => this._nav(onBack));
     bg.on('pointerover',  () => bg.setFillStyle(0x2a2a44));
     bg.on('pointerout',   () => bg.setFillStyle(0x1a1a2e));
     this._track(this.add.text(W / 2, y, '← Back', {
@@ -517,7 +519,7 @@ export default class UpgradeScene extends Phaser.Scene {
     if (this._navigating) return;
     this._navigating = true;
     this._clearScreen();
-    this._goToNextBattle();
+    this.time.delayedCall(1, () => this._goToNextBattle());
   }
 
   _goToNextBattle() {

@@ -77,7 +77,7 @@ export default class ShopSelectScene extends Phaser.Scene {
 
       bg.on('pointerover',  () => { bg.setFillStyle(0x181828); bg.setStrokeStyle(2, fc, 1); arrow.setColor(shop.color); });
       bg.on('pointerout',   () => { bg.setFillStyle(0x0d0d1c); bg.setStrokeStyle(2, fc, 0.6); arrow.setColor('#2a2a3a'); });
-      bg.on('pointerdown',  () => this.scene.start('ShopScene', { ...this._data, shopType: shop.key }));
+      bg.on('pointerdown',  () => this.time.delayedCall(1, () => this.scene.start('ShopScene', { ...this._data, shopType: shop.key })));
     });
 
     // Skip button
@@ -86,7 +86,7 @@ export default class ShopSelectScene extends Phaser.Scene {
     skipBg.setStrokeStyle(1, 0x222233, 0.8);
     skipBg.on('pointerover', () => skipBg.setFillStyle(0x181828));
     skipBg.on('pointerout',  () => skipBg.setFillStyle(0x0a0a14));
-    skipBg.on('pointerdown', () => this.scene.start('BattleScene', this._data));
+    skipBg.on('pointerdown', () => this.time.delayedCall(1, () => this.scene.start('BattleScene', this._data)));
     this.add.text(W / 2, skipY + 22, 'Skip  →', {
       fontSize: '15px', color: '#2a3848',
     }).setOrigin(0.5);

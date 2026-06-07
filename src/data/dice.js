@@ -1,7 +1,7 @@
 export const DIE_TYPES = {
-  attack: { id: 'attack', label: 'Steal',       sym: 'STE', color: '#ff4444' },
-  block:  { id: 'block',  label: 'Protect',     sym: 'PRO', color: '#3498db' },
-  pierce: { id: 'pierce', label: 'Clean Steal', sym: 'CLN', color: '#ff9900' },
+  attack: { id: 'attack', label: 'Attack',       sym: 'ATK', color: '#ff4444' },
+  block:  { id: 'block',  label: 'Block',        sym: 'BLK', color: '#3498db' },
+  pierce: { id: 'pierce', label: 'Buff',        sym: 'BUF', color: '#ff9900' },
   copy:   { id: 'copy',   label: 'Copy',        sym: 'CPY', color: '#cc88ff' },
   // Playable special die
   poison: { id: 'poison', label: 'Pickpocket',  sym: 'PKP', color: '#58d68d' },
@@ -23,13 +23,13 @@ export const STARTER_DICE = [
 
 export const FIGHTER_CONFIG = [
   { id: 'f0', type: 'attack', sides: 6, runeMap: {}, material: null, culledFaces: [] },
-  { id: 'f1', type: 'pierce', sides: 6, runeMap: {}, material: null, culledFaces: [] },
+  { id: 'f1', type: 'pierce', sides: 4, runeMap: {}, material: null, culledFaces: [] },
   { id: 'f2', type: 'block',  sides: 6, runeMap: {}, material: null, culledFaces: [] },
 ];
 
 export const MAGICIAN_CONFIG = [
   { id: 'm0', type: 'attack', sides: 6, runeMap: {}, material: null, culledFaces: [] },
-  { id: 'm1', type: 'copy',   sides: 6, runeMap: {}, material: null, culledFaces: [] },
+  { id: 'm1', type: 'copy',   sides: 4, runeMap: {}, material: null, culledFaces: [] },
   { id: 'm2', type: 'block',  sides: 6, runeMap: {}, material: null, culledFaces: [] },
 ];
 

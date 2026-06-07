@@ -22,6 +22,9 @@ export default class SetupScene extends Phaser.Scene {
     this._selectedCustomRelics = null;
 
     this.add.rectangle(W / 2, H / 2, W, H, 0x111122);
+    this.add.text(8, 8, 'pre-alpha-beta-0.6', {
+      fontSize: '11px', color: '#2a3848',
+    }).setOrigin(0, 0);
     this.add.rectangle(W / 2, 1, W, 2, 0x1a4a7a);
 
     this._showClassStep();
@@ -148,17 +151,17 @@ export default class SetupScene extends Phaser.Scene {
       bgHover: 0x1e160a,
       subtitle: 'The card sharp with a quick draw',
       dice: [
-        { type: 'attack', label: 'STE d6' },
-        { type: 'pierce', label: 'CLN d6' },
-        { type: 'block',  label: 'PRO d6' },
+        { type: 'attack', label: 'ATK d6' },
+        { type: 'pierce', label: 'BUF d4' },
+        { type: 'block',  label: 'BLK d6' },
       ],
-      startingRelicName: 'Happy Flower',
+      startingRelicName: 'Lucky Coin',
       startingRelicColor: '#f0c040',
       onTap: () => {
         this._usedClassPreset = true;
         this._diceCount  = 3;
         this._diceConfig = JSON.parse(JSON.stringify(FIGHTER_CONFIG));
-        this._startingRelic = getRelics().find(r => r.id === 'happy_flower') ?? null;
+        this._startingRelic = getRelics().find(r => r.id === 'lucky_coin') ?? null;
         this._startBattle();
       }
     });
@@ -172,17 +175,17 @@ export default class SetupScene extends Phaser.Scene {
       bgHover: 0x1a1028,
       subtitle: 'A master of misdirection',
       dice: [
-        { type: 'attack', label: 'STE d6' },
-        { type: 'copy',   label: 'CPY d6' },
-        { type: 'block',  label: 'PRO d6' },
+        { type: 'attack', label: 'ATK d6' },
+        { type: 'copy',   label: 'CPY d4' },
+        { type: 'block',  label: 'BLK d6' },
       ],
-      startingRelicName: 'Anchor',
-      startingRelicColor: '#3498db',
+      startingRelicName: 'Steady Hand',
+      startingRelicColor: '#f0c040',
       onTap: () => {
         this._usedClassPreset = true;
         this._diceCount  = 3;
         this._diceConfig = JSON.parse(JSON.stringify(MAGICIAN_CONFIG));
-        this._startingRelic = getRelics().find(r => r.id === 'anchor') ?? null;
+        this._startingRelic = getRelics().find(r => r.id === 'steady_hand') ?? null;
         this._startBattle();
       }
     });
@@ -196,17 +199,17 @@ export default class SetupScene extends Phaser.Scene {
       bgHover: 0x0e1e0e,
       subtitle: 'Lifts your chips while shaking your hand',
       dice: [
-        { type: 'attack', label: 'STE d6' },
+        { type: 'attack', label: 'ATK d6' },
         { type: 'poison', label: 'PKP d4' },
-        { type: 'block',  label: 'PRO d6' },
+        { type: 'block',  label: 'BLK d6' },
       ],
-      startingRelicName: 'Dead Branch',
+      startingRelicName: "Pickpocket's Thumb",
       startingRelicColor: '#58d68d',
       onTap: () => {
         this._usedClassPreset = true;
         this._diceCount  = 3;
         this._diceConfig = JSON.parse(JSON.stringify(ALCHEMIST_CONFIG));
-        this._startingRelic = getRelics().find(r => r.id === 'dead_branch') ?? null;
+        this._startingRelic = getRelics().find(r => r.id === 'pickpockets_thumb') ?? null;
         this._startBattle();
       }
     });
@@ -220,8 +223,8 @@ export default class SetupScene extends Phaser.Scene {
       bgHover: 0x1e0e0e,
       subtitle: 'Built like a brick, moves like one too',
       dice: [
-        { type: 'block', label: 'PRO d8' },
-        { type: 'block', label: 'PRO d8' },
+        { type: 'block', label: 'BLK d8' },
+        { type: 'block', label: 'BLK d8' },
       ],
       startingRelicName: 'Spiked Bumper',
       startingRelicColor: '#e74c3c',
@@ -259,15 +262,15 @@ export default class SetupScene extends Phaser.Scene {
     tutTxt.on('pointerover', () => tutTxt.setColor('#5588aa'));
     tutTxt.on('pointerout',  () => tutTxt.setColor('#2a3848'));
     tutTxt.on('pointerdown', () => {
-      this.scene.start('BattleScene', {
-        playerDiceConfig: JSON.parse(JSON.stringify(BRUTE_CONFIG)),
+      this.time.delayedCall(1, () => this.scene.start('BattleScene', {
+        playerDiceConfig: JSON.parse(JSON.stringify(FIGHTER_CONFIG)),
         playerHp:    PLAYER_MAX_HP,
         playerMaxHp: PLAYER_MAX_HP,
         enemyKey:    'training_dummy',
         tutorial:    true,
         battleIndex: 0,
         activeRelics: [],
-      });
+      }));
     });
 
     this._fadeIn(g);
@@ -514,7 +517,7 @@ export default class SetupScene extends Phaser.Scene {
         }).setOrigin(0.5);
       g.add(rLabel); g.add(rSub);
 
-      rBg.on('pointerdown', () => this._openRunePicker(di));
+      rBg.on('pointerdown', () => this._transitionTo(() => this._showBrandPickerStep(di)));
       rBg.on('pointerover',  () => rBg.setFillStyle(0x181828));
       rBg.on('pointerout',   () => rBg.setFillStyle(0x100f20));
 
@@ -561,52 +564,87 @@ export default class SetupScene extends Phaser.Scene {
 
   // ─── RUNE PICKER ─────────────────────────────────────────────────────────
 
-  _openRunePicker(di) {
-    this._closePicker();
-    const cx = W / 2;
-    const sp = 62, tileW = 56, tileH = 72;
-    const panelW = RUNE_KEYS.length * sp + 16;
-    const panelH = tileH + 52;
-    const panelY = H - 70 - panelH / 2;
+  _showBrandPickerStep(di) {
+    const g = this._stepGroup = this.add.container(0, 0);
+    const dc = this._diceConfig[di];
+    const dt = DIE_TYPES[dc.type];
 
-    const panel = this._picker = this.add.container(0, 0).setDepth(60);
-
-    const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.65).setInteractive();
-    dim.on('pointerdown', () => this._closePicker());
-    panel.add(dim);
-
-    panel.add(this.add.rectangle(cx, panelY, panelW, panelH, 0x0a0a1e)
-      .setStrokeStyle(1.5, 0xe8c97a, 0.45));
-    panel.add(this.add.text(cx, panelY - panelH / 2 + 18, 'choose a rune', {
-      fontSize: '17px', color: '#334455', letterSpacing: 1
+    g.add(this.add.text(W / 2, 36, 'CHOOSE A BRAND', {
+      fontSize: '17px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3,
+    }).setOrigin(0.5));
+    g.add(this.add.text(W / 2, 62, `Die ${di + 1} — ${dt?.sym ?? '?'} d${dc.sides}`, {
+      fontSize: '13px', color: dt ? dt.color : '#445566',
     }).setOrigin(0.5));
 
-    const ox = cx - ((RUNE_KEYS.length - 1) * sp) / 2;
+    const RARITY_COLOR = { common: 0x556677, uncommon: 0x2471a3, rare: 0x6c3483 };
+    const ITEM_H = 96, ITEM_GAP = 8, ITEM_TOTAL = ITEM_H + ITEM_GAP;
+    const LIST_TOP  = 80;
+    const LIST_BTM  = H - 60;
+    const LIST_H    = LIST_BTM - LIST_TOP;
+    const all       = RUNE_KEYS.map(id => RUNES[id]);
+    const totalH    = all.length * ITEM_TOTAL - ITEM_GAP;
+    const maxScroll = Math.max(0, totalH - LIST_H);
 
-    RUNE_KEYS.forEach((runeId, i) => {
-      const rune = RUNES[runeId];
-      const rc   = parseInt(rune.color.replace('#', ''), 16);
-      const tx   = ox + i * sp;
-      const ty   = panelY + 10;
+    let scrollY = 0;
+    const listCont = this.add.container(0, LIST_TOP);
+    g.add(listCont);
 
-      const tbg = this.add.rectangle(tx, ty, tileW, tileH, 0x131320);
-      tbg.setStrokeStyle(1.5, rc, 0.55).setInteractive();
-      panel.add(tbg);
-      panel.add(this.add.text(tx, ty - 14, rune.sym, {
-        fontSize: '17px', color: rune.color, fontStyle: 'bold',
-        stroke: '#000000', strokeThickness: 3
-      }).setOrigin(0.5));
-      panel.add(this.add.text(tx, ty + 12, rune.label, {
-        fontSize: '17px', color: '#6677aa'
-      }).setOrigin(0.5));
+    const maskGfx = this.make.graphics({ add: false });
+    maskGfx.fillRect(0, LIST_TOP, W, LIST_H);
+    listCont.setMask(maskGfx.createGeometryMask());
 
-      tbg.on('pointerdown', () => { this._closePicker(); this._openFaceRunePicker(di, runeId); });
-      tbg.on('pointerover',  () => tbg.setFillStyle(0x252540));
-      tbg.on('pointerout',   () => tbg.setFillStyle(0x131320));
+    all.forEach((rune, i) => {
+      const iy     = i * ITEM_TOTAL;
+      const cy     = iy + ITEM_H / 2;
+      const rc     = parseInt(rune.color.replace('#', ''), 16);
+      const rarCol = RARITY_COLOR[rune.rarity] ?? RARITY_COLOR.common;
+      const active = Object.values(dc.runeMap ?? {}).includes(rune.id);
+
+      const bg = this.add.rectangle(W / 2, cy, W - 32, ITEM_H, active ? 0x1a1a3a : 0x0d0d1c);
+      bg.setStrokeStyle(1.5, rarCol, active ? 0.9 : 0.5);
+      listCont.add(bg);
+      listCont.add(this.add.rectangle(16, cy, 4, ITEM_H - 16, rc, 0.8));
+      listCont.add(this.add.text(28, cy - 26, `${rune.sym}  ${rune.label}`, {
+        fontSize: '15px', color: rune.color, fontStyle: 'bold',
+      }).setOrigin(0, 0.5));
+      listCont.add(this.add.text(28, cy - 6, rune.rarity.toUpperCase(), {
+        fontSize: '11px', color: '#445566', letterSpacing: 1,
+      }).setOrigin(0, 0.5));
+      listCont.add(this.add.text(28, cy + 18, rune.desc, {
+        fontSize: '12px', color: '#8899aa', wordWrap: { width: W - 56 },
+      }).setOrigin(0, 0.5));
     });
+
+    let ptrDownY = null, scrollAtDown = 0;
+    const dragZone = this.add.rectangle(W / 2, LIST_TOP + LIST_H / 2, W, LIST_H, 0, 0).setInteractive();
+    g.add(dragZone);
+
+    dragZone.on('pointerdown', ptr => { ptrDownY = ptr.y; scrollAtDown = scrollY; });
+
+    const onMove = ptr => {
+      if (!ptr.isDown || ptrDownY === null) return;
+      scrollY = Phaser.Math.Clamp(scrollAtDown + (ptrDownY - ptr.y), 0, maxScroll);
+      listCont.y = LIST_TOP - scrollY;
+    };
+    this.input.on('pointermove', onMove);
+
+    dragZone.on('pointerup', ptr => {
+      if (ptrDownY !== null && Math.abs(ptr.y - ptrDownY) < 8) {
+        const relY = ptr.y - LIST_TOP + scrollY;
+        const idx  = Math.floor(relY / ITEM_TOTAL);
+        if (idx >= 0 && idx < all.length) {
+          this._openFaceRunePicker(di, all[idx].id, () => this._transitionTo(() => this._showRuneStep()));
+        }
+      }
+      ptrDownY = null;
+    });
+
+    g.once('destroy', () => { this.input.off('pointermove', onMove); maskGfx.destroy(); });
+    this._addBackBtn(g, () => this._showRuneStep());
+    this._fadeIn(g);
   }
 
-  _openFaceRunePicker(di, runeId) {
+  _openFaceRunePicker(di, runeId, onPick = null) {
     this._closePicker();
     const rune  = RUNES[runeId];
     const dc    = this._diceConfig[di];
@@ -683,7 +721,8 @@ export default class SetupScene extends Phaser.Scene {
         if (!dc.runeMap) dc.runeMap = {};
         dc.runeMap[fi] = runeId;
         this._closePicker();
-        this._refreshRuneSlot(di);
+        if (onPick) onPick();
+        else        this._refreshRuneSlot(di);
       });
       tbg.on('pointerover',  () => tbg.setFillStyle(0x252540));
       tbg.on('pointerout',   () => tbg.setFillStyle(sel ? 0x221a10 : 0x131320));
@@ -904,31 +943,31 @@ export default class SetupScene extends Phaser.Scene {
       const fc     = parseInt((relic.color ?? '#ffffff').replace('#', ''), 16);
       const rarCol = RARITY_COLOR[relic.rarity] ?? RARITY_COLOR.common;
 
-      const bg      = this.add.rectangle(W / 2, cy, W - 32, ITEM_H, 0x0a0a14, 0.5);
-      const dot     = this.add.circle(44, cy, 12, fc, 0.35);
+      const bg      = this.add.rectangle(W / 2, cy, W - 32, ITEM_H, 0x0d0d1c);
+      const dot     = this.add.circle(44, cy, 12, fc, 0.8);
       const dotLtr  = this.add.text(44, cy, relic.name[0].toUpperCase(), {
-        fontSize: '12px', color: '#444444', fontStyle: 'bold',
+        fontSize: '12px', color: '#dddddd', fontStyle: 'bold',
       }).setOrigin(0.5);
       const nameTxt = this.add.text(72, cy - 22, relic.name, {
-        fontSize: '15px', color: '#334455',
+        fontSize: '15px', color: relic.color, fontStyle: 'bold',
       }).setOrigin(0, 0.5);
       const rarTxt  = this.add.text(72, cy - 3, relic.rarity.toUpperCase(), {
-        fontSize: '11px', color: '#1c1c2e', letterSpacing: 1,
+        fontSize: '11px', color: '#445566', letterSpacing: 1,
       }).setOrigin(0, 0.5);
       const descTxt = this.add.text(72, cy + 18, relic.description, {
-        fontSize: '12px', color: '#2a3040', wordWrap: { width: W - 96 },
+        fontSize: '12px', color: '#8899aa', wordWrap: { width: W - 96 },
       }).setOrigin(0, 0.5);
 
       listCont.add([bg, dot, dotLtr, nameTxt, rarTxt, descTxt]);
 
       const refresh = (sel) => {
-        bg.setFillStyle(sel ? 0x1a1a3a : 0x0a0a14, sel ? 1 : 0.5);
-        bg.setStrokeStyle(2, rarCol, sel ? 0.85 : 0.3);
-        dot.setAlpha(sel ? 0.9 : 0.35);
-        dotLtr.setColor(sel ? '#ffffff' : '#444444');
-        nameTxt.setColor(sel ? relic.color : '#334455');
-        rarTxt.setColor(sel ? '#334455' : '#1c1c2e');
-        descTxt.setColor(sel ? '#7788aa' : '#2a3040');
+        bg.setFillStyle(sel ? 0x1a1a3a : 0x0d0d1c);
+        bg.setStrokeStyle(2, rarCol, sel ? 0.9 : 0.5);
+        dot.setAlpha(sel ? 1 : 0.8);
+        dotLtr.setColor(sel ? '#ffffff' : '#dddddd');
+        nameTxt.setColor(relic.color);
+        rarTxt.setColor(sel ? '#667788' : '#445566');
+        descTxt.setColor(sel ? '#8899aa' : '#6677aa');
       };
       refresh(this._selectedCustomRelics.some(r => r.id === relic.id));
       items.push({ relic, refresh });
@@ -997,12 +1036,12 @@ export default class SetupScene extends Phaser.Scene {
     const relics = this._selectedCustomRelics !== null
       ? this._selectedCustomRelics
       : (this._startingRelic ? [this._startingRelic] : []);
-    this.scene.start('BattleScene', {
+    this.time.delayedCall(1, () => this.scene.start('BattleScene', {
       playerDiceConfig: this._diceConfig,
       playerHp:         PLAYER_MAX_HP,
       playerMaxHp:      PLAYER_MAX_HP,
       battleIndex:      BATTLE_SEQUENCE.indexOf(this._enemyKey),
       activeRelics:     relics,
-    });
+    }));
   }
 }
