@@ -233,7 +233,6 @@ export default class RelicManager {
 
       case 'LUCKY_COIN': {
         if (!payload.die?.isPlayer || s._luckyCoinUsed) return;
-        if ((payload.die.data?.type) === 'pierce') return;
         const active = s._getActiveFaceIndices(payload.die.data);
         if (!active.length) return;
         const maxVal = Math.floor(Math.max(...active) / 2) + 1;

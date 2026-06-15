@@ -1485,12 +1485,13 @@ export default class BattleScene extends Phaser.Scene {
 
   // ─── IMMEDIATE EFFECTS ────────────────────────────────────────────────────
 
-  _applyDieFaceImmediate(dieRef, skipRune = false) {
+  _applyDieFaceImmediate(dieRef, skipRune = false, snapX = null, snapY = null) {
     if (this.phase === 99) return;
     const { data } = dieRef;
-    // Use last-known position — img may be inactive if the die was already shattered
-    const imgX = dieRef.img?.x ?? 0;
-    const imgY = dieRef.img?.y ?? 0;
+    // Prefer the position snapshotted at queue-entry time so effects resolve
+    // correctly even if the die was destroyed before this entry fired.
+    const imgX = snapX ?? dieRef.img?.x ?? 0;
+    const imgY = snapY ?? dieRef.img?.y ?? 0;
     let value = Math.floor(data.currentFaceIdx / 2) + 1;
     if (dieRef._cracked)     { value = Math.ceil(value / 2); dieRef._cracked = false; }
     if (dieRef._valueBonus)  { value += dieRef._valueBonus;  dieRef._valueBonus = 0; }
@@ -2191,7 +2192,9 @@ export default class BattleScene extends Phaser.Scene {
     const { data } = dieRef;
     const value = Math.floor(data.currentFaceIdx / 2) + 1;
     const type  = dieRef._mimicType ?? data.type;
-    const entry = { dieRef, value, type };
+    const x     = dieRef.img?.x ?? 0;
+    const y     = dieRef.img?.y ?? 0;
+    const entry = { dieRef, value, type, x, y };
     this._effectQueue.push(entry);
     const card = this._createQueueCard(entry, this._queueCards.length);
     this._queueCards.push(card);
@@ -2267,7 +2270,7 @@ export default class BattleScene extends Phaser.Scene {
         this._prevQueueEffect = this._currQueueEffect ?? null;
         this._currQueueEffect = null;
         this.bus.emit('ON_QUEUE_FIRE', { die: entry.dieRef });
-        this._applyDieFaceImmediate(entry.dieRef);
+        this._applyDieFaceImmediate(entry.dieRef, false, entry.x, entry.y);
 
         // Wait long enough for rune delays (e.g. Egyptian's 250ms) to initiate movement
         this.time.delayedCall(800, () => {
