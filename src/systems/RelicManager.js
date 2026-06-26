@@ -295,6 +295,12 @@ export default class RelicManager {
         s._flashHeal(amt);
         break;
       }
+
+      case 'DESTROY_ECHO': {
+        if (!payload.die?.isPlayer) return;
+        s._applyMaxFaceDamage(payload.die);
+        break;
+      }
     }
   }
 

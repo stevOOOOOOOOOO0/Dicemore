@@ -39,28 +39,30 @@ export const ENEMIES = {
   // ── TUTORIAL ────────────────────────────────────────────────────────────
 
   training_dummy: {
-    name: 'Training Dummy', hp: 10, tier: 'minion', color: '#f39c12', obstacleCount: 0,
+    name: 'Training Dummy', hp: 14, tier: 'minion', color: '#f39c12', obstacleCount: 0,
     intents: [
       { type: 'attack', value: 2, weight: 3 },
       { type: 'attack', value: 3, weight: 2 },
       { type: 'block',  value: 3, weight: 2 },
     ],
+    enemyDice: [{ type: 'attack', sides: 8 }, { type: 'attack', sides: 8 }],
   },
 
-  // ── MINIONS (1 obstacle · HP 16-28) ────────────────────────────────────
+  // ── MINIONS (1 obstacle · HP 26-42) ────────────────────────────────────
 
   red_louse: {
-    name: 'Red Louse', hp: 18, tier: 'minion', color: '#e74c3c', obstacleCount: 1,
+    name: 'Red Louse', hp: 26, tier: 'minion', color: '#e74c3c', obstacleCount: 0,
     intents: [
       { type: 'attack',   value: 5,  weight: 4 },
       { type: 'attack',   value: 8,  weight: 2 },
       { type: 'attack',   value: 3,  weight: 2 },
       { type: 'strength', value: 1,  weight: 2 },
     ],
+    enemyDice: [{ type: 'attack', sides: 12 }, { type: 'attack', sides: 12 }],
   },
 
   cultist: {
-    name: 'Cultist', hp: 16, tier: 'minion', color: '#9b59b6', obstacleCount: 1,
+    name: 'Cultist', hp: 24, tier: 'minion', color: '#9b59b6', obstacleCount: 0,
     // Stacks strength — harmless at first, terrifying later
     intents: [
       { type: 'strength', value: 2,  weight: 5 },
@@ -68,96 +70,105 @@ export const ENEMIES = {
       { type: 'strength', value: 3,  weight: 2 },
       { type: 'attack',   value: 7,  weight: 1 },
     ],
+    enemyDice: [{ type: 'attack', sides: 12 }, { type: 'attack', sides: 12 }, { type: 'frail', sides: 8 }, { type: 'frail', sides: 8 }],
   },
 
   jaw_worm: {
-    name: 'Jaw Worm', hp: 28, tier: 'minion', color: '#c0392b', obstacleCount: 1,
+    name: 'Jaw Worm', hp: 42, tier: 'minion', color: '#c0392b', obstacleCount: 0,
     intents: [
       { type: 'attack',   value: 8,  weight: 3 },
       { type: 'strength', value: 2,  weight: 3 },
       { type: 'block',    value: 7,  weight: 2 },
       { type: 'attack',   value: 12, weight: 2 },
     ],
+    enemyDice: [{ type: 'attack', sides: 16 }, { type: 'attack', sides: 16 }],
   },
 
-  // ── STANDARDS (2 obstacles · HP 28-44) ─────────────────────────────────
+  // ── STANDARDS (2 obstacles · HP 48-62) ─────────────────────────────────
 
   spike_slime: {
-    name: 'Spike Slime', hp: 36, tier: 'standard', color: '#58d68d', obstacleCount: 2,
+    name: 'Spike Slime', hp: 52, tier: 'standard', color: '#58d68d', obstacleCount: 0,
     intents: [
       { type: 'vulnerable', value: 1, weight: 4 },
       { type: 'attack',     value: 6, weight: 3 },
       { type: 'attack',     value: 9, weight: 2 },
       { type: 'strength',   value: 2, weight: 1 },
     ],
+    enemyDice: [{ type: 'attack', sides: 16 }, { type: 'attack', sides: 16 }, { type: 'block', sides: 12 }, { type: 'block', sides: 12 }],
   },
 
   green_louse: {
-    name: 'Green Louse', hp: 28, tier: 'standard', color: '#27ae60', obstacleCount: 2,
+    name: 'Green Louse', hp: 44, tier: 'standard', color: '#27ae60', obstacleCount: 0,
     intents: [
       { type: 'frail',    value: 1,  weight: 4 },
       { type: 'attack',   value: 7,  weight: 3 },
       { type: 'attack',   value: 11, weight: 2 },
       { type: 'vulnerable', value: 1, weight: 1 },
     ],
+    enemyDice: [{ type: 'attack', sides: 12 }, { type: 'attack', sides: 12 }, { type: 'attack', sides: 12 }, { type: 'attack', sides: 12 }],
   },
 
   fungal_beast: {
-    name: 'Fungal Beast', hp: 44, tier: 'standard', color: '#8e44ad', obstacleCount: 2,
+    name: 'Fungal Beast', hp: 62, tier: 'standard', color: '#8e44ad', obstacleCount: 0,
     intents: [
       { type: 'attack',   value: 8,  weight: 3 },
       { type: 'strength', value: 2,  weight: 3 },
       { type: 'block',    value: 9,  weight: 2 },
       { type: 'attack',   value: 12, weight: 2 },
     ],
+    enemyDice: [{ type: 'attack', sides: 16 }, { type: 'attack', sides: 16 }, { type: 'strength', sides: 12 }, { type: 'strength', sides: 12 }],
   },
 
-  // ── ELITES (3 obstacles · HP 56-68) ────────────────────────────────────
+  // ── ELITES (3 obstacles · HP 80-96) ────────────────────────────────────
 
   gremlin_nob: {
-    name: 'Gremlin Nob', hp: 56, tier: 'elite', color: '#e67e22', obstacleCount: 3,
+    name: 'Gremlin Nob', hp: 80, tier: 'elite', color: '#e67e22', obstacleCount: 0,
     intents: [
       { type: 'multi', weight: 3, intents: [{ type: 'vulnerable', value: 1 }, { type: 'attack', value: 10 }] },
       { type: 'attack',   value: 14, weight: 3 },
       { type: 'strength', value: 3,  weight: 2 },
       { type: 'multi', weight: 2, intents: [{ type: 'attack', value: 18 }, { type: 'strength', value: 2 }] },
     ],
+    enemyDice: [{ type: 'attack', sides: 20 }, { type: 'attack', sides: 20 }, { type: 'strength', sides: 12 }, { type: 'strength', sides: 12 }],
   },
 
   lagavulin: {
-    name: 'Lagavulin', hp: 68, tier: 'elite', color: '#2c3e50', obstacleCount: 3,
+    name: 'Lagavulin', hp: 96, tier: 'elite', color: '#2c3e50', obstacleCount: 0,
     intents: [
       { type: 'block',    value: 12, weight: 3 },
       { type: 'attack',   value: 16, weight: 3 },
       { type: 'attack',   value: 21, weight: 2 },
       { type: 'multi', weight: 2, intents: [{ type: 'frail', value: 1 }, { type: 'attack', value: 14 }] },
     ],
+    enemyDice: [{ type: 'attack', sides: 20 }, { type: 'attack', sides: 20 }, { type: 'block', sides: 16 }, { type: 'block', sides: 16 }],
   },
 
   bronze_automaton: {
-    name: 'Automaton', hp: 60, tier: 'elite', color: '#ba8c63', obstacleCount: 3,
+    name: 'Automaton', hp: 86, tier: 'elite', color: '#ba8c63', obstacleCount: 0,
     intents: [
       { type: 'attack',   value: 10, weight: 3 },
       { type: 'strength', value: 3,  weight: 3 },
       { type: 'multi', weight: 2, intents: [{ type: 'frail', value: 1 }, { type: 'attack', value: 8 }] },
       { type: 'attack',   value: 15, weight: 2 },
     ],
+    enemyDice: [{ type: 'attack', sides: 16 }, { type: 'attack', sides: 16 }, { type: 'attack', sides: 16 }, { type: 'attack', sides: 16 }, { type: 'block', sides: 12 }, { type: 'block', sides: 12 }],
   },
 
-  // ── BOSSES (4 obstacles · HP 92-104) ───────────────────────────────────
+  // ── BOSSES (4 obstacles · HP 130-150) ──────────────────────────────────
 
   slime_lord: {
-    name: 'Slime Lord', hp: 92, tier: 'elite', color: '#2ecc71', obstacleCount: 4,
+    name: 'Slime Lord', hp: 130, tier: 'elite', color: '#2ecc71', obstacleCount: 0,
     intents: [
       { type: 'multi', weight: 3, intents: [{ type: 'vulnerable', value: 1 }, { type: 'attack', value: 12 }] },
       { type: 'attack',   value: 17, weight: 3 },
       { type: 'strength', value: 3,  weight: 2 },
       { type: 'multi', weight: 2, intents: [{ type: 'attack', value: 21 }, { type: 'frail', value: 1 }] },
     ],
+    enemyDice: [{ type: 'attack', sides: 20 }, { type: 'attack', sides: 20 }, { type: 'attack', sides: 20 }, { type: 'attack', sides: 20 }, { type: 'strength', sides: 14 }, { type: 'strength', sides: 14 }],
   },
 
   hexaghost: {
-    name: 'Hexaghost', hp: 104, tier: 'boss', color: '#cc88ff', obstacleCount: 4,
+    name: 'Hexaghost', hp: 150, tier: 'boss', color: '#cc88ff', obstacleCount: 0,
     // Pure chaos — always multi-intent
     intents: [
       { type: 'multi', weight: 3, intents: [{ type: 'strength', value: 2 }, { type: 'attack', value: 12 }] },
@@ -165,7 +176,61 @@ export const ENEMIES = {
       { type: 'multi', weight: 2, intents: [{ type: 'attack', value: 19 }, { type: 'strength', value: 2 }] },
       { type: 'multi', weight: 2, intents: [{ type: 'attack', value: 23 }, { type: 'vulnerable', value: 1 }] },
     ],
+    enemyDice: [{ type: 'attack', sides: 20 }, { type: 'attack', sides: 20 }, { type: 'attack', sides: 20 }, { type: 'attack', sides: 20 }, { type: 'block', sides: 16 }, { type: 'block', sides: 16 }, { type: 'strength', sides: 12 }, { type: 'strength', sides: 12 }],
   },
+
+  // ── ALTERNATES (swap-in pool for branching map routes) ──────────────────
+  // Each is a named alternative to a roster slot. Not in BATTLE_SEQUENCE —
+  // routed via map logic when the branching map system is implemented.
+
+  witch: {
+    name: 'The Hex', hp: 22, tier: 'minion', color: '#cc44ff', obstacleCount: 0,
+    abilities: [{ id: 'bumper_enrage', value: 2 }],
+    enemyDice: [{ type: 'attack', sides: 10 }, { type: 'attack', sides: 10 }, { type: 'frail', sides: 8 }, { type: 'frail', sides: 8 }],
+  },
+
+  void_worm: {
+    name: 'The Maw', hp: 38, tier: 'minion', color: '#4444cc', obstacleCount: 0,
+    abilities: [{ id: 'flat_reduction', value: 2 }],
+    enemyDice: [{ type: 'attack', sides: 14 }, { type: 'attack', sides: 14 }],
+  },
+
+  shatter_slime: {
+    name: 'The Smashball', hp: 48, tier: 'standard', color: '#58d68d', obstacleCount: 0,
+    abilities: [{ id: 'glass_curse' }],
+    enemyDice: [{ type: 'attack', sides: 14 }, { type: 'attack', sides: 14 }, { type: 'block', sides: 10 }, { type: 'block', sides: 10 }],
+  },
+
+  swarm: {
+    name: 'The Pack', hp: 36, tier: 'standard', color: '#27ae60', obstacleCount: 0,
+    abilities: [{ id: 'contact_drain' }],
+    enemyDice: [{ type: 'attack', sides: 10 }, { type: 'attack', sides: 10 }, { type: 'attack', sides: 10 }, { type: 'attack', sides: 10 }],
+  },
+
+  mycelium: {
+    name: 'The Tangle', hp: 56, tier: 'standard', color: '#8e44ad', obstacleCount: 0,
+    abilities: [{ id: 'obstacle_buff', value: 2 }],
+    enemyDice: [{ type: 'attack', sides: 14 }, { type: 'attack', sides: 14 }, { type: 'strength', sides: 10 }, { type: 'strength', sides: 10 }],
+  },
+
+  pinball_nob: {
+    name: 'Pinball Pete', hp: 72, tier: 'elite', color: '#f39c12', obstacleCount: 0,
+    abilities: [{ id: 'bouncy_bumpers' }],
+    enemyDice: [{ type: 'attack', sides: 18 }, { type: 'attack', sides: 18 }, { type: 'strength', sides: 10 }, { type: 'strength', sides: 10 }],
+  },
+
+  tar_giant: {
+    name: 'Tar Molly', hp: 88, tier: 'elite', color: '#2c3e50', obstacleCount: 0,
+    abilities: [{ id: 'sticky_walls' }],
+    enemyDice: [{ type: 'attack', sides: 18 }, { type: 'attack', sides: 18 }, { type: 'block', sides: 14 }, { type: 'block', sides: 14 }],
+  },
+
+  artillery_bot: {
+    name: 'The Gatling', hp: 80, tier: 'elite', color: '#ba8c63', obstacleCount: 0,
+    abilities: [{ id: 'bullet_throws' }],
+    enemyDice: [{ type: 'attack', sides: 14 }, { type: 'attack', sides: 14 }, { type: 'attack', sides: 14 }, { type: 'attack', sides: 14 }, { type: 'block', sides: 10 }, { type: 'block', sides: 10 }],
+  },
+
 };
 
 // Ordered battle progression: minions → standards → elites → bosses

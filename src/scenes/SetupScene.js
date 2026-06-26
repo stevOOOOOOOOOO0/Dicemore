@@ -4,6 +4,7 @@ import { DIE_TYPES, DIE_TYPE_KEYS, SPECIAL_DIE_KEYS, SIDES_PROGRESSION, FIGHTER_
 import { W, H, PLAYER_MAX_HP } from '../constants.js';
 import { RUNES, MATERIALS, RUNE_KEYS, MATERIAL_KEYS } from '../data/runes.js';
 import { getRelics } from '../data/relics.js';
+import { UPGRADES, UPGRADE_DESCRIPTIONS } from '../data/upgrades.js';
 
 const ENEMY_KEYS = ['red_louse', 'cultist', 'jaw_worm'];
 
@@ -20,9 +21,10 @@ export default class SetupScene extends Phaser.Scene {
     this._picker          = null;
     this._startingRelic        = null;
     this._selectedCustomRelics = null;
+    this._upgradeActiveDie     = 0;
 
     this.add.rectangle(W / 2, H / 2, W, H, 0x111122);
-    this.add.text(8, 8, 'pre-alpha-beta-0.6', {
+    this.add.text(8, 8, 'pre-alpha-beta-0.14', {
       fontSize: '11px', color: '#2a3848',
     }).setOrigin(0, 0);
     this.add.rectangle(W / 2, 1, W, 2, 0x1a4a7a);
@@ -364,6 +366,7 @@ export default class SetupScene extends Phaser.Scene {
         this._diceConfig = Array.from({ length: n }, (_, j) => ({
           id: `custom_${j}`, type: null, sides: 6,
           runeMap: {}, material: null, culledFaces: [],
+          upgradeState: { takenUpgrades: [] },
         }));
         this._transitionTo(() => this._showTypeStep());
       });
@@ -549,7 +552,7 @@ export default class SetupScene extends Phaser.Scene {
     const btnBg = this.add.rectangle(W / 2, H - 44, W - 16, 50, 0x163824);
     btnBg.setStrokeStyle(1.5, 0x27ae60, 0.9).setInteractive();
     btnBg.on('pointerdown', () => this._transitionTo(() =>
-      isCustom ? this._showCustomRelicStep() : this._startBattle()
+      isCustom ? this._showUpgradeStep() : this._startBattle()
     ));
     btnBg.on('pointerover',  () => btnBg.setFillStyle(0x27ae60));
     btnBg.on('pointerout',   () => btnBg.setFillStyle(0x163824));
@@ -905,6 +908,163 @@ export default class SetupScene extends Phaser.Scene {
     this._fadeIn(g);
   }
 
+  // ─── UPGRADE SELECTION ────────────────────────────────────────────────────
+
+  _showUpgradeStep() {
+    if (this._upgradeActiveDie === undefined) this._upgradeActiveDie = 0;
+    this._upgradeActiveDie = Phaser.Math.Clamp(this._upgradeActiveDie, 0, this._diceConfig.length - 1);
+
+    const g          = this._stepGroup = this.add.container(0, 0);
+    const activeDie  = this._upgradeActiveDie;
+    const dc         = this._diceConfig[activeDie];
+
+    const RARITY_COLOR = { common: 0x556677, uncommon: 0x2471a3, rare: 0x6c3483 };
+    const ITEM_H = 96, ITEM_GAP = 8, ITEM_TOTAL = ITEM_H + ITEM_GAP;
+    const LIST_TOP = 118;
+    const LIST_BTM = H - 66;
+    const LIST_H   = LIST_BTM - LIST_TOP;
+    const allUpgr  = UPGRADES;
+    const totalH   = allUpgr.length * ITEM_TOTAL - ITEM_GAP;
+    const maxScroll = Math.max(0, totalH - LIST_H);
+
+    // Title
+    g.add(this.add.text(W / 2, 28, 'UPGRADES', {
+      fontSize: '20px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3,
+    }).setOrigin(0.5));
+
+    // Die selector tabs
+    const tabW = Math.floor((W - 20) / this._diceConfig.length) - 6;
+    const tabsTotalW = this._diceConfig.length * (tabW + 6) - 6;
+    const tabsX0 = (W - tabsTotalW) / 2;
+
+    this._diceConfig.forEach((d, i) => {
+      const dt      = DIE_TYPES[d.type];
+      const isActive = i === activeDie;
+      const tx      = tabsX0 + i * (tabW + 6) + tabW / 2;
+      const fc      = dt ? parseInt(dt.color.replace('#', ''), 16) : 0x334455;
+      const taken   = d.upgradeState?.takenUpgrades ?? [];
+
+      const tabBg = this.add.rectangle(tx, 66, tabW, 30, isActive ? 0x1a2030 : 0x0d0d1c);
+      tabBg.setStrokeStyle(isActive ? 2 : 1, fc, isActive ? 0.9 : 0.35);
+      g.add(tabBg);
+
+      const label = `D${i + 1} ${dt?.sym ?? '?'}`;
+      g.add(this.add.text(tx, 61, label, {
+        fontSize: '12px', color: isActive ? (dt?.color ?? '#aaaaaa') : '#334455',
+        fontStyle: isActive ? 'bold' : 'normal',
+      }).setOrigin(0.5));
+      if (taken.length > 0) {
+        g.add(this.add.text(tx, 75, `×${taken.length}`, {
+          fontSize: '9px', color: isActive ? '#88aacc' : '#2a3848',
+        }).setOrigin(0.5));
+      }
+
+      if (!isActive) {
+        tabBg.setInteractive();
+        tabBg.on('pointerdown', () => {
+          this._upgradeActiveDie = i;
+          this._transitionTo(() => this._showUpgradeStep());
+        });
+        tabBg.on('pointerover', () => tabBg.setFillStyle(0x141424));
+        tabBg.on('pointerout',  () => tabBg.setFillStyle(0x0d0d1c));
+      }
+    });
+
+    // "X selected" summary line under tabs
+    const taken0    = dc.upgradeState?.takenUpgrades ?? [];
+    const summaryTxt = this.add.text(W / 2, 98,
+      taken0.length > 0 ? `${taken0.length} selected` : 'tap to add upgrades', {
+      fontSize: '12px', color: taken0.length > 0 ? '#88aacc' : '#2a3848',
+    }).setOrigin(0.5);
+    g.add(summaryTxt);
+
+    // Scrollable upgrade list
+    let scrollY = 0;
+    const listCont = this.add.container(0, LIST_TOP);
+    g.add(listCont);
+
+    const maskGfx = this.make.graphics({ add: false });
+    maskGfx.fillRect(0, LIST_TOP, W, LIST_H);
+    listCont.setMask(maskGfx.createGeometryMask());
+
+    const items = [];
+
+    allUpgr.forEach((upg, i) => {
+      const iy     = i * ITEM_TOTAL;
+      const cy     = iy + ITEM_H / 2;
+      const uc     = parseInt((upg.color ?? '#ffffff').replace('#', ''), 16);
+      const rarCol = RARITY_COLOR[upg.rarity] ?? RARITY_COLOR.common;
+      const sel    = (dc.upgradeState?.takenUpgrades ?? []).includes(upg.id);
+
+      const bg       = this.add.rectangle(W / 2, cy, W - 32, ITEM_H, sel ? 0x1a1a3a : 0x0d0d1c);
+      bg.setStrokeStyle(1.5, rarCol, sel ? 0.9 : 0.5);
+      const colorBar = this.add.rectangle(16, cy, 4, ITEM_H - 12, uc, sel ? 1 : 0.55);
+      const nameTxt  = this.add.text(28, cy - 28, upg.name, {
+        fontSize: '15px', color: upg.color, fontStyle: 'bold',
+      }).setOrigin(0, 0.5);
+      const rarTxt   = this.add.text(28, cy - 8, upg.rarity.toUpperCase(), {
+        fontSize: '11px', color: '#445566', letterSpacing: 1,
+      }).setOrigin(0, 0.5);
+      const descTxt  = this.add.text(28, cy + 16, UPGRADE_DESCRIPTIONS[upg.id] ?? '', {
+        fontSize: '12px', color: '#8899aa', wordWrap: { width: W - 60 },
+      }).setOrigin(0, 0.5);
+
+      listCont.add([bg, colorBar, nameTxt, rarTxt, descTxt]);
+      items.push({ upg, bg, colorBar, rarCol });
+    });
+
+    // Bottom next button
+    const btnBg = this.add.rectangle(W / 2, H - 38, W - 16, 46, 0x163824);
+    btnBg.setStrokeStyle(1.5, 0x27ae60, 0.9).setInteractive();
+    btnBg.on('pointerdown', () => this._transitionTo(() => this._showCustomRelicStep()));
+    btnBg.on('pointerover', () => btnBg.setFillStyle(0x27ae60));
+    btnBg.on('pointerout',  () => btnBg.setFillStyle(0x163824));
+    g.add(btnBg);
+    g.add(this.add.text(W / 2, H - 38, 'Next  →', {
+      fontSize: '17px', color: '#aaffaa', fontStyle: 'bold', letterSpacing: 2,
+    }).setOrigin(0.5));
+
+    // Drag zone: scroll + tap
+    let ptrDownY = null, scrollAtDown = 0;
+    const dragZone = this.add.rectangle(W / 2, LIST_TOP + LIST_H / 2, W, LIST_H, 0, 0).setInteractive();
+    g.add(dragZone);
+
+    dragZone.on('pointerdown', ptr => { ptrDownY = ptr.y; scrollAtDown = scrollY; });
+
+    const onMove = ptr => {
+      if (!ptr.isDown || ptrDownY === null) return;
+      scrollY = Phaser.Math.Clamp(scrollAtDown + (ptrDownY - ptr.y), 0, maxScroll);
+      listCont.y = LIST_TOP - scrollY;
+    };
+    this.input.on('pointermove', onMove);
+
+    dragZone.on('pointerup', ptr => {
+      if (ptrDownY !== null && Math.abs(ptr.y - ptrDownY) < 8) {
+        const relY = ptr.y - LIST_TOP + scrollY;
+        const idx  = Math.floor(relY / ITEM_TOTAL);
+        if (idx >= 0 && idx < items.length) {
+          const { upg, bg, colorBar, rarCol } = items[idx];
+          if (!dc.upgradeState) dc.upgradeState = { takenUpgrades: [] };
+          const arr    = dc.upgradeState.takenUpgrades;
+          const si     = arr.indexOf(upg.id);
+          const nowSel = si < 0;
+          if (si >= 0) arr.splice(si, 1); else arr.push(upg.id);
+          bg.setFillStyle(nowSel ? 0x1a1a3a : 0x0d0d1c);
+          bg.setStrokeStyle(1.5, rarCol, nowSel ? 0.9 : 0.5);
+          colorBar.setAlpha(nowSel ? 1 : 0.55);
+          const n = arr.length;
+          summaryTxt.setText(n > 0 ? `${n} selected` : 'tap to add upgrades');
+          summaryTxt.setColor(n > 0 ? '#88aacc' : '#2a3848');
+        }
+      }
+      ptrDownY = null;
+    });
+
+    g.once('destroy', () => { this.input.off('pointermove', onMove); maskGfx.destroy(); });
+    this._addBackBtn(g, () => this._showRuneStep());
+    this._fadeIn(g);
+  }
+
   // ─── CUSTOM RELIC SELECTION ───────────────────────────────────────────────
 
   _showCustomRelicStep() {
@@ -1026,7 +1186,7 @@ export default class SetupScene extends Phaser.Scene {
       maskGfx.destroy();
     });
 
-    this._addBackBtn(g, () => this._showRuneStep());
+    this._addBackBtn(g, () => this._showUpgradeStep());
     this._fadeIn(g);
   }
 

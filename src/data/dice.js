@@ -16,30 +16,32 @@ export const SPECIAL_DIE_KEYS = ['poison'];
 
 export const SIDES_PROGRESSION = [4, 6, 8, 10, 12, 20];
 
+const _us = () => ({ takenUpgrades: [] });
+
 export const STARTER_DICE = [
-  { id: 's0', type: 'attack', sides: 6, runeMap: {}, material: null, culledFaces: [] },
-  { id: 's1', type: 'block',  sides: 6, runeMap: {}, material: null, culledFaces: [] },
+  { id: 's0', type: 'attack', sides: 6, runeMap: {}, material: null, culledFaces: [], upgradeState: _us() },
+  { id: 's1', type: 'block',  sides: 6, runeMap: {}, material: null, culledFaces: [], upgradeState: _us() },
 ];
 
 export const FIGHTER_CONFIG = [
-  { id: 'f0', type: 'attack', sides: 6, runeMap: {}, material: null, culledFaces: [] },
-  { id: 'f1', type: 'pierce', sides: 4, runeMap: {}, material: null, culledFaces: [] },
-  { id: 'f2', type: 'block',  sides: 6, runeMap: {}, material: null, culledFaces: [] },
+  { id: 'f0', type: 'attack', sides: 6, runeMap: {}, material: null, culledFaces: [], upgradeState: _us() },
+  { id: 'f1', type: 'pierce', sides: 4, runeMap: {}, material: null, culledFaces: [], upgradeState: _us() },
+  { id: 'f2', type: 'block',  sides: 6, runeMap: {}, material: null, culledFaces: [], upgradeState: _us() },
 ];
 
 export const MAGICIAN_CONFIG = [
-  { id: 'm0', type: 'attack', sides: 6, runeMap: {}, material: null, culledFaces: [] },
-  { id: 'm1', type: 'copy',   sides: 4, runeMap: {}, material: null, culledFaces: [] },
-  { id: 'm2', type: 'block',  sides: 6, runeMap: {}, material: null, culledFaces: [] },
+  { id: 'm0', type: 'attack', sides: 6, runeMap: {}, material: null, culledFaces: [], upgradeState: _us() },
+  { id: 'm1', type: 'copy',   sides: 4, runeMap: {}, material: null, culledFaces: [], upgradeState: _us() },
+  { id: 'm2', type: 'block',  sides: 6, runeMap: {}, material: null, culledFaces: [], upgradeState: _us() },
 ];
 
 export const ALCHEMIST_CONFIG = [
-  { id: 'al0', type: 'attack', sides: 6, runeMap: {}, material: null, culledFaces: [] },
-  { id: 'al1', type: 'poison', sides: 4, runeMap: {}, material: null, culledFaces: [] },
-  { id: 'al2', type: 'block',  sides: 6, runeMap: {}, material: null, culledFaces: [] },
+  { id: 'al0', type: 'attack', sides: 6, runeMap: {}, material: null, culledFaces: [], upgradeState: _us() },
+  { id: 'al1', type: 'poison', sides: 4, runeMap: {}, material: null, culledFaces: [], upgradeState: _us() },
+  { id: 'al2', type: 'block',  sides: 6, runeMap: {}, material: null, culledFaces: [], upgradeState: _us() },
 ];
 
 export const BRUTE_CONFIG = [
-  { id: 'br0', type: 'block', sides: 8, runeMap: {}, material: null, culledFaces: [] },
-  { id: 'br1', type: 'block', sides: 8, runeMap: {}, material: null, culledFaces: [] },
+  { id: 'br0', type: 'block', sides: 8, runeMap: {}, material: null, culledFaces: [], upgradeState: _us() },
+  { id: 'br1', type: 'block', sides: 8, runeMap: {}, material: null, culledFaces: [], upgradeState: _us() },
 ];

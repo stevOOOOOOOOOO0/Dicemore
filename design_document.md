@@ -1,6 +1,6 @@
 # Dicemore — Game Design Document
 
-**Version:** pre-alpha-beta-0.6
+**Version:** pre-alpha-beta-0.14
 **Genre:** Roguelike Dice-Builder
 
 > Sections marked **[PLANNED]** describe intended future design not yet implemented. All other sections describe mechanics that are built and working.
@@ -9,13 +9,13 @@
 
 ## 1. Concept Overview
 
-Dicemore is a roguelike dice-building game set in a western-themed underground dice gambling championship. Everyone in the championship is cheating. The player is a newcomer working their way up the bracket against increasingly slimy opponents. Players collect, upgrade, and manipulate a set of custom dice rather than a deck of cards. Each die has a **type** that determines its effect, and its rolled value scales that effect. Players can attach brands (runes) and apply materials to dice between battles. Combat is resolved by physically throwing dice across a 2D play surface using tap-and-drag, where two physics bumpers act as pinball-style obstacles. Player dice queue their effects and fire sequentially once they settle. Enemies reveal their intent at the start of each turn — a preview of what they plan to do — and the player must decide how to respond.
+Dicemore is a roguelike dice-building game set in a western-themed underground dice gambling championship. Everyone in the championship is cheating. The player is a newcomer working their way up the bracket against increasingly slimy opponents. Players collect, upgrade, and manipulate a set of custom dice rather than a deck of cards. Each die has a **type** that determines its effect, and its rolled value scales that effect. Players can attach brands (runes) and apply materials to dice between battles. Combat is resolved by physically throwing dice across a 2D play surface using tap-and-drag, where two physics bumpers act as pinball-style obstacles. Player dice queue their effects and fire sequentially once they settle. At the start of each turn enemies throw their own dice onto the rolling surface; those dice settle via the same physics as the player's, and the player can physically interact with them — knocking an attack die to a lower value, or risking a boost.
 
 ---
 
 ## 2. Core Fantasy
 
-The player is a con-artist at a rigged dice table, whose power comes from their ability to shape, throw, and redirect fate itself. A master of the dice doesn't just accept what they roll — they aim their throws, bank dice off bumpers, chain collisions for reroll bonuses, and apply brands that bend the rules. When the opponent reveals their intent, the master reads it and decides how to respond: steal big before their protection activates, build block against an incoming grab, or set up a cascade of effects across the queue.
+The player is a con-artist at a rigged dice table, whose power comes from their ability to shape, throw, and redirect fate itself. A master of the dice doesn't just accept what they roll — they aim their throws, bank dice off bumpers, chain collisions for reroll bonuses, and apply brands that bend the rules. When the enemy throws their dice, the master reads the table — nudge their attack die into a lower value, risk pushing their block die higher, or ignore it entirely and focus on dealing damage before the enemy's dice settle.
 
 ---
 
@@ -53,7 +53,7 @@ The player is represented as a **gold circle bumper** fixed at the bottom-center
 
 ### 3.3 Enemy Character
 
-The enemy is a **colored circle bumper** in the upper half. HP and intent symbol display beside it. Tapping the enemy bumper opens an intent popup. The enemy repositions to a random location within the upper half at the start of each new turn.
+The enemy is a **colored circle bumper** in the upper half. HP displays beside it. Tapping the enemy bumper opens the **web view** — thin lines are drawn from the enemy bumper to each of their dice currently on the surface, and each die is highlighted with its type label and current value. Tapping anywhere else closes the view. The enemy repositions to a random location within the upper half at the start of each new turn.
 
 ### 3.4 Hand Tray (Footer)
 
@@ -143,9 +143,8 @@ Each combat turn proceeds in four phases: **PREP → ENEMY_ROLL → PLAYER_ROLL 
 ### 5.3 Enemy Roll Phase (ENEMY_ROLL)
 
 1. Enemy poison ticks: enemy takes damage equal to stack count. If `_suppressPoisonDecay` is false, stack count decreases by 1.
-2. Enemy draws their **intent** for this turn from a weighted pool.
-3. If the intent contains a **block** component, that value is stored as pending and activates at the start of the next turn.
-4. **Obstacle dice** — blank physics dice equal to `obstacleCount` for this enemy are thrown onto the surface. No effect on settle; purely physical blockers. Each is spawned with `sides: 6`.
+2. **Enemy dice are thrown** — each die in the enemy's `enemyDice` config is auto-thrown onto the surface with a randomised angle and force. They use the same physics bodies as player dice and settle by the same `SETTLE_VEL` threshold.
+3. **Obstacle dice** — blank physics dice equal to `obstacleCount` for this enemy are thrown onto the surface. No effect on settle; purely physical blockers. Each is spawned with `sides: 6`.
 
 ### 5.4 Player Rolling Phase (PLAYER_ROLL)
 
@@ -161,15 +160,15 @@ Each combat turn proceeds in four phases: **PREP → ENEMY_ROLL → PLAYER_ROLL 
 
 ### 5.5 Commit Phase (COMMIT)
 
-Enemy acts on their intent:
+Each settled enemy die resolves by type, using its **settled face value** as the magnitude:
 
-- **Attack:** deals damage, reduced by player block.
-- **Block:** pending value stored for next turn.
-- **Strength:** adds permanently to enemy attack damage.
-- **Vulnerable / Frail:** applies to player for 3 turns.
-- **Multi:** processes a list of sub-intents in sequence.
+- **Attack (ATK):** deals settled value as damage, reduced by player block.
+- **Block (BLK):** stores settled value as pending block; activates at start of next turn.
+- **Strength (STR):** adds settled value permanently to enemy strength.
+- **Vulnerable (VUL):** applies Vulnerable to the player for settled value turns (+50% damage taken).
+- **Frail (FRL):** applies Frail to the player for settled value turns (player dice deal half damage).
 
-After enemy acts, `ON_TURN_END` fires. Obstacle dice are cleared. If player HP reaches 0 → game over.
+Enemy dice are cleared from the surface after all effects resolve. After enemy acts, `ON_TURN_END` fires. Obstacle dice are cleared. If player HP reaches 0 → game over.
 
 ---
 
@@ -183,7 +182,7 @@ Queue cards appear in a vertical column on the left side of the rolling surface.
 
 Enemy block uses a **one-turn delay** ("casting" model):
 
-- When the enemy draws a **block** intent, the value is stored as pending block — does not activate this turn.
+- When an enemy block die settles, its value is stored as pending block — does not activate this turn.
 - At the start of the following turn (PREP), pending block becomes active `enemyBlock`.
 - While active, `enemyBlock` absorbs player Steal damage. Pierce and Rock material bypass it entirely.
 - The block shield displays beside the enemy bumper as an arc with the remaining value.
@@ -193,39 +192,122 @@ Enemy block uses a **one-turn delay** ("casting" model):
 
 ## 8. Enemy System
 
-### 8.1 Intent System
+### 8.1 Enemy Dice
 
-| Type         | Effect                                                                       |
-| ------------ | ---------------------------------------------------------------------------- |
-| `attack`     | Deals `value` damage to player at commit.                                    |
-| `block`      | Queues `value` block, activates next turn.                                   |
-| `strength`   | Adds `value` to enemy's permanent strength (stacks, lasts the whole battle). |
-| `vulnerable` | Applies Vulnerable to player for 3 turns (+50% damage taken).                |
-| `frail`      | Applies Frail to player for 3 turns (dice deal half damage).                 |
-| `multi`      | Processes an array of sub-intents in sequence.                               |
+Each enemy carries a set of **enemy dice** — 1 to 4 dice depending on tier. At the start of ENEMY_ROLL, all enemy dice are auto-thrown onto the rolling surface with randomised angles and forces. They use identical physics bodies to player dice (circular, radius 20 px, same constants) and settle by the same `SETTLE_VEL` threshold.
 
-### 8.2 Enemy Roster
+During PLAYER_ROLL, enemy dice are live on the table. Player dice can physically collide with them, rerolling them on contact. This is the core player agency point: aim to knock an attack die to a lower value, but risk boosting it or triggering a block die instead.
 
-| #   | Key                | Name             | Tier     | HP  | Obstacles |
-| --- | ------------------ | ---------------- | -------- | --- | --------- |
-| —   | `training_dummy`   | The Greenhorn    | tutorial | 10  | 0         |
-| 1   | `red_louse`        | Two-Bit Hank     | minion   | 18  | 1         |
-| 2   | `cultist`          | Snake Eyes Sally | minion   | 16  | 1         |
-| 3   | `jaw_worm`         | The Dandy        | minion   | 28  | 1         |
-| 4   | `spike_slime`      | The Reverend     | standard | 36  | 2         |
-| 5   | `green_louse`      | Mad-Eye McGee    | standard | 28  | 2         |
-| 6   | `fungal_beast`     | The Widow        | standard | 44  | 2         |
-| 7   | `gremlin_nob`      | The Baron        | elite    | 56  | 3         |
-| 8   | `lagavulin`        | Iron Iris        | elite    | 68  | 3         |
-| 9   | `bronze_automaton` | The House        | elite    | 60  | 3         |
-| 10  | `slime_lord`       | The House (TBD)  | elite    | 92  | 4         |
-| 11  | `hexaghost`        | The Devil        | boss     | 104 | 4         |
+At COMMIT, each settled enemy die resolves its effect (type + face value). Enemy dice are then cleared from the surface.
+
+Because enemy dice share the same architecture as player dice, they can carry upgrades and brands in future iterations using the same systems.
+
+### 8.2 Enemy Die Types
+
+| Type         | Sym | Effect on Commit                                                                    |
+| ------------ | --- | ----------------------------------------------------------------------------------- |
+| `attack`     | ATK | Deal settled value as damage to player, reduced by block.                           |
+| `block`      | BLK | Store settled value as pending block; activates at start of next turn.              |
+| `strength`   | STR | Add settled value permanently to enemy strength.                                    |
+| `vulnerable` | VUL | Apply Vulnerable to player for settled value turns (+50% damage taken).             |
+| `frail`      | FRL | Apply Frail to player for settled value turns (player dice deal half damage).        |
+
+### 8.3 Web View (Tap Enemy)
+
+Tapping the enemy bumper during PLAYER_ROLL opens the **web view**: thin lines are drawn from the enemy bumper to each of the enemy's live dice on the surface. Each die is highlighted and shows its type label (ATK / BLK / etc.) and current face value. Tapping anywhere else closes the view. The web view is purely cosmetic — it does not pause the game or block throwing.
+
+### 8.4 Visual Differentiation
+
+Enemy dice use a warm red/orange palette distinct from player dice. The die's type symbol is visible on the face at all times, and the current value animates while the die is in motion (same spin-display logic as player dice).
+
+### 8.5 Enemy Roster
+
+Dice values updated to double the original — enemy dice sides were too weak at the original scale.
+
+| #   | Key                | Name             | Tier     | HP  | Obstacles | Enemy Dice                            | Ability            |
+| --- | ------------------ | ---------------- | -------- | --- | --------- | ------------------------------------- | ------------------ |
+| —   | `training_dummy`   | The Greenhorn    | tutorial | 14  | 0         | 1× d8 ATK                            | —                  |
+| 1   | `red_louse`        | Two-Bit Hank     | minion   | 26  | 1         | 1× d12 ATK                           | —                  |
+| 2   | `cultist`          | Snake Eyes Sally | minion   | 24  | 1         | 1× d12 ATK, 1× d8 FRL               | —                  |
+| 3   | `jaw_worm`         | The Dandy        | minion   | 42  | 1         | 1× d16 ATK                           | —                  |
+| 4   | `spike_slime`      | The Reverend     | standard | 52  | 2         | 1× d16 ATK, 1× d12 BLK              | —                  |
+| 5   | `green_louse`      | Mad-Eye McGee    | standard | 44  | 2         | 2× d12 ATK                           | —                  |
+| 6   | `fungal_beast`     | The Widow        | standard | 62  | 2         | 1× d16 ATK, 1× d12 STR              | —                  |
+| 7   | `gremlin_nob`      | The Baron        | elite    | 80  | 3         | 1× d20 ATK, 1× d12 STR              | —                  |
+| 8   | `lagavulin`        | Iron Iris        | elite    | 96  | 3         | 1× d20 ATK, 1× d16 BLK              | —                  |
+| 9   | `bronze_automaton` | The House        | elite    | 86  | 3         | 2× d16 ATK, 1× d12 BLK              | —                  |
+| 10  | `slime_lord`       | The House (TBD)  | elite    | 130 | 4         | 2× d20 ATK, 1× d14 STR              | —                  |
+| 11  | `hexaghost`        | The Devil        | boss     | 150 | 4         | 2× d20 ATK, 1× d16 BLK, 1× d12 STR | —                  |
 
 The Greenhorn is used only in the tutorial and uses the Dice Slinger class loadout.
 
-### 8.3 Enemy Strength & Vulnerable
+### 8.6 Enemy Strength & Vulnerable
 
 Enemy Strength stacks accumulate permanently during a battle. Enemy Vulnerable (`enemyVulnerable`) makes the enemy take 50% more damage from Steal dice, resets each turn. Enemy Weakened (`enemyWeakened`) halves enemy attack damage, resets each turn.
+
+### 8.7 Enemy Passive Abilities
+
+Enemies can carry one or more **passive abilities** that modify the physics rules or player mechanics for the duration of that enemy's turn. Abilities are declared in `faces.js` under the `abilities` array on an enemy definition and are applied at the start of `ENEMY_ROLL`, then torn down after `_clearSurface()`.
+
+Each ability entry has an `id` and an optional `value`. A list of teardown callbacks (`_abilityCleanup[]`) is flushed at the end of each turn so no state leaks between rounds.
+
+#### Ability IDs
+
+| ID                  | Effect                                                                                                                                                              |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bouncy_bumpers`    | Sets enemy bumper restitution to 2.0 for the turn. Player dice rocket off the bumper unpredictably. The bumper is no longer a reliable aiming target.               |
+| `sticky_walls`      | Sets wall friction to maximum and restitution to 0. Dice that hit a wall crawl to a stop instead of bouncing. Kills wall-ball strategies entirely.                  |
+| `glass_curse`       | All player dice on the tray are flagged as Glass for the turn. They shatter and trigger twice on their first physical contact with any other die or bumper.          |
+| `obstacle_buff`     | Each time any die (player or enemy) contacts an obstacle die this turn, the enemy gains `+value` Strength permanently.                                              |
+| `contact_drain`     | Every time a player die contacts anything (die, wall, or bumper), its `_valueBonus` decreases by 1. Dice that collide a lot settle significantly weaker.            |
+| `bumper_enrage`     | Each time a player die contacts the enemy bumper this turn, the enemy permanently gains `+value` Strength. The standard chip-damage payoff is reversed into a risk. |
+| `flat_reduction`    | Reduces every player die's settled value by `value` before its effect fires. Flat, not percentage — predictable and readable.                                       |
+| `bullet_throws`     | Overrides the minimum throw speed to a high value. Every throw goes fast regardless of gesture length. Difficult to aim precisely; dice careen unpredictably.       |
+| `weak_throws`       | Caps the maximum throw speed at half normal. Dice barely reach the enemy bumper. Pairs poorly with featherlight upgrades.                                           |
+
+#### Suggested enemy alternatives using abilities
+
+Each of the following is a named alternate version of an existing roster slot, selectable via a future branching map. The player would see one or the other per run, not both.
+
+| Replaces           | Alt key              | Alt name      | Ability            | Design note                                                                              |
+| ------------------ | -------------------- | ------------- | ------------------ | ---------------------------------------------------------------------------------------- |
+| `cultist`          | `witch`              | The Hex       | `bumper_enrage`    | Punishes the instinct to aim for the bumper; turns a reward loop into a liability.       |
+| `spike_slime`      | `shatter_slime`      | The Smashball | `glass_curse`      | Slime theme, destroys player dice on contact rather than debuffing stats.                |
+| `green_louse`      | `swarm`              | The Pack      | `contact_drain`    | Two dice = lots of collisions = lots of drain. Rewards clean, minimal-contact throws.    |
+| `fungal_beast`     | `mycelium`           | The Tangle    | `obstacle_buff`    | Obstacles feel like mycelium tendrils; hitting them feeds the beast.                     |
+| `gremlin_nob`      | `pinball_nob`        | Pinball Pete  | `bouncy_bumpers`   | Elite-tier chaos. Every round is structurally different. High-skill ceiling to play around. |
+| `lagavulin`        | `tar_giant`          | Tar Molly     | `sticky_walls`     | Slow and oppressive. Shuts down wall-bounce and featherlight strategies.                 |
+| `bronze_automaton` | `artillery_bot`      | The Gatling   | `bullet_throws`    | Forces the player to deal with their own uncontrollable speed. Chaotic table state.      |
+| `jaw_worm`         | `void_worm`          | The Maw       | `flat_reduction`   | Simple, readable debuff as the first non-trivial minion.                                 |
+
+#### Implementation sketch
+
+```
+faces.js:
+  abilities: [{ id: 'bouncy_bumpers', duration: 'turn' }]
+  abilities: [{ id: 'obstacle_buff',  value: 2 }]
+
+BattleScene.js:
+  _enemyRollPhase():
+    (this.enemyDef.abilities ?? []).forEach(ab => this._applyEnemyAbility(ab))
+
+  _applyEnemyAbility(ab):
+    switch ab.id:
+      'bouncy_bumpers' → enemyBumperBody.restitution = 2.0
+                         _abilityCleanup.push(() => reset)
+      'sticky_walls'   → wallBodies.forEach(b => b.friction = 8, b.restitution = 0)
+                         _abilityCleanup.push(() => reset)
+      'glass_curse'    → playerDice.forEach(d => d._cursedGlass = true)
+      'obstacle_buff'  → _obstacleBuffPerHit = ab.value
+                         _abilityCleanup.push(() => reset)
+      ... etc.
+
+  _clearSurface():
+    _abilityCleanup.forEach(fn => fn())
+    _abilityCleanup = []
+```
+
+Abilities that modify the collision handler (`obstacle_buff`, `contact_drain`, `bumper_enrage`) read a flag set by `_applyEnemyAbility` rather than checking the ability list directly, so the collision handler stays a simple flag check rather than an array scan per-collision.
 
 ---
 
@@ -662,6 +744,7 @@ After each fight the player chooses their next table (replaces current linear se
 | **Buff die design**               | The Pierce die was redesigned as the Buff (BUF) die: adds its rolled value to `cleanBonus`, a flat bonus applied to all other dice that turn. Does not directly deal damage.   |
 | **Copy die default**              | If a Copy die never physically touches another player die, it deals 1 weak steal rather than doing nothing.                                                                    |
 | **Physics body shape**            | Circular, not square. Square bodies caused excessive energy loss at wall contacts.                                                                                             |
+| **Enemy intent → enemy dice**     | Replaced the static weighted-intent system with fully physical enemy dice. Enemy dice land on the table at turn start; the player can physically nudge them before COMMIT.      |
 
 ### 24.2 Open Questions
 
@@ -669,6 +752,8 @@ After each fight the player chooses their next table (replaces current linear se
 2. **Double Down cancellation** — Double Down Brand should cancel the die's base effect on minimum face, but the base effect fires before the brand. Requires pre-effect architecture change to implement properly.
 3. **Reroll token refresh** — Once per battle vs. once per turn? Currently once per battle.
 4. **Copy die and brands** — If a Copy die mimics Steal, does the Copy die's own brand still check its face index? Currently yes.
-5. **Enemy bumper on enemy dice** — Enemy obstacle dice currently do not deal damage when hitting the player bumper. Should they?
-6. **House Cut governor** — Lexicon notes this may be HP-positive in short fights. Needs playtesting.
-7. **Obstacle object variety** — Each opponent should have unique obstacle objects per the western theme. Currently all obstacles are generic dice.
+5. **House Cut governor** — Lexicon notes this may be HP-positive in short fights. Needs playtesting.
+6. **Obstacle object variety** — Each opponent should have unique obstacle objects per the western theme. Currently all obstacles are generic dice.
+7. **Enemy die upgrade potential** — Enemy dice use the same architecture as player dice. Should harder enemies have brands or materials on their dice? No mechanic planned yet.
+8. **Enemy bumper damage guard** — Enemy combat dice hitting their own bumper no longer deal chip damage to the enemy (guarded by `isPlayer` check). Was this the right call?
+9. **Player agency vs. randomness** — Enemy dice values are random on each throw. Should players be able to see the range (die size) in the web view? Currently only the current face and type are shown.

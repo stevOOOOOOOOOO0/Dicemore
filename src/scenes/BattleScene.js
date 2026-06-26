@@ -10,8 +10,11 @@ import {
 import RelicManager from '../systems/RelicManager.js';
 import EventBus from '../systems/EventBus.js';
 import { RUNE_HANDLERS } from '../systems/RuneRegistry.js';
+import { UPGRADE_MAP, UPGRADE_DESCRIPTIONS } from '../data/upgrades.js';
 
 const PHASE = { PREP: 0, ENEMY_ROLL: 1, PLAYER_ROLL: 2, COMMIT: 3 };
+const ENEMY_DIE_TYPE_COLORS = { attack: '#e74c3c', block: '#3498db', strength: '#e67e22', vulnerable: '#bb44cc', frail: '#1abc9c' };
+const ENEMY_DIE_TYPE_SYMS   = { attack: 'ATK', block: 'BLK', strength: 'STR', vulnerable: 'VUL', frail: 'FRL' };
 
 const INTENT = {
   attack:     { label: 'ATTACK',  color: '#e74c3c' },
@@ -100,6 +103,23 @@ export default class BattleScene extends Phaser.Scene {
     this._ashenActive           = false;
     this._intentPopup        = null;
     this._relicPopup         = null;
+    this._webViewActive      = false;
+    this._webViewGfx         = null;
+    this._webViewLabels      = [];
+    this._webViewDim         = null;
+
+    this._reductionStacks    = 0;
+    this._settledValuesThisTurn = [];
+    this._mines              = [];
+
+    this._abilityCleanup      = [];
+    this._obstacleBuffPerHit  = 0;
+    this._contactDrainActive  = false;
+    this._bumperEnragePerHit  = 0;
+    this._playerDiceReduction = 0;
+    this._minThrowOverride    = 0;
+    this._maxThrowOverride    = 0;
+    this._glassCurseActive    = false;
 
     this.trayCards          = [];
     this.throwCount         = 0;
@@ -135,6 +155,7 @@ export default class BattleScene extends Phaser.Scene {
     this._buildRelicStrip();
     this._buildEnemyCharacter();
     this._buildPlayerCharacter();
+    this._processSpecialistSwarm();
     this._buildDieStrip();
     this._buildCommitOverlay();
     this._setupCollisions();
@@ -175,13 +196,16 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   _buildWalls() {
-    const opt = { isStatic: true, label: 'wall', friction: 0, frictionStatic: 0, restitution: 0.925 };
+    const opt = { isStatic: true, label: 'wall', friction: 0, frictionStatic: 0, restitution: 0.925,
+                  collisionFilter: { category: 0x0020, mask: 0xFFFFFFFF } };
     const cy  = (SURFACE_TOP + SURFACE_BOTTOM) / 2;
     const sh  = SURFACE_BOTTOM - SURFACE_TOP + WALL_T * 2;
-    this.matter.add.rectangle(-WALL_T / 2,    cy, WALL_T, sh, opt);
-    this.matter.add.rectangle(W + WALL_T / 2, cy, WALL_T, sh, opt);
-    this.matter.add.rectangle(W / 2, SURFACE_TOP    - WALL_T / 2, W + WALL_T * 2, WALL_T, opt);
-    this.matter.add.rectangle(W / 2, SURFACE_BOTTOM + WALL_T / 2, W + WALL_T * 2, WALL_T, opt);
+    this._wallBodies = [
+      this.matter.add.rectangle(-WALL_T / 2,    cy, WALL_T, sh, opt),
+      this.matter.add.rectangle(W + WALL_T / 2, cy, WALL_T, sh, opt),
+      this.matter.add.rectangle(W / 2, SURFACE_TOP    - WALL_T / 2, W + WALL_T * 2, WALL_T, opt),
+      this.matter.add.rectangle(W / 2, SURFACE_BOTTOM + WALL_T / 2, W + WALL_T * 2, WALL_T, opt),
+    ];
   }
 
   _buildHeaderStrip() {
@@ -190,6 +214,17 @@ export default class BattleScene extends Phaser.Scene {
     this.battleMsgTxt = this.add.text(W / 2, mid + 16, '', { fontSize: '17px', color: '#ffffff', wordWrap: { width: W - 60 } }).setOrigin(0.5, 0.5);
     this.potLabelTxt  = this.add.text(W - 8, 6, 'POT', { fontSize: '10px', color: '#8b7a40', letterSpacing: 1 }).setOrigin(1, 0);
     this.potTxt       = this.add.text(W - 8, 18, '0', { fontSize: '22px', color: '#f0c040', fontStyle: 'bold' }).setOrigin(1, 0);
+
+    // Info button — bottom-right of header strip
+    const ibx = W - 14, iby = 62;
+    const ibCircle = this.add.circle(ibx, iby, 11, 0x1a2a44, 0.95).setDepth(25).setInteractive();
+    ibCircle.setStrokeStyle(1.5, 0x4477bb, 0.9);
+    this.add.text(ibx, iby, 'i', {
+      fontSize: '13px', color: '#88aadd', fontStyle: 'bold italic',
+      stroke: '#000000', strokeThickness: 2,
+    }).setOrigin(0.5, 0.5).setDepth(26);
+    ibCircle.on('pointerdown', () => this._showHowToPlay());
+
     this._refreshStatusUI();
   }
 
@@ -241,6 +276,88 @@ export default class BattleScene extends Phaser.Scene {
     pop.add(this.add.text(panelX - panelW / 2 + 14, panelY + 18, relic.description, {
       fontSize: '13px', color: '#8899aa', wordWrap: { width: panelW - 28 },
     }).setOrigin(0, 0.5));
+  }
+
+  _showHowToPlay() {
+    if (this._howToPlayPanel) return;
+
+    const cx = W / 2, cy = H / 2;
+    const panelW = W - 28, panelH = H - 80;
+
+    const pop = this._howToPlayPanel = this.add.container(0, 0).setDepth(90);
+
+    // Dim overlay — tap anywhere to close
+    const dim = this.add.rectangle(cx, cy, W, H, 0x000000, 0.75).setInteractive();
+    dim.on('pointerdown', close);
+    pop.add(dim);
+
+    // Panel background + border
+    const panel = this.add.rectangle(cx, cy, panelW, panelH, 0x080f1c, 0.98)
+      .setStrokeStyle(2, 0x2255aa, 0.9);
+    pop.add(panel);
+
+    // Title
+    pop.add(this.add.text(cx, cy - panelH / 2 + 20, 'HOW TO PLAY', {
+      fontSize: '17px', color: '#aaccff', fontStyle: 'bold', letterSpacing: 3,
+    }).setOrigin(0.5, 0.5));
+
+    // Content
+    const LEFT   = cx - panelW / 2 + 16;
+    const WRAP_W = panelW - 32;
+    const sections = [
+      { head: 'THROWING DICE' },
+      '• Drag from the field upward to aim, release to throw',
+      '• Dice bounce off walls and bumpers before settling',
+      '• Each die in your tray throws one at a time, left to right',
+      { head: 'DIE TYPES' },
+      '• Attack — deal damage equal to the rolled value',
+      '• Block — absorb that much incoming damage this turn',
+      '• Buff — boost every die that settles after this one',
+      '• Poison — apply stacks to the enemy; each stack deals 1 damage per turn',
+      { head: 'BUMPERS' },
+      '• Hitting the enemy bumper deals 1 chip damage and rerolls the die',
+      '• More bounces = more chip hits and more rerolls',
+      '• The enemy bumper may have passive abilities — check their icon',
+      { head: 'ENEMY TURN' },
+      '• After you COMMIT, the enemy throws their own dice',
+      '• Attack dice reduce your HP minus your current block',
+      '• Block dice shield the enemy from damage next turn',
+      '• Strength dice permanently increase the enemy\'s attack',
+      { head: 'UPGRADES' },
+      '• Win battles to earn upgrade offers between rounds',
+      '• Each upgrade targets one die and is permanent for the run',
+      '• Tap any tray card before throwing to inspect its upgrades',
+    ];
+
+    let yPos = cy - panelH / 2 + 50;
+    sections.forEach(item => {
+      if (typeof item === 'object') {
+        pop.add(this.add.text(LEFT, yPos, item.head, {
+          fontSize: '10px', color: '#ffcc44', fontStyle: 'bold', letterSpacing: 2,
+        }).setOrigin(0, 0.5));
+        yPos += 18;
+      } else {
+        const t = this.add.text(LEFT + 4, yPos, item, {
+          fontSize: '11px', color: '#99aabb', wordWrap: { width: WRAP_W },
+        }).setOrigin(0, 0);
+        pop.add(t);
+        yPos += t.height + 4;
+      }
+    });
+
+    // Close button
+    const closeBtn = this.add.text(cx, cy + panelH / 2 - 22, 'CLOSE', {
+      fontSize: '14px', color: '#4488ff', fontStyle: 'bold',
+      backgroundColor: '#111a2e', padding: { x: 24, y: 7 },
+    }).setOrigin(0.5, 0.5).setInteractive();
+    closeBtn.on('pointerdown', close);
+    pop.add(closeBtn);
+
+    const self = this;
+    function close() {
+      self._howToPlayPanel?.destroy();
+      self._howToPlayPanel = null;
+    }
   }
 
   // ─── ENEMY CHARACTER (bumper) ─────────────────────────────────────────────
@@ -322,6 +439,51 @@ export default class BattleScene extends Phaser.Scene {
 
     this._refreshEnemyCharacter();
     this._createEnemyPhysicsBody();
+    this._buildBumperDecoys();
+  }
+
+  _buildBumperDecoys() {
+    this._decoyBumpers = [];
+    if (!this.relicManager.active.some(r => r.id === 'bumper_decoy')) return;
+    const R   = ENEMY_BUMPER_R;
+    const col = parseInt(this.enemyDef.color.replace('#', ''), 16);
+    // Place two fakes symmetrically, flanking the real bumper
+    const positions = [
+      { x: 90,  y: 262 },
+      { x: 310, y: 262 },
+    ];
+    positions.forEach(pos => {
+      const cont = this.add.container(pos.x, pos.y).setDepth(14);
+
+      const glow = this.add.graphics();
+      glow.lineStyle(4, col, 0.3);
+      glow.strokeCircle(0, 0, R + 10);
+      cont.add(glow);
+
+      const bg = this.add.graphics();
+      bg.fillStyle(0x080814, 0.92);
+      bg.fillCircle(0, 0, R);
+      cont.add(bg);
+
+      const ring = this.add.graphics();
+      ring.lineStyle(2, col, 0.9);
+      ring.strokeCircle(0, 0, R);
+      cont.add(ring);
+
+      const intentTxt = this.add.text(0, -3, '?', {
+        fontSize: '11px', color: '#ffffff', fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 3, align: 'center',
+      }).setOrigin(0.5, 0.5);
+      cont.add(intentTxt);
+
+      const nameTxt = this.add.text(0, -R - 16, this.enemyDef.name.toUpperCase(), {
+        fontSize: '17px', color: this.enemyDef.color, fontStyle: 'bold', letterSpacing: 2
+      }).setOrigin(0.5, 0.5);
+      cont.add(nameTxt);
+
+      this.tweens.add({ targets: glow, alpha: 0.3, duration: 1100 + Math.random() * 200, yoyo: true, repeat: -1 });
+      this._decoyBumpers.push(cont);
+    });
   }
 
   _createEnemyPhysicsBody() {
@@ -390,7 +552,6 @@ export default class BattleScene extends Phaser.Scene {
     }
 
     this._refreshEnemyPills();
-    this._refreshIntentDisplay();
     this._refreshBlockShield();
   }
 
@@ -529,6 +690,58 @@ export default class BattleScene extends Phaser.Scene {
     if (!this._intentPopup) return;
     this._intentPopup.destroy(true);
     this._intentPopup = null;
+  }
+
+  // ─── WEB VIEW (enemy dice overlay) ───────────────────────────────────────
+
+  _toggleWebView() {
+    if (this._webViewActive) this._hideWebView();
+    else this._showWebView();
+  }
+
+  _showWebView() {
+    if (this._webViewActive) return;
+    this._webViewActive = true;
+
+    const combatDice = this.enemyDice.filter(d => d._isEnemyCombatDie && d.img?.active);
+    const eCol = parseInt(this.enemyDef.color.replace('#', ''), 16);
+
+    this._webViewGfx = this.add.graphics().setDepth(50);
+
+    combatDice.forEach(eDie => {
+      const dx = eDie.img.x;
+      const dy = eDie.img.y;
+      this._webViewGfx.lineStyle(2, eCol, 0.55);
+      this._webViewGfx.beginPath();
+      this._webViewGfx.moveTo(this.enemyPos.x, this.enemyPos.y);
+      this._webViewGfx.lineTo(dx, dy);
+      this._webViewGfx.strokePath();
+      this._webViewGfx.lineStyle(3, eCol, 0.8);
+      this._webViewGfx.strokeCircle(dx, dy, DIE_SIZE / 2 + 8);
+
+      const value = (Math.floor(eDie.data.currentFaceIdx / 2) + 1) * 2;
+      const sym   = ENEMY_DIE_TYPE_SYMS[eDie.data.type] ?? '?';
+      const lbl   = this.add.text(dx, dy - DIE_SIZE / 2 - 10, `${sym} ${value}`, {
+        fontSize: '13px', color: this.enemyDef.color, fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 3,
+      }).setOrigin(0.5, 1).setDepth(51);
+      this._webViewLabels.push(lbl);
+    });
+
+    const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0)
+      .setDepth(49).setInteractive();
+    dim.on('pointerdown', () => this._hideWebView());
+    this._webViewDim = dim;
+  }
+
+  _hideWebView() {
+    this._webViewActive = false;
+    this._webViewGfx?.destroy();
+    this._webViewGfx = null;
+    this._webViewLabels.forEach(l => l?.destroy());
+    this._webViewLabels = [];
+    this._webViewDim?.destroy();
+    this._webViewDim = null;
     if (this._tutorialMode && this._tutStep === 2) this._tutIntentViewed = true;
   }
 
@@ -905,15 +1118,63 @@ export default class BattleScene extends Phaser.Scene {
 
         // Die-die: material checks then reroll the slower one
         if (dA && dB) {
-          // Glass: shatters both on contact
-          const glassA = dA.isPlayer && dA.data.material === 'glass';
-          const glassB = dB.isPlayer && dB.data.material === 'glass';
-          if (glassA || glassB) {
+          // Glass material OR Glass upgrade: shatters on first die contact, triggers 2×
+          const glassA = dA.isPlayer && (dA.data.material === 'glass' || this._hasDieUpgrade(dA.data, 'glass') || dA._cursedGlass);
+          const glassB = dB.isPlayer && (dB.data.material === 'glass' || this._hasDieUpgrade(dB.data, 'glass') || dB._cursedGlass);
+          if (glassA && !dA._destroyTriggered) {
+            dA._destroyTriggered = true;
+            this._floatText(dA.img?.x ?? 0, (dA.img?.y ?? 0) - 24, 'GLASS!', '#ff6633');
+            this._applyDieFaceImmediate(dA, true, null, null, true);
+            this._applyDieFaceImmediate(dA, true, null, null, true);
             this._shatterDie(dA);
-            this._shatterDie(dB);
-            return;
+            // Force-settle the hit die so its effect also fires
+            this._forceSettleDie(dB);
           }
+          if (glassB && !dB._destroyTriggered) {
+            dB._destroyTriggered = true;
+            this._floatText(dB.img?.x ?? 0, (dB.img?.y ?? 0) - 24, 'GLASS!', '#ff6633');
+            this._applyDieFaceImmediate(dB, true, null, null, true);
+            this._applyDieFaceImmediate(dB, true, null, null, true);
+            this._shatterDie(dB);
+            // Force-settle the hit die so its effect also fires
+            this._forceSettleDie(dA);
+          }
+          if (glassA || glassB) return;
 
+          // Bulletproof Glass upgrade: track contact hits
+          if (dA.isPlayer && this._hasDieUpgrade(dA.data, 'bulletproof_glass')) this._handleBulletproofHit(dA);
+          if (dB.isPlayer && this._hasDieUpgrade(dB.data, 'bulletproof_glass')) this._handleBulletproofHit(dB);
+
+          // Destroy Contacts: infect a die on its first touch by the upgrade die.
+          // After infection the die shatters after further contacts with ANYTHING
+          // (walls, bumpers, any die) — ticked by _tickInfectedContact at each site.
+          const dAWasInfected = (dA._infectHits ?? 0) > 0;
+          const dBWasInfected = (dB._infectHits ?? 0) > 0;
+          const _checkDestroyContacts = (attacker, target) => {
+            if (!attacker.isPlayer) return;
+            if (!this._hasDieUpgrade(attacker.data, 'destroy_contacts')) return;
+            if (!target.img?.active || !this.allDice.includes(target)) return;
+            if ((target._infectHits ?? 0) > 0) return; // already infected
+            target._infectHits = 1;
+            this._applyCrackOverlay(target);
+            this._floatText(target.img?.x ?? 0, (target.img?.y ?? 0) - 24, 'INFECTED', '#ff6633');
+          };
+          _checkDestroyContacts(dA, dB);
+          _checkDestroyContacts(dB, dA);
+          // Tick already-infected dice — snapshot taken before infection so the
+          // same collision that infects doesn't also count as the second hit.
+          if (dAWasInfected) this._tickInfectedContact(dA);
+          if (dBWasInfected) this._tickInfectedContact(dB);
+
+          // Black Hole: any player die that contacts it during pull is destroyed and triggers max face
+          if (dA._blackHole && dB.isPlayer && this.allDice.includes(dB)) {
+            this._applyMaxFaceDamage(dB);
+            this._shatterDie(dB);
+          }
+          if (dB._blackHole && dA.isPlayer && this.allDice.includes(dA)) {
+            this._applyMaxFaceDamage(dA);
+            this._shatterDie(dA);
+          }
 
           // Copy die: remember the last player die type it touched
           if (dA.isPlayer && dA.data.type === 'copy' && dB.isPlayer && dB.data.type !== 'copy') {
@@ -923,8 +1184,6 @@ export default class BattleScene extends Phaser.Scene {
             dB._mimicType = dA.data.type;
           }
 
-          dA._hadCollision = true;
-          dB._hadCollision = true;
           if (dA.isPlayer && dA._firstContactedDie === undefined) dA._firstContactedDie = dB;
           if (dB.isPlayer && dB._firstContactedDie === undefined) dB._firstContactedDie = dA;
           if (dA.isPlayer) { if (!dA._contactedDice) dA._contactedDice = new Set(); dA._contactedDice.add(dB); }
@@ -949,6 +1208,21 @@ export default class BattleScene extends Phaser.Scene {
           if (dB._gravityWell && dA.isPlayer && !rerolled.has(dA)) {
             rerolled.add(dA); this._rerollDie(dA);
           }
+
+          // obstacle_buff: enemy gains strength whenever any die touches an obstacle die
+          if (this._obstacleBuffPerHit > 0 && (dA.data?.isObstacle || dB.data?.isObstacle)) {
+            this.enemyStrength = (this.enemyStrength ?? 0) + this._obstacleBuffPerHit;
+            this._refreshEnemyCharacter();
+            this._floatText(this.enemyPos.x, this.enemyPos.y - 30, `+${this._obstacleBuffPerHit} STR`, '#e67e22');
+          }
+          // contact_drain: each die-die contact reduces value bonus
+          if (this._contactDrainActive) {
+            if (dA.isPlayer) dA._valueBonus = (dA._valueBonus ?? 0) - 1;
+            if (dB.isPlayer) dB._valueBonus = (dB._valueBonus ?? 0) - 1;
+          }
+          // sign: flip face value on die-die contact
+          if (dA.isPlayer) this._applySignToggle(dA);
+          if (dB.isPlayer) this._applySignToggle(dB);
           return;
         }
 
@@ -957,6 +1231,12 @@ export default class BattleScene extends Phaser.Scene {
         const dieBody = dA ? bodyA : bodyB;
         const other   = dA ? bodyB : bodyA;
 
+        // Mine contact
+        if (other?.label === 'mine') {
+          const mine = this._mines.find(m => m.body === other && !m.triggered && m.armed);
+          if (mine) { mine.triggered = true; this._triggerMine(mine); }
+        }
+
         if (dieRef && other.label === 'enemyBumper') {
           dieRef._hadCollision = true;
           this._applyBumperKick(dieBody, this.enemyPos.x, this.enemyPos.y);
@@ -964,14 +1244,29 @@ export default class BattleScene extends Phaser.Scene {
             rerolled.add(dieRef); this._rerollDie(dieRef);
           }
           this._flashEnemyBumper();
-          // Any die contacting the enemy bumper deals 1 chip damage (absorbed by block)
-          const chipDmg = this._hitEnemyBlock(1);
-          if (chipDmg > 0) {
-            this.enemyHp = Math.max(0, this.enemyHp - chipDmg);
-            this._addToPot(chipDmg);
-            this._flashEnemyDamage(chipDmg);
-            this._siphonHeal(chipDmg);
-            if (this.enemyHp <= 0) this._triggerVictory();
+          if (dieRef.isPlayer) {
+            const bumperBonus = this._hasDieUpgrade(dieRef.data, 'bumper') ? 1 : 0;
+            const chipDmg = this._hitEnemyBlock(1 + bumperBonus);
+            if (chipDmg > 0) {
+              this.enemyHp = Math.max(0, this.enemyHp - chipDmg);
+              this._addToPot(chipDmg);
+              this._flashEnemyDamage(chipDmg);
+              this._siphonHeal(chipDmg);
+              if (this.enemyHp <= 0) this._triggerVictory();
+            }
+            // bumper_decoy: +bonus damage for hitting the real bumper
+            const decoyRelic = this.relicManager.active.find(r => r.id === 'bumper_decoy');
+            if (decoyRelic) {
+              const decoyDmg = this._hitEnemyBlock(decoyRelic.value);
+              if (decoyDmg > 0) {
+                this.enemyHp = Math.max(0, this.enemyHp - decoyDmg);
+                this._addToPot(decoyDmg);
+                this._flashEnemyDamage(decoyDmg);
+                this._siphonHeal(decoyDmg);
+                if (this.enemyHp <= 0) this._triggerVictory();
+              }
+              this._floatText(this.enemyPos.x, this.enemyPos.y - ENEMY_BUMPER_R - 36, `REAL! +${decoyRelic.value}`, '#ffee00');
+            }
           }
           if (dieRef.isPlayer && dieRef.data.material === 'cursed') {
             this.enemyVulnerable = true;
@@ -982,7 +1277,34 @@ export default class BattleScene extends Phaser.Scene {
             dieRef._lastBumperX = this.enemyPos.x;
             dieRef._lastBumperY = this.enemyPos.y;
             this.bus.emit('ON_CONTACT_BUMPER_ENEMY', { die: dieRef });
+            // Bulletproof Glass on bumper contact
+            if (this._hasDieUpgrade(dieRef.data, 'bulletproof_glass')) this._handleBulletproofHit(dieRef);
+            // Heavyweight on bumper contact
+            if (this._hasDieUpgrade(dieRef.data, 'heavyweight')) {
+              const bDmg = this._hitEnemyBlock(2);
+              if (bDmg > 0) { this.enemyHp = Math.max(0, this.enemyHp - bDmg); this._addToPot(bDmg); this._refreshEnemyCharacter(); this._flashEnemyDamage(bDmg); this._siphonHeal(bDmg); if (this.enemyHp <= 0) this._triggerVictory(); }
+              this._floatText(dieRef.img.x, dieRef.img.y - 24, 'HEAVY +2', '#aabbcc');
+            }
+            // bumper_enrage: enemy gains strength on each bumper contact
+            if (this._bumperEnragePerHit > 0) {
+              this.enemyStrength = (this.enemyStrength ?? 0) + this._bumperEnragePerHit;
+              this._floatText(this.enemyPos.x, this.enemyPos.y - 30, `ENRAGED! +${this._bumperEnragePerHit}`, '#e74c3c');
+            }
+            // contact_drain on bumper contact
+            if (this._contactDrainActive) {
+              dieRef._valueBonus = (dieRef._valueBonus ?? 0) - 1;
+            }
+            // sign: flip face value on enemy bumper contact
+            this._applySignToggle(dieRef);
+            // explosive_contact: radial knockback from enemy bumper
+            if (this._hasDieUpgrade(dieRef.data, 'explosive_contact')) {
+              this._explosionAt(this.enemyPos.x, this.enemyPos.y, dieRef);
+            }
+            // trigger_materials: material bonus as chip damage on enemy bumper hit
+            this._triggerMaterialChip(dieRef, this.enemyPos.x, this.enemyPos.y);
           }
+          // Infected dice progress toward shatter on every bumper contact
+          this._tickInfectedContact(dieRef);
           this._refreshEnemyCharacter();
         }
 
@@ -998,7 +1320,65 @@ export default class BattleScene extends Phaser.Scene {
             dieRef._lastBumperX = THROW_ORIGIN_X;
             dieRef._lastBumperY = THROW_ORIGIN_Y;
             this.bus.emit('ON_CONTACT_BUMPER_PLAYER', { die: dieRef });
+            // Bulletproof Glass on player bumper contact
+            if (this._hasDieUpgrade(dieRef.data, 'bulletproof_glass')) this._handleBulletproofHit(dieRef);
+            // Heavyweight on player bumper contact
+            if (this._hasDieUpgrade(dieRef.data, 'heavyweight')) {
+              const bDmg = this._hitEnemyBlock(2);
+              if (bDmg > 0) { this.enemyHp = Math.max(0, this.enemyHp - bDmg); this._addToPot(bDmg); this._refreshEnemyCharacter(); this._flashEnemyDamage(bDmg); this._siphonHeal(bDmg); if (this.enemyHp <= 0) this._triggerVictory(); }
+              this._floatText(dieRef.img.x, dieRef.img.y - 24, 'HEAVY +2', '#aabbcc');
+            }
+            // contact_drain on player bumper contact
+            if (this._contactDrainActive) {
+              dieRef._valueBonus = (dieRef._valueBonus ?? 0) - 1;
+            }
+            // sign: flip face value on player bumper contact
+            this._applySignToggle(dieRef);
+            // trigger_materials: material bonus chip damage on player bumper hit
+            this._triggerMaterialChip(dieRef, THROW_ORIGIN_X, THROW_ORIGIN_Y);
           }
+          // Infected dice progress toward shatter on every bumper contact
+          this._tickInfectedContact(dieRef);
+        }
+
+        if (dieRef && other.label === 'wall') {
+          if (dieRef.isPlayer) {
+            // Wall Ball upgrade: +1 value per wall contact
+            if (this._hasDieUpgrade(dieRef.data, 'wall_ball')) {
+              dieRef._valueBonus = (dieRef._valueBonus ?? 0) + 1;
+            }
+            // Wall Radiation: reduce own roll by 1 per wall hit
+            if (this._hasDieUpgrade(dieRef.data, 'wall_radiation')) {
+              dieRef._valueBonus = (dieRef._valueBonus ?? 0) - 1;
+            }
+            // Mine upgrade: spawn on first wall hit per turn
+            if (this._hasDieUpgrade(dieRef.data, 'mine') && !dieRef._mineFiredThisTurn) {
+              dieRef._mineFiredThisTurn = true;
+              this._spawnMine(dieRef.img.x, dieRef.img.y);
+            }
+            // Bulletproof Glass
+            if (this._hasDieUpgrade(dieRef.data, 'bulletproof_glass')) this._handleBulletproofHit(dieRef);
+            // Heavyweight: bonus damage on wall contact
+            if (this._hasDieUpgrade(dieRef.data, 'heavyweight')) {
+              const bDmg = this._hitEnemyBlock(2);
+              if (bDmg > 0) { this.enemyHp = Math.max(0, this.enemyHp - bDmg); this._addToPot(bDmg); this._refreshEnemyCharacter(); this._flashEnemyDamage(bDmg); this._siphonHeal(bDmg); if (this.enemyHp <= 0) this._triggerVictory(); }
+              this._floatText(dieRef.img.x, dieRef.img.y - 24, 'HEAVY +2', '#aabbcc');
+            }
+            // contact_drain on wall contact
+            if (this._contactDrainActive) {
+              dieRef._valueBonus = (dieRef._valueBonus ?? 0) - 1;
+            }
+            // sign: flip face value on wall contact
+            this._applySignToggle(dieRef);
+          }
+          // Wall Radiation: when ANY die hits a wall, give +1 to dice with wall_radiation
+          this.playerDice.forEach(pd => {
+            if (pd !== dieRef && this._hasDieUpgrade(pd.data, 'wall_radiation')) {
+              pd._valueBonus = (pd._valueBonus ?? 0) + 1;
+            }
+          });
+          // Infected dice progress toward shatter on every wall contact
+          this._tickInfectedContact(dieRef);
         }
       });
     });
@@ -1080,7 +1460,7 @@ export default class BattleScene extends Phaser.Scene {
         if (wasTap) {
           this.aimActive = false;
           this.aimGfx.clear();
-          this._toggleIntentPopup();
+          this._toggleWebView();
           return;
         }
         // drag — fall through to throw logic
@@ -1134,7 +1514,9 @@ export default class BattleScene extends Phaser.Scene {
         if (len < 20) return;  // too small — ignore accidental taps
         const speedBonus = this._nextThrowSpeedBonus ?? 0;
         this._nextThrowSpeedBonus = 0;
-        const spd = Math.min(MAX_THROW_SPEED, Math.max(7, len * 0.14) + speedBonus);
+        const minSpd = this._minThrowOverride > 0 ? this._minThrowOverride : 7;
+        const maxSpd = this._maxThrowOverride > 0 ? this._maxThrowOverride : MAX_THROW_SPEED;
+        const spd = Math.min(maxSpd, Math.max(minSpd, len * 0.14) + speedBonus);
         this._throwNextCard(THROW_ORIGIN_X, THROW_ORIGIN_Y, (-dragDx / len) * spd, (-dragDy / len) * spd);
       }
     });
@@ -1190,7 +1572,22 @@ export default class BattleScene extends Phaser.Scene {
     this.enemyBlock         = this._pendingEnemyBlock ?? 0;
     this._pendingEnemyBlock = 0;
     this._autoCommitDone = false;
-    this._hideIntentPopup();
+    this._hideWebView();
+
+    this._reductionStacks = 0;
+    this._settledValuesThisTurn = [];
+    this._clearMines();
+
+    // Flush ability teardowns from previous turn, then reset all ability flags
+    this._abilityCleanup.forEach(fn => fn());
+    this._abilityCleanup      = [];
+    this._obstacleBuffPerHit  = 0;
+    this._contactDrainActive  = false;
+    this._bumperEnragePerHit  = 0;
+    this._playerDiceReduction = 0;
+    this._minThrowOverride    = 0;
+    this._maxThrowOverride    = 0;
+    this._glassCurseActive    = false;
 
     this._effectQueue = [];
     this._queueCards.forEach(c => c.container.destroy());
@@ -1216,7 +1613,6 @@ export default class BattleScene extends Phaser.Scene {
     this.phase = PHASE.ENEMY_ROLL;
     this._setPhase('ENEMY ROLLING');
 
-    // Tick enemy poison before obstacles are thrown
     if (this.enemyPoisonStacks > 0) {
       const psn    = this.enemyPoisonStacks;
       this.enemyHp = Math.max(0, this.enemyHp - psn);
@@ -1228,27 +1624,18 @@ export default class BattleScene extends Phaser.Scene {
       if (this.enemyHp <= 0) { this._triggerVictory(); return; }
     }
 
-    // Draw intent for this turn
-    this.currentIntent = this._drawIntent();
+    // Apply passive abilities for this turn
+    (this.enemyDef.abilities ?? []).forEach(ab => this._applyEnemyAbility(ab));
 
-    // Queue block intent — activates next turn so it doesn't shield the enemy this turn
-    const allIntents = this.currentIntent.type === 'multi'
-      ? this.currentIntent.intents : [this.currentIntent];
-    const blockSub = allIntents.find(i => i.type === 'block');
-    if (blockSub) this._pendingEnemyBlock = blockSub.value;
+    const enemyDiceConfigs = this.enemyDef.enemyDice ?? [];
+    this._showMsg('Enemy rolling their dice...');
 
-    this._refreshEnemyCharacter();
-    this._showMsg('Enemy is acting — tap the enemy to see intent');
-
-    // Place obstacle dice in the most open gaps between enemy and player
-    const count  = this.enemyDef.obstacleCount ?? 1;
-    const MARGIN = 36;
-    const placeY = (this.enemyPos.y + THROW_ORIGIN_Y) / 2 + 20;
-
-    // Largest-gap algorithm: each new obstacle fills the widest open x interval
+    // Pre-compute evenly distributed target landing zones across the play area
+    const MARGIN  = 40;
+    const placeY  = (this.enemyPos.y + THROW_ORIGIN_Y) / 2 + 20;
     const anchors = [MARGIN, W - MARGIN];
-    const positions = [];
-    for (let i = 0; i < count; i++) {
+    const targets = [];
+    for (let i = 0; i < enemyDiceConfigs.length; i++) {
       anchors.sort((a, b) => a - b);
       let bestGap = -1, bestMid = W / 2;
       for (let j = 0; j < anchors.length - 1; j++) {
@@ -1256,29 +1643,107 @@ export default class BattleScene extends Phaser.Scene {
         if (gap > bestGap) { bestGap = gap; bestMid = (anchors[j] + anchors[j + 1]) / 2; }
       }
       anchors.push(bestMid);
-      positions.push({ x: bestMid, y: placeY + Phaser.Math.FloatBetween(-20, 20) });
+      targets.push({ x: bestMid + Phaser.Math.FloatBetween(-18, 18), y: placeY + Phaser.Math.FloatBetween(-30, 30) });
     }
 
-    // Pop each obstacle into its position, staggered
-    positions.forEach((pos, i) => {
-      this.time.delayedCall(i * 140, () => {
-        const eDie = this._spawnDie({ isObstacle: true, currentFaceIdx: 0, sides: 6 },
-          pos.x, pos.y, 0, 0, false, -1);
-        eDie._finalFaceIdx = 0;
-        eDie._rolling = false;
-
-        eDie.img.setAlpha(0).setScale(0.1);
-        eDie.lbl.setAlpha(0);
-        eDie.valLbl.setAlpha(0);
-        this.tweens.add({
-          targets: eDie.img, alpha: 1, scaleX: 1, scaleY: 1,
-          duration: 250, ease: 'Back.Out',
-        });
-        this.tweens.add({ targets: [eDie.lbl, eDie.valLbl], alpha: 1, duration: 200, delay: 100 });
+    // Throw each die aimed at its distributed target position
+    enemyDiceConfigs.forEach((cfg, i) => {
+      this.time.delayedCall(i * 200, () => {
+        if (this.phase === 99) return;
+        const fIdx  = Phaser.Math.Between(0, cfg.sides - 1);
+        const data  = { ...cfg, currentFaceIdx: fIdx };
+        const sx    = this.enemyPos.x + Phaser.Math.FloatBetween(-15, 15);
+        const sy    = this.enemyPos.y + ENEMY_BUMPER_R + 6;
+        const tx    = targets[i].x;
+        const ty    = targets[i].y;
+        const dist  = Math.hypot(tx - sx, ty - sy);
+        const speed = Phaser.Math.FloatBetween(6, 10);
+        const vx    = ((tx - sx) / dist) * speed;
+        const vy    = ((ty - sy) / dist) * speed;
+        const eDie  = this._spawnDie(data, sx, sy, vx, vy, false, -1);
+        eDie._rolling          = true;
+        eDie._finalFaceIdx     = fIdx;
+        eDie._isEnemyCombatDie = true;
       });
     });
 
-    this.time.delayedCall(count * 140 + 400, () => this._playerRollPhase());
+    const minDelay = enemyDiceConfigs.length * 200 + 800;
+    this._waitForEnemyDiceSettle(minDelay, () => {
+      if (this.phase !== PHASE.ENEMY_ROLL) return;
+      this._showMsg('Tap the enemy to see their dice');
+      this._playerRollPhase();
+    });
+  }
+
+  _waitForEnemyDiceSettle(minDelay, cb) {
+    let checks = 0;
+    const maxChecks = 16;
+    const poll = () => {
+      if (this.phase === 99) return;
+      checks++;
+      const combat     = this.enemyDice.filter(d => d._isEnemyCombatDie && d.img?.active);
+      const allSettled = combat.length === 0 || combat.every(d => !d._rolling);
+      if (allSettled || checks > maxChecks) { cb(); }
+      else { this.time.delayedCall(250, poll); }
+    };
+    this.time.delayedCall(minDelay, poll);
+  }
+
+  _applyEnemyAbility(ab) {
+    const WALL_DEF = { friction: 0, frictionStatic: 0, restitution: 0.925 };
+    switch (ab.id) {
+      case 'bouncy_bumpers':
+        if (this.enemyPhysicsBody) {
+          this.enemyPhysicsBody.restitution = 2.0;
+          this._abilityCleanup.push(() => { if (this.enemyPhysicsBody) this.enemyPhysicsBody.restitution = 0.9; });
+        }
+        this._floatText(this.enemyPos.x, this.enemyPos.y - 50, 'ULTRA BOUNCE!', '#ffee00');
+        break;
+      case 'sticky_walls':
+        (this._wallBodies ?? []).forEach(b => { b.friction = 8; b.frictionStatic = 8; b.restitution = 0; });
+        this._abilityCleanup.push(() =>
+          (this._wallBodies ?? []).forEach(b => {
+            b.friction = WALL_DEF.friction; b.frictionStatic = WALL_DEF.frictionStatic; b.restitution = WALL_DEF.restitution;
+          })
+        );
+        this._floatText(this.enemyPos.x, this.enemyPos.y - 50, 'STICKY WALLS', '#88aaff');
+        break;
+      case 'glass_curse':
+        this._glassCurseActive = true;
+        this._abilityCleanup.push(() => { this._glassCurseActive = false; });
+        this._floatText(THROW_ORIGIN_X, THROW_ORIGIN_Y - 40, 'GLASS CURSE', '#ff6633');
+        break;
+      case 'obstacle_buff':
+        this._obstacleBuffPerHit = ab.value ?? 1;
+        this._abilityCleanup.push(() => { this._obstacleBuffPerHit = 0; });
+        this._floatText(this.enemyPos.x, this.enemyPos.y - 50, 'WATCH THE PILLARS', '#e67e22');
+        break;
+      case 'contact_drain':
+        this._contactDrainActive = true;
+        this._abilityCleanup.push(() => { this._contactDrainActive = false; });
+        this._floatText(this.enemyPos.x, this.enemyPos.y - 50, 'CONTACT DRAIN', '#cc44ff');
+        break;
+      case 'bumper_enrage':
+        this._bumperEnragePerHit = ab.value ?? 2;
+        this._abilityCleanup.push(() => { this._bumperEnragePerHit = 0; });
+        this._floatText(this.enemyPos.x, this.enemyPos.y - 50, 'ENRAGE', '#e74c3c');
+        break;
+      case 'flat_reduction':
+        this._playerDiceReduction = ab.value ?? 2;
+        this._abilityCleanup.push(() => { this._playerDiceReduction = 0; });
+        this._floatText(THROW_ORIGIN_X, THROW_ORIGIN_Y - 40, `DICE -${ab.value ?? 2}`, '#cc44ff');
+        break;
+      case 'bullet_throws':
+        this._minThrowOverride = ab.value ?? 18;
+        this._abilityCleanup.push(() => { this._minThrowOverride = 0; });
+        this._floatText(THROW_ORIGIN_X, THROW_ORIGIN_Y - 40, 'BULLET THROWS', '#ff4444');
+        break;
+      case 'weak_throws':
+        this._maxThrowOverride = ab.value ?? Math.floor(MAX_THROW_SPEED * 0.5);
+        this._abilityCleanup.push(() => { this._maxThrowOverride = 0; });
+        this._floatText(THROW_ORIGIN_X, THROW_ORIGIN_Y - 40, 'WEAKENED', '#9b59b6');
+        break;
+    }
   }
 
   _playerRollPhase() {
@@ -1315,20 +1780,22 @@ export default class BattleScene extends Phaser.Scene {
     this.phase = PHASE.COMMIT;
     this._setPhase('RESOLVING...');
     this._showMsg('');
-    this._hideIntentPopup();
+    this._hideWebView();
 
     this.time.delayedCall(600, () => {
-      const intent   = this.currentIntent;
-      const subs     = intent?.type === 'multi' ? intent.intents : (intent ? [intent] : []);
-      const msgs     = [];
+      const msgs = [];
+      const enemyCombatDice = this.enemyDice.filter(d => d._isEnemyCombatDie);
 
-      subs.forEach(sub => {
-        switch (sub.type) {
+      enemyCombatDice.forEach(eDie => {
+        const value = (Math.floor(eDie.data.currentFaceIdx / 2) + 1) * 2;
+        switch (eDie.data.type) {
           case 'attack': {
-            let dmg = (sub.value + this.enemyStrength);
+            let dmg = Math.max(0, (value + (this.enemyStrength ?? 0)) - (this._reductionStacks ?? 0));
             if (this.vulnerable > 0) dmg = Math.ceil(dmg * 1.5);
             if (this.enemyWeakened)  dmg = Math.floor(dmg * 0.5);
-            const taken = Math.max(0, dmg - this.block);
+            const absorbed = Math.min(this.block, dmg);
+            this.block -= absorbed;
+            const taken = dmg - absorbed;
             this.playerHp = Math.max(0, this.playerHp - taken);
             if (taken > 0) {
               this._flashDamage(taken);
@@ -1340,25 +1807,25 @@ export default class BattleScene extends Phaser.Scene {
             break;
           }
           case 'block':
-            // Already set in _enemyRollPhase; just acknowledge
-            msgs.push(`Enemy blocked ${sub.value}`);
+            this._pendingEnemyBlock += value;
+            msgs.push(`Enemy blocked ${value}`);
             break;
           case 'strength':
-            this.enemyStrength += sub.value;
-            this._floatText(this.enemyPos.x, this.enemyPos.y - ENEMY_BUMPER_R - 20, `LOADED +${sub.value}`, '#e67e22');
-            msgs.push(`Loaded dice +${sub.value}`);
+            this.enemyStrength += value;
+            this._floatText(this.enemyPos.x, this.enemyPos.y - ENEMY_BUMPER_R - 20, `LOADED +${value}`, '#e67e22');
+            msgs.push(`Loaded dice +${value}`);
             break;
           case 'vulnerable':
-            this.vulnerable = Math.max(this.vulnerable, 3);
+            this.vulnerable = Math.max(this.vulnerable, value);
             this._floatText(THROW_ORIGIN_X, THROW_ORIGIN_Y - 30, 'HUSTLED!', '#bb44cc');
-            msgs.push('You\'re distracted');
-            this.bus.emit('ON_STATUS_APPLIED', { target: 'player', status: 'vulnerable', amount: 3 });
+            msgs.push("You're distracted");
+            this.bus.emit('ON_STATUS_APPLIED', { target: 'player', status: 'vulnerable', amount: value });
             break;
           case 'frail':
-            this.playerFrail = Math.max(this.playerFrail, 3);
+            this.playerFrail = Math.max(this.playerFrail, value);
             this._floatText(THROW_ORIGIN_X, THROW_ORIGIN_Y + 30, 'RATTLED!', '#1abc9c');
-            msgs.push('You\'re rattled');
-            this.bus.emit('ON_STATUS_APPLIED', { target: 'player', status: 'frail', amount: 3 });
+            msgs.push("You're rattled");
+            this.bus.emit('ON_STATUS_APPLIED', { target: 'player', status: 'frail', amount: value });
             break;
         }
       });
@@ -1366,13 +1833,32 @@ export default class BattleScene extends Phaser.Scene {
       if (this.enemyWeakened)
         this._floatText(THROW_ORIGIN_X, THROW_ORIGIN_Y - 50, 'OPPONENT EXPOSED!', '#9b59b6');
 
-      this._lastIntentWasPassive = intent ? this._isPurelyPassive(intent) : false;
+      this._reductionStacks = 0;
 
       this._refreshEnemyCharacter();
       this._refreshStatusUI();
       this._showMsg(msgs.length > 0 ? msgs.join('  ·  ') : 'Nothing happened.');
 
       this.time.delayedCall(2000, () => {
+        // Poison Burst upgrade
+        const hasBurst = this.playerDiceConfig.some(dc => dc.upgradeState?.takenUpgrades?.includes('poison_burst'));
+        if (hasBurst && this.enemyPoisonStacks > 0) {
+          const n = this.enemyPoisonStacks;
+          const burst = n * (n + 1) / 2;
+          this.enemyPoisonStacks = 0;
+          const dmgB = this._hitEnemyBlock(burst);
+          if (dmgB > 0) {
+            this.enemyHp = Math.max(0, this.enemyHp - dmgB);
+            this._addToPot(dmgB);
+            this._refreshEnemyCharacter();
+            this._flashEnemyDamage(dmgB);
+            this.bus.emit('ON_DAMAGE_DEALT', { amount: dmgB });
+            this._siphonHeal(dmgB);
+          }
+          this._floatText(this.enemyPos.x, this.enemyPos.y - 50, `POISON BURST -${burst}`, '#44ff88');
+          if (this.enemyHp <= 0) { this._triggerVictory(); return; }
+        }
+
         this._clearSurface();
         if (this.playerHp <= 0) this._gameOver();
         else { this.bus.emit('ON_TURN_END', {}); this._startTurn(); }
@@ -1402,6 +1888,11 @@ export default class BattleScene extends Phaser.Scene {
       lblText  = (showVal && face.value !== undefined) ? String(face.value) : (face ? face.sym : '--');
       lblColor = face ? face.color : '#ffffff';
       valText  = showVal ? '' : (face?.value !== undefined ? String(face.value) : '');
+    } else if (data.type && !data.isObstacle) {
+      // Enemy combat die
+      lblText  = ENEMY_DIE_TYPE_SYMS[data.type]  ?? data.type.slice(0, 3).toUpperCase();
+      lblColor = ENEMY_DIE_TYPE_COLORS[data.type] ?? '#ffffff';
+      valText  = String((Math.floor(data.currentFaceIdx / 2) + 1) * 2);
     } else {
       // obstacle die
       lblText  = '--';
@@ -1452,12 +1943,42 @@ export default class BattleScene extends Phaser.Scene {
     die._lastCycleMs   = 0;
     die._hadCollision  = false;
     if (this._ashenActive) { die._runeDouble = true; this._ashenActive = false; }
+    if (this._glassCurseActive) die._cursedGlass = true;
+
+    // Physics-modifying upgrades applied at throw time
+    let phantomStep = false;
+    if (dc.upgradeState?.takenUpgrades && die.img?.body) {
+      const ups = dc.upgradeState.takenUpgrades;
+      if (ups.includes('featherlight')) {
+        die.img.body.restitution = 0.96;
+        Phaser.Physics.Matter.Matter.Body.setDensity(die.img.body, 0.001);
+      }
+      if (ups.includes('greased')) {
+        die.img.body.frictionAir = 0;
+      }
+      if (ups.includes('heavyweight')) {
+        Phaser.Physics.Matter.Matter.Body.setDensity(die.img.body, 0.014);
+        die.img.body.restitution = Math.max(0.1, DIE_BOUNCE - 0.3);
+      }
+      if (ups.includes('phantom_step')) {
+        phantomStep = true;
+        die._phantomStep = true;
+        die.img.body.collisionFilter.category = 0x0010;
+        // Tier boost: use a 0–19 face index regardless of die's configured sides
+        const pFIdx = Phaser.Math.Between(0, 19);
+        die._finalFaceIdx = pFIdx;
+        die.data.currentFaceIdx = pFIdx;
+      }
+    }
     this._throwLocked  = true;
 
-    // Ignore the player bumper until the die has cleared the origin
-    die.img.body.collisionFilter.mask = 0xFFFFFFFF & ~0x0002;
+    // Ignore the player bumper until the die has cleared the origin.
+    // Phantom step also passes through other player dice (category 0x0001) permanently.
+    const initMask  = phantomStep ? (0xFFFFFFFF & ~0x0001 & ~0x0002) : (0xFFFFFFFF & ~0x0002);
+    const finalMask = phantomStep ? (0xFFFFFFFF & ~0x0001)            : 0xFFFFFFFF;
+    die.img.body.collisionFilter.mask = initMask;
     this.time.delayedCall(400, () => {
-      if (die.img?.body) die.img.body.collisionFilter.mask = 0xFFFFFFFF;
+      if (die.img?.body) die.img.body.collisionFilter.mask = finalMask;
     });
 
     card.img.setVisible(false);
@@ -1475,7 +1996,7 @@ export default class BattleScene extends Phaser.Scene {
       const activeIdx = this._getActiveFaceIndices(data);
       data.currentFaceIdx = activeIdx[Phaser.Math.Between(0, activeIdx.length - 1)];
     } else {
-      data.currentFaceIdx = Phaser.Math.Between(0, (data.faces?.length ?? 6) - 1);
+      data.currentFaceIdx = Phaser.Math.Between(0, (data.sides ?? data.faces?.length ?? 6) - 1);
     }
     dieRef._finalFaceIdx = data.currentFaceIdx;
     dieRef._rolling      = true;
@@ -1485,7 +2006,7 @@ export default class BattleScene extends Phaser.Scene {
 
   // ─── IMMEDIATE EFFECTS ────────────────────────────────────────────────────
 
-  _applyDieFaceImmediate(dieRef, skipRune = false, snapX = null, snapY = null) {
+  _applyDieFaceImmediate(dieRef, skipRune = false, snapX = null, snapY = null, _skipUpgrades = false) {
     if (this.phase === 99) return;
     const { data } = dieRef;
     // Prefer the position snapshotted at queue-entry time so effects resolve
@@ -1495,14 +2016,36 @@ export default class BattleScene extends Phaser.Scene {
     let value = Math.floor(data.currentFaceIdx / 2) + 1;
     if (dieRef._cracked)     { value = Math.ceil(value / 2); dieRef._cracked = false; }
     if (dieRef._valueBonus)  { value += dieRef._valueBonus;  dieRef._valueBonus = 0; }
+    if (this._playerDiceReduction > 0) value = Math.max(0, value - this._playerDiceReduction);
     const type  = dieRef._mimicType ?? data.type;
-    const isDmg = type === 'attack';
+
+    // Buffet upgrade: add min of previously settled dice values
+    if (this._hasDieUpgrade(data, 'buffet') && (this._settledValuesThisTurn?.length ?? 0) > 1) {
+      const prev = this._settledValuesThisTurn.slice(0, -1);
+      if (prev.length) value += Math.min(...prev);
+    }
+
+    // Vanguard: does not benefit from cleanBonus
+    const effectiveCleanBonus = this._hasDieUpgrade(data, 'vanguard') ? 0 : this.cleanBonus;
+
+    // Poison upgrade: convert die effect to poison stacks (runs after buffet + cleanBonus so buff dice apply)
+    if (!_skipUpgrades && this._hasDieUpgrade(data, 'poison')) {
+      let stacks = this._getModifiedValue(dieRef, value, false) + effectiveCleanBonus;
+      stacks = Math.max(0, stacks);
+      this.enemyPoisonStacks += stacks;
+      this._refreshEnemyCharacter();
+      this._floatText(this.enemyPos.x, this.enemyPos.y - ENEMY_BUMPER_R - 20, `☠ +${stacks} PSN`, '#44ff88');
+      this._currQueueEffect = { type: 'poison', value: stacks };
+      if (!skipRune && data.runeMap?.[data.currentFaceIdx]) this._applyRuneEffect(dieRef);
+      if (!_skipUpgrades) this._applyFlatUpgradeEffects(dieRef, value);
+      return;
+    }
 
     switch (type) {
       case 'attack': {
         let raw = this._getModifiedValue(dieRef, value, true);
         raw += this.relicManager.getAttackBonus();
-        raw += this.cleanBonus;
+        raw += effectiveCleanBonus;
         raw += this.turnAttackBonus;
         if (!dieRef._hadCollision) raw += this.relicManager.getCleanLandBonus();
         raw  = Math.floor(raw * this.relicManager.getAttackMultiplier());
@@ -1527,7 +2070,7 @@ export default class BattleScene extends Phaser.Scene {
       case 'block': {
         let blk = this._getModifiedValue(dieRef, value, false);
         blk += this.relicManager.getBlockBonus();
-        blk += this.cleanBonus;
+        blk += effectiveCleanBonus;
         if (!dieRef._hadCollision) blk += this.relicManager.getCleanLandBonus();
         blk  = Math.floor(blk * this.relicManager.getBlockMultiplier());
         this.block += blk;
@@ -1621,6 +2164,8 @@ export default class BattleScene extends Phaser.Scene {
     if (!skipRune && data.runeMap?.[data.currentFaceIdx]) {
       this._applyRuneEffect(dieRef);
     }
+
+    if (!_skipUpgrades) this._applyFlatUpgradeEffects(dieRef, value);
   }
 
   _applyRuneEffect(dieRef) {
@@ -1642,12 +2187,120 @@ export default class BattleScene extends Phaser.Scene {
     this.bus.emit('ON_FACE', { die: dieRef, runeId, value, faceIdx });
   }
 
+  // ─── FLAT UPGRADE EFFECTS ─────────────────────────────────────────────────
+
+  _applyFlatUpgradeEffects(dieRef, value) {
+    if (!dieRef.isPlayer || !dieRef.data) return;
+    const data = dieRef.data;
+    const has  = (id) => this._hasDieUpgrade(data, id);
+    const imgX = dieRef.img?.x ?? 0;
+    const imgY = dieRef.img?.y ?? 0;
+
+    // REDUCTION
+    if (has('reduction')) { this._reductionStacks += 1; this._floatText(this.enemyPos.x, this.enemyPos.y - ENEMY_BUMPER_R - 20, 'REDUCE -1', '#cc44ff'); this.bus.emit('ON_STATUS_APPLIED', { target: 'enemy', status: 'reduction' }); }
+    if (has('more_reduction')) { this._reductionStacks += value; this._floatText(this.enemyPos.x, this.enemyPos.y - ENEMY_BUMPER_R - 20, `REDUCE -${value}`, '#cc44ff'); this.bus.emit('ON_STATUS_APPLIED', { target: 'enemy', status: 'reduction', amount: value }); }
+
+    // STATUS DAMAGE
+    if (has('status_damage')) {
+      const n = this._countEnemyStatuses();
+      if (n > 0) {
+        const raw = n * 5;
+        const dmg = this._hitEnemyBlock(raw);
+        if (dmg > 0) { this._laserBeam(imgX, imgY, this.enemyPos.x, this.enemyPos.y, 0xcc44ff); this.enemyHp = Math.max(0, this.enemyHp - dmg); this._addToPot(dmg); this._refreshEnemyCharacter(); this._flashEnemyDamage(dmg); this.bus.emit('ON_DAMAGE_DEALT', { amount: dmg, die: dieRef }); this._siphonHeal(dmg); if (this.enemyHp <= 0) { this._triggerVictory(); return; } }
+        this._floatText(imgX, imgY - 32, `STATUS ×${n}`, '#cc44ff');
+      }
+    }
+
+    // BLOCKING STANCE
+    if (has('blocking_stance')) { this.block += value; this._refreshStatusUI(); this._floatText(imgX, imgY - 32, `+${value} BLK`, '#3498db'); this.bus.emit('ON_BLOCK_GAINED', { amount: value }); }
+
+    // BUFF
+    if (has('buff')) { dieRef._valueBonus = (dieRef._valueBonus ?? 0) + 1; this._floatText(imgX, imgY - 32, 'BUFF +1', '#ffaa00'); }
+
+    // BUFF REACH
+    if (has('buff_reach')) {
+      const bonus = Math.max(1, Math.floor(value / 2));
+      this.playerDice.forEach(pd => { if (pd !== dieRef && pd.img?.active) pd._valueBonus = (pd._valueBonus ?? 0) + bonus; });
+      this._floatText(imgX, imgY - 32, `REACH +${bonus}`, '#ffaa00');
+    }
+
+    // SLOW DRIP
+    if (has('slow_drip')) this._suppressPoisonDecay = true;
+
+    // CULTIST
+    if (has('cultist')) {
+      const maxVal = Math.floor((data.sides - 1) / 2) + 1;
+      if (Math.floor(data.currentFaceIdx / 2) + 1 >= maxVal) { this.enemyPoisonStacks += 5; this._refreshEnemyCharacter(); this._floatText(this.enemyPos.x, this.enemyPos.y - ENEMY_BUMPER_R - 36, '☠ +5 CULTIST', '#44ff88'); }
+    }
+
+    // GRAVITY WELL
+    if (has('gravity_well') && !dieRef._gravityWellFiredThisTurn) {
+      dieRef._gravityWellFiredThisTurn = true;
+      this._pullDiceToward(imgX, imgY, dieRef);
+      this._floatText(imgX, imgY - 32, 'GRAVITY WELL', '#4488ff');
+    }
+
+    // BLACK HOLE
+    if (has('black_hole') && !dieRef._blackHoleFiredThisTurn) {
+      dieRef._blackHoleFiredThisTurn = true;
+      dieRef._blackHole = true;
+      this._pullDiceToward(imgX, imgY, dieRef);
+      this._floatText(imgX, imgY - 32, 'BLACK HOLE', '#4488ff');
+    }
+
+    // VENTRILOQUIST
+    if (has('ventriloquist') && !dieRef._ventriloquistFiredThisTurn) {
+      dieRef._ventriloquistFiredThisTurn = true;
+      this._pullDiceToward(this.enemyPos.x, this.enemyPos.y, dieRef);
+      this._floatText(this.enemyPos.x, this.enemyPos.y - ENEMY_BUMPER_R - 20, 'GRAVITY WELL', '#4488ff');
+    }
+
+    // SHIV (now uncommon — spawns d2 attack die)
+    if (has('shiv') && !dieRef._shivFiredThisTurn) {
+      dieRef._shivFiredThisTurn = true;
+      this._addTempDieToTray('attack', 2);
+      this._floatText(imgX, imgY - 32, 'SHIV d2', '#ff4488');
+    }
+    if (has('shiv_tier_plus') && !dieRef._shivTierFiredThisTurn) {
+      dieRef._shivTierFiredThisTurn = true;
+      this._addTempDieToTray('attack', 4);
+      this._floatText(imgX, imgY - 48, 'SHIV d4', '#ff4488');
+    }
+    if (has('shiv_quantity') && !dieRef._shivQtyFiredThisTurn) {
+      dieRef._shivQtyFiredThisTurn = true;
+      this._addTempDieToTray('attack', 2);
+      this._addTempDieToTray('attack', 2);
+      this._floatText(imgX, imgY - 48, 'SHIV \xd72', '#ff4488');
+    }
+    if (has('shiv_trigger')) {
+      const maxVal = Math.floor((data.sides - 1) / 2) + 1;
+      if (Math.floor(data.currentFaceIdx / 2) + 1 >= maxVal) { this._addTempDieToTray('attack', 2); this._floatText(imgX, imgY - 48, 'SHIV TRIGGER', '#ff4488'); }
+    }
+
+    // CONSUME
+    if (has('consume') && this._effectQueue.length > 0) {
+      const myType = dieRef._mimicType ?? data.type;
+      this._effectQueue.forEach(e => { e.type = myType; e.dieRef._mimicType = myType; });
+      this._floatText(imgX, imgY - 32, 'CONSUME', '#f0c040');
+    }
+
+    // FINISHER text
+    if (has('finisher')) {
+      const bonus = Math.max(0, this.playerSettleCount - 1);
+      if (bonus > 0) this._floatText(imgX, imgY - 48, `FINISHER +${bonus}`, '#f0c040');
+    }
+  }
+
   _countEnemyStatuses() {
     let n = 0;
     if (this.enemyPoisonStacks > 0) n++;
     if (this.enemyWeakened)         n++;
     if (this.enemyVulnerable)       n++;
     return n;
+  }
+
+  _hasDieUpgrade(data, id) {
+    return data?.upgradeState?.takenUpgrades?.includes(id) ?? false;
   }
 
   _blastDice(originDieRef, direction) {
@@ -1665,6 +2318,122 @@ export default class BattleScene extends Phaser.Scene {
       });
       this._rerollDie(d);
     });
+  }
+
+  // ─── BULLETPROOF GLASS HELPER ─────────────────────────────────────────────
+
+  _handleBulletproofHit(dieRef) {
+    if (!this.allDice.includes(dieRef)) return;
+    dieRef._contactHits = (dieRef._contactHits ?? 0) + 1;
+    if (dieRef._contactHits === 1) {
+      dieRef._cracked = true;
+      this._applyCrackOverlay(dieRef);
+      this._floatText(dieRef.img?.x ?? 0, (dieRef.img?.y ?? 0) - 24, 'CRACKED', '#ff6633');
+    } else if (dieRef._contactHits >= 3) {
+      this._floatText(dieRef.img?.x ?? 0, (dieRef.img?.y ?? 0) - 24, 'SHATTER!', '#ff6633');
+      this._applyDieFaceImmediate(dieRef, true, null, null, true);
+      this._applyDieFaceImmediate(dieRef, true, null, null, true);
+      this._applyDieFaceImmediate(dieRef, true, null, null, true);
+      this._shatterDie(dieRef);
+    }
+  }
+
+  // Progress an infected die (from destroy_contacts) one step toward shatter.
+  // Called from every contact site: die-die, enemy bumper, player bumper, wall.
+  // Player dice shatter at 3 total contacts; enemy dice at 4.
+  _tickInfectedContact(dieRef) {
+    if (!dieRef?.img?.active || !this.allDice.includes(dieRef)) return;
+    if ((dieRef._infectHits ?? 0) === 0) return;
+    dieRef._infectHits += 1;
+    const threshold = dieRef.isPlayer ? 3 : 4;
+    if (dieRef._infectHits >= threshold) {
+      this._floatText(dieRef.img?.x ?? 0, (dieRef.img?.y ?? 0) - 24, 'SHATTER!', '#ff6633');
+      this._applyDieFaceImmediate(dieRef, true, null, null, true);
+      this._applyDieFaceImmediate(dieRef, true, null, null, true);
+      this._shatterDie(dieRef);
+    }
+  }
+
+  _pullDiceToward(tx, ty, excludeDie = null) {
+    const PULL_SPEED = 8;
+    this.allDice.forEach(d => {
+      if (d === excludeDie || !d.img?.active || !d.img.body) return;
+      const dx  = tx - d.img.x;
+      const dy  = ty - d.img.y;
+      const len = Math.hypot(dx, dy) || 1;
+      Phaser.Physics.Matter.Matter.Body.setVelocity(d.img.body, {
+        x: (dx / len) * PULL_SPEED,
+        y: (dy / len) * PULL_SPEED,
+      });
+      if (d._rolling) this._rerollDie(d);
+    });
+  }
+
+  // ─── MINE ─────────────────────────────────────────────────────────────────
+
+  _spawnMine(x, y) {
+    const g = this.add.circle(x, y, 8, 0x00ccff, 0.25).setDepth(8);
+    const body = this.matter.add.circle(x, y, 8, { isStatic: true, label: 'mine', isSensor: true });
+    const mine = { x, y, gfx: g, body, blastR: 220, triggered: false, armed: false };
+    this._mines.push(mine);
+    // Arm after 500ms — prevents the spawning die from immediately triggering it
+    this.time.delayedCall(500, () => {
+      if (mine.triggered) return;
+      mine.armed = true;
+      this.tweens.add({ targets: g, alpha: 0.85, duration: 180, ease: 'Sine.Out' });
+    });
+  }
+
+  _cleanupMines() {
+    if (!this._mines.length || this.phase === 99) return;
+    this._mines = this._mines.filter(m => !m.triggered);
+  }
+
+  _clearMines() {
+    this._mines.forEach(m => { m.gfx?.destroy(); if (m.body) { try { this.matter.world.remove(m.body); } catch(_){} } });
+    this._mines = [];
+  }
+
+  _triggerMine(mine) {
+    mine.gfx?.destroy();
+    if (mine.body) { try { this.matter.world.remove(mine.body); } catch(_){} }
+    this._floatText(mine.x, mine.y - 24, 'MINE!', '#00ccff');
+    this.allDice.forEach(d => {
+      if (!d.img?.active || !d.img.body) return;
+      const dx   = d.img.x - mine.x;
+      const dy   = d.img.y - mine.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > mine.blastR) return;
+      const nx = dx / (dist || 1);
+      const ny = dy / (dist || 1);
+      const speed = 22 * (1 - dist / mine.blastR);
+      Phaser.Physics.Matter.Matter.Body.setVelocity(d.img.body, { x: nx * speed, y: ny * speed });
+      Phaser.Physics.Matter.Matter.Body.setAngularVelocity(d.img.body, Phaser.Math.FloatBetween(-0.5, 0.5));
+      if (d._rolling) this._rerollDie(d);
+    });
+  }
+
+  _applyCrackOverlay(dieRef) {
+    if (dieRef.crackGfx?.active) return;
+    const g = this.add.graphics().setDepth(9);
+    const x = dieRef.img?.x ?? 0;
+    const y = dieRef.img?.y ?? 0;
+
+    // Three branching fracture lines from a slightly off-center origin.
+    // All points stay within ~18px of center so they hug the die edge
+    // without obscuring the value text in the middle.
+    g.lineStyle(1.2, 0xffffff, 0.6);
+    // Branch A: upper-left
+    g.beginPath(); g.moveTo(-1, -2); g.lineTo(-6, -9); g.lineTo(-13, -14); g.strokePath();
+    // Sub-branch off A
+    g.beginPath(); g.moveTo(-6, -9); g.lineTo(-10, -5); g.strokePath();
+    // Branch B: right
+    g.beginPath(); g.moveTo(-1, -2); g.lineTo(7,  2); g.lineTo(15, 1); g.strokePath();
+    // Branch C: lower-left
+    g.beginPath(); g.moveTo(-1, -2); g.lineTo(-2, 8); g.lineTo(-6, 14); g.strokePath();
+
+    g.setPosition(x, y);
+    dieRef.crackGfx = g;
   }
 
   _getModifiedValue(dieRef, base, isDamage = false) {
@@ -1717,6 +2486,111 @@ export default class BattleScene extends Phaser.Scene {
     }
   }
 
+  _forceSettleDie(dieRef) {
+    if (!dieRef?.isPlayer) return;
+    if (!this.allDice.includes(dieRef)) return;
+    if (!dieRef._rolling) return;  // already settled
+    if (dieRef.img?.body) {
+      Phaser.Physics.Matter.Matter.Body.setVelocity(dieRef.img.body, { x: 0, y: 0 });
+      Phaser.Physics.Matter.Matter.Body.setAngularVelocity(dieRef.img.body, 0);
+    }
+    dieRef._rolling = false;
+    this.playerSettleCount++;
+    dieRef._settleOrder = this.playerSettleCount;
+    this._addToEffectQueue(dieRef);
+    if (!this._queueActive) this._startQueue();
+    this.bus.emit('ON_SETTLE', { die: dieRef });
+  }
+
+  // ─── PLANNED UPGRADE IMPLEMENTATIONS ─────────────────────────────────────
+
+  // specialist_swarm: run once before the tray is built; converts matching dice to d4 attack
+  // and spawns additional d4 dice carrying pairs of the original upgrades.
+  _processSpecialistSwarm() {
+    const additions = [];
+    this.playerDiceConfig = this.playerDiceConfig.map(dc => {
+      const ups = dc.upgradeState?.takenUpgrades ?? [];
+      if (!ups.includes('specialist_swarm')) return dc;
+      const otherUps   = ups.filter(u => u !== 'specialist_swarm');
+      const remaining  = [...otherUps];
+      const spawnCount = Math.floor(remaining.length / 2);
+      for (let i = 0; i < spawnCount; i++) {
+        const pair = remaining.splice(0, 2);
+        additions.push({
+          id: `_swarm_${Date.now()}_${i}`,
+          type: 'attack', sides: 4, runeMap: {}, material: null, culledFaces: [],
+          upgradeState: { takenUpgrades: pair },
+        });
+      }
+      return { ...dc, type: 'attack', sides: 4, runeMap: {}, material: null, culledFaces: [],
+               upgradeState: { takenUpgrades: [] } };
+    });
+    this.playerDiceConfig.push(...additions);
+  }
+
+  // sign: flip this die's face between its lowest and highest active face indices.
+  _applySignToggle(dieRef) {
+    if (!dieRef?.isPlayer || !this._hasDieUpgrade(dieRef.data, 'sign')) return;
+    const active = this._getActiveFaceIndices(dieRef.data);
+    if (active.length < 2) return;
+    const lo = active[0];
+    const hi = active[active.length - 1];
+    const nextIdx = dieRef.data.currentFaceIdx === hi ? lo : hi;
+    dieRef.data.currentFaceIdx = nextIdx;
+    dieRef._finalFaceIdx       = nextIdx;
+  }
+
+  // explosive_contact: radial impulse from (cx, cy) applied to all dice within RADIUS.
+  _explosionAt(cx, cy, excludeDie = null) {
+    const IMPULSE = 0.055;
+    const RADIUS  = 160;
+    this._floatText(cx, cy - 35, 'BOOM!', '#ffee00');
+    this.allDice.forEach(d => {
+      if (d === excludeDie || !d.img?.body || !d.img.active) return;
+      const dx   = d.img.x - cx;
+      const dy   = d.img.y - cy;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 1 || dist > RADIUS) return;
+      const scale = IMPULSE * (1 - dist / RADIUS);
+      Phaser.Physics.Matter.Matter.Body.applyForce(d.img.body, { x: d.img.x, y: d.img.y },
+        { x: (dx / dist) * scale, y: (dy / dist) * scale });
+      Phaser.Physics.Matter.Matter.Body.setAngularVelocity(d.img.body, Phaser.Math.FloatBetween(-0.3, 0.3));
+      // Only reroll dice that are still in-flight; calling _rerollDie on a
+      // settled die sets _rolling=true again and causes it to double-enter the queue.
+      if (d._rolling) this._rerollDie(d);
+    });
+  }
+
+  // trigger_materials: deal the die's material bonus as immediate chip damage on bumper hit.
+  _triggerMaterialChip(dieRef, cx, cy) {
+    if (!dieRef?.isPlayer || !this._hasDieUpgrade(dieRef.data, 'trigger_materials')) return;
+    const mat = dieRef.data?.material;
+    if (!mat) return;
+    const baseVal = Math.floor((dieRef.data.currentFaceIdx ?? 0) / 2) + 1;
+    let bonus = 0;
+    if (mat === 'iron')    bonus = 1;
+    if (mat === 'steel')   bonus = baseVal;
+    if (mat === 'fire')    bonus = 3;
+    if (mat === 'uranium') bonus = baseVal;
+    if (mat === 'rock')    bonus = 1;
+    if (mat === 'phantom' && !dieRef._hadCollision) bonus = baseVal;
+    if (mat === 'cursed') {
+      this.enemyVulnerable = true;
+      this._floatText(cx, cy - 30, 'EXPOSED', '#ff44bb');
+    }
+    if (bonus <= 0) return;
+    const dmg = this._hitEnemyBlock(bonus);
+    if (dmg > 0) {
+      this.enemyHp = Math.max(0, this.enemyHp - dmg);
+      this._addToPot(dmg);
+      this._refreshEnemyCharacter();
+      this._flashEnemyDamage(dmg);
+      this._siphonHeal(dmg);
+      if (this.enemyHp <= 0) this._triggerVictory();
+    }
+    this._floatText(cx, cy - 45, `${mat.toUpperCase()} +${bonus}`, '#aaddff');
+  }
+
   _shatterDie(dieRef) {
     if (!this.allDice.includes(dieRef)) return;
     this._floatText(dieRef.img.x, dieRef.img.y - 24, 'SHATTER!', '#aaddff');
@@ -1726,6 +2600,15 @@ export default class BattleScene extends Phaser.Scene {
     removeFrom(this.allDice);
     removeFrom(this.playerDice);
     removeFrom(this.enemyDice);
+
+    // Purge any pending (not-yet-animating) queue entry for this die so the
+    // queue never tries to pulse/slide a dead die's card.
+    const pendingIdx = this._effectQueue.findIndex(e => e.dieRef === dieRef);
+    if (pendingIdx !== -1) {
+      this._effectQueue.splice(pendingIdx, 1);
+      const orphanCard = this._queueCards.splice(pendingIdx, 1)[0];
+      if (orphanCard) { orphanCard.container.destroy(); this._repositionQueueCards(); }
+    }
     if (dieRef.isPlayer) this.bus.emit('ON_DIE_DESTROYED', { die: dieRef });
 
     // Fire any ON_DIE_DESTROYED runes on this die (e.g. Chain Reaction Brand)
@@ -1739,7 +2622,7 @@ export default class BattleScene extends Phaser.Scene {
       handler({ scene: this, die: dieRef, value: maxVal, faceIdx: -1, playerX: THROW_ORIGIN_X, playerY: THROW_ORIGIN_Y });
     }
 
-    this.time.delayedCall(150, () => { dieRef.img?.destroy(); dieRef.lbl?.destroy(); dieRef.valLbl?.destroy(); });
+    this.time.delayedCall(150, () => { dieRef.crackGfx?.destroy(); dieRef.img?.destroy(); dieRef.lbl?.destroy(); dieRef.valLbl?.destroy(); });
     // Die was shattered before settling — the update loop will never trigger
     // _startQueue for it, so _throwLocked would stay true indefinitely.
     if (wasRollingPlayer && !this._queueActive) {
@@ -1826,7 +2709,7 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   _clearSurface() {
-    this.allDice.forEach(d => { this._stopDieShield(d); d.img.destroy(); d.lbl.destroy(); d.valLbl.destroy(); });
+    this.allDice.forEach(d => { this._stopDieShield(d); d.crackGfx?.destroy(); d.img.destroy(); d.lbl.destroy(); d.valLbl.destroy(); });
     this.allDice    = [];
     this.playerDice = [];
     this.enemyDice  = [];
@@ -1835,6 +2718,7 @@ export default class BattleScene extends Phaser.Scene {
     this._queueCards  = [];
     this._queueActive = false;
     this._throwLocked = false;
+    this._clearMines();
   }
 
   // ─── TRAY RESET ───────────────────────────────────────────────────────────
@@ -1894,8 +2778,103 @@ export default class BattleScene extends Phaser.Scene {
     const { data, isPlayer } = dieRef;
     if (isPlayer) {
       this._buildPlayerInspector(data, data.currentFaceIdx);
+    } else if (data.type && !data.isObstacle) {
+      this._buildEnemyCombatDieInspector(dieRef);
     } else if (data.faces) {
       this._buildInspectorPanel(data.faces, data.currentFaceIdx, 0x8b1a1a);
+    }
+  }
+
+  _buildEnemyCombatDieInspector(dieRef) {
+    const { data } = dieRef;
+    this.aimActive      = false;
+    this._suppressThrow = true;
+    this.aimGfx.clear();
+    this._hideInspector();
+    this.inspectorPanel = this.add.container(0, 0).setDepth(60);
+
+    const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.6).setInteractive();
+    dim.on('pointerdown', () => { this._suppressThrow = true; this._hideInspector(); });
+    this.inspectorPanel.add(dim);
+
+    const typeColor = parseInt((ENEMY_DIE_TYPE_COLORS[data.type] ?? '#ffffff').replace('#', ''), 16);
+    const typeSym   = ENEMY_DIE_TYPE_SYMS[data.type] ?? data.type.toUpperCase();
+    const typeDesc  = {
+      attack:     'Deals damage to you at end of turn',
+      block:      'Enemy blocks this much damage next turn',
+      strength:   'Enemy gains +value to all future attacks',
+      vulnerable: 'You take 50% more damage for that many turns',
+      frail:      'Your dice deal less damage for that many turns',
+    }[data.type] ?? '';
+
+    const maxVal    = (Math.floor((data.sides - 1) / 2) + 1) * 2;
+    const currentVal= (Math.floor(data.currentFaceIdx / 2) + 1) * 2;
+
+    // Layout
+    const CELL = 46, FACE = 41;
+    const cols  = Math.min(maxVal, 6);
+    const rows  = Math.ceil(maxVal / cols);
+    const gridW = cols * CELL;
+    const gridH = rows * CELL;
+    const headerH = 46;
+    const descH   = 22;
+    const panelW  = Math.max(gridW + 24, 160);
+    const panelH  = headerH + descH + gridH + 16;
+
+    const cx = W / 2;
+    const cy = SURFACE_TOP + (THROW_ZONE_BOTTOM - SURFACE_TOP) / 2;
+
+    const bg = this.add.rectangle(cx, cy, panelW, panelH, 0x0a0a1e, 0.97);
+    bg.setStrokeStyle(1.5, typeColor, 0.85).setInteractive();
+    bg.on('pointerdown', () => this._hideInspector());
+    this.inspectorPanel.add(bg);
+
+    const closeBtn = this.add.text(cx + panelW / 2 - 12, cy - panelH / 2 + 14, '✕', {
+      fontSize: '17px', color: '#666688',
+    }).setOrigin(0.5, 0.5).setInteractive();
+    closeBtn.on('pointerdown', (ptr) => { ptr.event.stopPropagation(); this._suppressThrow = true; this._hideInspector(); });
+    closeBtn.on('pointerover', () => closeBtn.setColor('#ffffff'));
+    closeBtn.on('pointerout',  () => closeBtn.setColor('#666688'));
+    this.inspectorPanel.add(closeBtn);
+
+    // Header: type + sides
+    this.inspectorPanel.add(
+      this.add.text(cx, cy - panelH / 2 + 18, `${typeSym}  d${data.sides}`, {
+        fontSize: '18px', color: ENEMY_DIE_TYPE_COLORS[data.type] ?? '#ffffff', fontStyle: 'bold',
+      }).setOrigin(0.5, 0.5)
+    );
+
+    // Description line
+    this.inspectorPanel.add(
+      this.add.text(cx, cy - panelH / 2 + 38, typeDesc, {
+        fontSize: '11px', color: '#778899',
+      }).setOrigin(0.5, 0.5)
+    );
+
+    // Value cells
+    const originX = cx - gridW / 2 + CELL / 2;
+    const originY = cy - panelH / 2 + headerH + descH + CELL / 2;
+
+    for (let v = 1; v <= maxVal; v++) {
+      const col  = (v - 1) % cols;
+      const row  = Math.floor((v - 1) / cols);
+      const ax   = originX + col * CELL;
+      const ay   = originY + row * CELL;
+      const isActive = v === currentVal;
+
+      const fb = this.add.rectangle(ax, ay, FACE, FACE,
+        isActive ? 0x1a2e4a : 0x141428);
+      fb.setStrokeStyle(isActive ? 2 : 1, typeColor, isActive ? 1 : 0.35);
+      this.inspectorPanel.add(fb);
+
+      this.inspectorPanel.add(
+        this.add.text(ax, ay, String(v), {
+          fontSize: '18px',
+          color: isActive ? (ENEMY_DIE_TYPE_COLORS[data.type] ?? '#ffffff') : '#445566',
+          fontStyle: isActive ? 'bold' : 'normal',
+          stroke: '#000000', strokeThickness: isActive ? 3 : 1,
+        }).setOrigin(0.5, 0.5)
+      );
     }
   }
 
@@ -2016,12 +2995,11 @@ export default class BattleScene extends Phaser.Scene {
     this._hideInspector();
     this.inspectorPanel = this.add.container(0, 0).setDepth(60);
 
-    const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.6).setInteractive();
+    const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.65).setInteractive();
     dim.on('pointerdown', () => { this._suppressThrow = true; this._hideInspector(); });
     this.inspectorPanel.add(dim);
 
     const cx = W / 2;
-    const cy = SURFACE_TOP + (THROW_ZONE_BOTTOM - SURFACE_TOP) / 2;
     const dt = DIE_TYPES[data.type];
     const typeColor = dt ? parseInt(dt.color.replace('#', ''), 16) : 0xd4a820;
 
@@ -2056,28 +3034,43 @@ export default class BattleScene extends Phaser.Scene {
     const hasAnyRune  = Object.entries(data.runeMap ?? {}).some(
       ([fi, id]) => id && !(data.culledFaces ?? []).includes(parseInt(fi) + 1)
     );
-    const matH   = hasMaterial ? 16 : 0;
-    const runeH  = hasAnyRune  ? 52 : 0;
-    const panelW = netW + 24;
-    const panelH = netH + 64 + matH + runeH;
+    const upgrades = (data.upgradeState?.takenUpgrades ?? []).map(id => UPGRADE_MAP[id]).filter(Boolean);
 
-    const bg = this.add.rectangle(cx, cy, panelW, panelH, 0x0a0a1e, 0.96);
+    // Panel is wider so upgrade descriptions have room to breathe
+    const panelW   = 340;
+    const WRAP_W   = panelW - 32;
+    // Estimate lines per upgrade description (~42 chars/line at 12px in 308px)
+    const upgItemH = (upg) => {
+      const lines = Math.min(4, Math.max(1, Math.ceil((UPGRADE_DESCRIPTIONS[upg.id]?.length ?? 0) / 42)));
+      return 20 + lines * 15 + 4;
+    };
+    const matH      = hasMaterial  ? 20 : 0;
+    const runeH     = hasAnyRune   ? 52 : 0;
+    const upgradeH  = upgrades.length > 0
+      ? (20 + upgrades.reduce((s, u) => s + upgItemH(u), 0))
+      : 0;
+    const panelH    = netH + 56 + matH + runeH + upgradeH;
+
+    // Vertically centre, clamped so panel stays on screen
+    const cy = Math.max(panelH / 2 + 8, Math.min(H / 2, H - panelH / 2 - 8));
+
+    const bg = this.add.rectangle(cx, cy, panelW, panelH, 0x0a0a1e, 0.97);
     bg.setStrokeStyle(1.5, typeColor, 0.85).setInteractive();
     bg.on('pointerdown', () => this._hideInspector());
     this.inspectorPanel.add(bg);
 
-    const closeBtn = this.add.text(cx + panelW / 2 - 12, cy - panelH / 2 + 14, '✕', {
-      fontSize: '17px', color: '#666688',
+    const closeBtn = this.add.text(cx + panelW / 2 - 14, cy - panelH / 2 + 16, '✕', {
+      fontSize: '18px', color: '#666688',
     }).setOrigin(0.5, 0.5).setInteractive();
     closeBtn.on('pointerdown', (ptr) => { ptr.event.stopPropagation(); this._suppressThrow = true; this._hideInspector(); });
     closeBtn.on('pointerover', () => closeBtn.setColor('#ffffff'));
     closeBtn.on('pointerout',  () => closeBtn.setColor('#666688'));
     this.inspectorPanel.add(closeBtn);
 
-    // Die type + sides header
+    // Header: die type + sides
     this.inspectorPanel.add(
       this.add.text(cx, cy - panelH / 2 + 18, `${dt?.label ?? '?'}  d${data.sides}`, {
-        fontSize: '17px', color: dt?.color ?? '#ffffff', fontStyle: 'bold',
+        fontSize: '18px', color: dt?.color ?? '#ffffff', fontStyle: 'bold',
       }).setOrigin(0.5, 0.5)
     );
 
@@ -2085,14 +3078,14 @@ export default class BattleScene extends Phaser.Scene {
     if (hasMaterial) {
       const m = MATERIALS[data.material];
       this.inspectorPanel.add(
-        this.add.text(cx, cy - panelH / 2 + 34, `${m.sym}  ${m.label}`, {
-          fontSize: '12px', color: m.color,
+        this.add.text(cx, cy - panelH / 2 + 37, `${m.sym}  ${m.label}`, {
+          fontSize: '13px', color: m.color,
         }).setOrigin(0.5, 0.5)
       );
     }
 
     const originX = cx - netW / 2;
-    const originY = cy - panelH / 2 + 38 + matH;
+    const originY = cy - panelH / 2 + 42 + matH;
 
     // Rune detail footer — populated when a rune face is tapped
     let runeLbl = null, runeDesc = null;
@@ -2103,15 +3096,16 @@ export default class BattleScene extends Phaser.Scene {
       this.inspectorPanel.add(footerBg);
 
       runeLbl = this.add.text(cx, footerCY - 8, '◆  tap a rune face', {
-        fontSize: '11px', color: '#2a2a44',
+        fontSize: '12px', color: '#2a2a44',
       }).setOrigin(0.5, 0.5);
       runeDesc = this.add.text(cx, footerCY + 10, '', {
-        fontSize: '11px', color: '#667788', wordWrap: { width: panelW - 24 }, align: 'center',
+        fontSize: '12px', color: '#667788', wordWrap: { width: WRAP_W }, align: 'center',
       }).setOrigin(0.5, 0.5);
       this.inspectorPanel.add(runeLbl);
       this.inspectorPanel.add(runeDesc);
     }
 
+    // Face cells
     facePositions.forEach(({ fx, fy }, fi) => {
       const ax         = originX + fx;
       const ay         = originY + fy;
@@ -2159,6 +3153,39 @@ export default class BattleScene extends Phaser.Scene {
       }
     });
 
+    // Upgrades section — inline name + description, no tap required
+    if (upgrades.length > 0) {
+      const leftX = cx - panelW / 2 + 14;
+      let uy = originY + netH + runeH + (hasAnyRune ? 10 : 14);
+
+      this.inspectorPanel.add(
+        this.add.text(cx, uy, 'UPGRADES', {
+          fontSize: '11px', color: '#33334a', fontStyle: 'bold',
+        }).setOrigin(0.5, 0)
+      );
+      uy += 18;
+
+      upgrades.forEach(upg => {
+        const desc  = UPGRADE_DESCRIPTIONS[upg.id] ?? '';
+        const lines = Math.min(4, Math.max(1, Math.ceil(desc.length / 42)));
+
+        this.inspectorPanel.add(
+          this.add.text(leftX, uy, `◆  ${upg.name}`, {
+            fontSize: '14px', color: upg.color ?? '#aaaaaa', fontStyle: 'bold',
+          }).setOrigin(0, 0)
+        );
+        uy += 20;
+
+        this.inspectorPanel.add(
+          this.add.text(leftX + 8, uy, desc, {
+            fontSize: '12px', color: '#778899',
+            wordWrap: { width: WRAP_W - 8 },
+          }).setOrigin(0, 0)
+        );
+        uy += lines * 15 + 4;
+      });
+    }
+
   }
 
   _hideInspector() {
@@ -2175,6 +3202,7 @@ export default class BattleScene extends Phaser.Scene {
       callback: () => {
         attempts++;
         const ok = this.allDice.every(d => {
+          if (!d.isPlayer || !d._rolling) return true;
           const v = d.img?.body?.velocity;
           return !v || (Math.abs(v.x) < SETTLE_VEL && Math.abs(v.y) < SETTLE_VEL);
         });
@@ -2190,14 +3218,42 @@ export default class BattleScene extends Phaser.Scene {
   _addToEffectQueue(dieRef) {
     if (this._tutorialMode && !this._tutFirstSettled) this._tutFirstSettled = true;
     const { data } = dieRef;
-    const value = Math.floor(data.currentFaceIdx / 2) + 1;
+    const settleVal = Math.floor(data.currentFaceIdx / 2) + 1;
+    this._settledValuesThisTurn = this._settledValuesThisTurn ?? [];
+    this._settledValuesThisTurn.push(settleVal);
+
+    // Finisher: +1 per die settled before it (applied at queue-add time)
+    if (this._hasDieUpgrade(data, 'finisher')) {
+      dieRef._valueBonus = (dieRef._valueBonus ?? 0) + Math.max(0, this.playerSettleCount - 1);
+    }
+
+    let value = settleVal;
     const type  = dieRef._mimicType ?? data.type;
     const x     = dieRef.img?.x ?? 0;
     const y     = dieRef.img?.y ?? 0;
     const entry = { dieRef, value, type, x, y };
-    this._effectQueue.push(entry);
-    const card = this._createQueueCard(entry, this._queueCards.length);
-    this._queueCards.push(card);
+
+    // Vanguard: insert at front of queue
+    if (this._hasDieUpgrade(data, 'vanguard')) {
+      this._effectQueue.unshift(entry);
+      const card = this._createQueueCard(entry, 0);
+      this._queueCards.unshift(card);
+      this._repositionQueueCards();
+    } else {
+      this._effectQueue.push(entry);
+      const card = this._createQueueCard(entry, this._queueCards.length);
+      this._queueCards.push(card);
+    }
+
+    // Finisher: always ensure it's last
+    const finIdx = this._effectQueue.findIndex(e => this._hasDieUpgrade(e.dieRef.data, 'finisher'));
+    if (finIdx !== -1 && finIdx !== this._effectQueue.length - 1) {
+      const finEntry = this._effectQueue.splice(finIdx, 1)[0];
+      const finCard  = this._queueCards.splice(finIdx, 1)[0];
+      this._effectQueue.push(finEntry);
+      this._queueCards.push(finCard);
+      this._repositionQueueCards();
+    }
   }
 
   _createQueueCard(entry, stackIdx) {
@@ -2257,6 +3313,15 @@ export default class BattleScene extends Phaser.Scene {
     // added while this one is in-flight get the correct stacking index.
     const card  = this._queueCards[0];
     if (!card) { this._queueComplete(); return; }
+
+    // Skip silently if the die was shattered before its turn to fire
+    if (entry.dieRef.isPlayer && !this.allDice.includes(entry.dieRef)) {
+      this._queueCards.shift();
+      card.container.destroy();
+      this._repositionQueueCards();
+      this.time.delayedCall(50, () => this._processQueue());
+      return;
+    }
 
     // Pulse the card to signal it's firing
     card.container.setDepth(36);
@@ -2453,6 +3518,7 @@ export default class BattleScene extends Phaser.Scene {
       if (!d.img?.active) return;
       d.lbl.setPosition(d.img.x, d.img.y - 7);
       d.valLbl.setPosition(d.img.x, d.img.y + 7);
+      if (d.crackGfx?.active) d.crackGfx.setPosition(d.img.x, d.img.y);
 
       if (!d._rolling) return;
 
@@ -2493,6 +3559,11 @@ export default class BattleScene extends Phaser.Scene {
           d.lbl.setText((fShowVal && finalFace.value !== undefined) ? String(finalFace.value) : (finalFace ? finalFace.sym : '--'));
           d.lbl.setColor(finalFace ? finalFace.color : '#ffffff');
           d.valLbl.setText(fShowVal ? '' : (finalFace?.value !== undefined ? String(finalFace.value) : ''));
+        } else if (d.data.type && !d.data.isObstacle) {
+          // Enemy combat die — lock in final value display
+          d.lbl.setText(ENEMY_DIE_TYPE_SYMS[d.data.type] ?? '?');
+          d.lbl.setColor(ENEMY_DIE_TYPE_COLORS[d.data.type] ?? '#ffffff');
+          d.valLbl.setText(String((Math.floor(d._finalFaceIdx / 2) + 1) * 2));
         }
         // obstacle dice: just show '--', no shield, no effects
       } else {
@@ -2507,12 +3578,20 @@ export default class BattleScene extends Phaser.Scene {
             d.lbl.setColor(dt ? dt.color : '#ffffff');
             d.valLbl.setText('');
           } else {
-            if (!d.data.faces) return; // obstacle die — no face cycling
-            const randFace  = FACES[d.data.faces[Phaser.Math.Between(0, d.data.faces.length - 1)]];
-            const rShowVal  = randFace?.effect === 'enemy_damage' || randFace?.effect === 'enemy_block';
-            d.lbl.setText((rShowVal && randFace.value !== undefined) ? String(randFace.value) : (randFace ? randFace.sym : '--'));
-            d.lbl.setColor(randFace ? randFace.color : '#ffffff');
-            d.valLbl.setText(rShowVal ? '' : (randFace?.value !== undefined ? String(randFace.value) : ''));
+            if (d.data.type && !d.data.isObstacle) {
+              // Enemy combat die — cycle value, keep type sym fixed
+              const randIdx = Phaser.Math.Between(0, (d.data.sides ?? 6) - 1);
+              d.lbl.setText(ENEMY_DIE_TYPE_SYMS[d.data.type] ?? '?');
+              d.lbl.setColor(ENEMY_DIE_TYPE_COLORS[d.data.type] ?? '#ffffff');
+              d.valLbl.setText(String(Math.floor(randIdx / 2) + 1));
+            } else if (d.data.faces) {
+              const randFace  = FACES[d.data.faces[Phaser.Math.Between(0, d.data.faces.length - 1)]];
+              const rShowVal  = randFace?.effect === 'enemy_damage' || randFace?.effect === 'enemy_block';
+              d.lbl.setText((rShowVal && randFace.value !== undefined) ? String(randFace.value) : (randFace ? randFace.sym : '--'));
+              d.lbl.setColor(randFace ? randFace.color : '#ffffff');
+              d.valLbl.setText(rShowVal ? '' : (randFace?.value !== undefined ? String(randFace.value) : ''));
+            }
+            // else: obstacle die — no cycling
           }
         }
       }
@@ -2557,8 +3636,8 @@ export default class BattleScene extends Phaser.Scene {
         y:     490,
       },
       {
-        title: 'Enemy Intent',
-        body:  'See the text inside the glowing circle? That\'s their INTENT — what they\'ll do at the end of your turn. Tap the enemy circle now to inspect it in detail.',
+        title: 'Enemy Dice',
+        body:  'The enemy also rolls dice! Their dice land on the table alongside yours. Tap the enemy circle to see what their dice rolled.',
         y:     490,
       },
       {

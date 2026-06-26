@@ -21,7 +21,13 @@
       "Read(//c/Program Files \\(x86\\)/Google/Chrome/Application/**)",
       "Read(//c/Users/steph/AppData/Local/Temp/**)",
       "PowerShell(Stop-Process -Id 21232 -Force -Confirm:$false 2>$null)",
-      "PowerShell($true)"
+      "PowerShell($true)",
+      "Bash(Get-Content \"c:\\\\Users\\\\steph\\\\Documents\\\\Repositories\\\\Dicemore\\\\src\\\\scenes\\\\BattleScene.js\")",
+      "Bash(Measure-Object -Line)",
+      "PowerShell(\\(Get-Content \"c:\\\\Users\\\\steph\\\\Documents\\\\Repositories\\\\Dicemore\\\\src\\\\scenes\\\\BattleScene.js\" | Measure-Object -Line\\).Lines)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('scripts',{}\\), indent=2\\)\\)\")",
+      "PowerShell(cd \"c:\\\\Users\\\\steph\\\\Documents\\\\Repositories\\\\Dicemore\"; \\(Get-Content package.json | ConvertFrom-Json\\).scripts)",
+      "PowerShell(npm run dev)"
     ],
     "additionalDirectories": [
       "c:\\Users\\steph\\.claude\\projects\\c--Users-steph-Documents-Repositories-Dicemore\\memory",
