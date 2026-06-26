@@ -29,6 +29,8 @@ export default class UpgradeScene extends Phaser.Scene {
     this.playerGold       = data.playerGold   ?? 0;
     this.cullCount        = data.cullCount    ?? 0;
     this.witchRunes       = data.witchRunes   ?? [];
+    this._returnScene     = data.returnScene  ?? null;
+    this._returnData      = data.returnData   ?? null;
     this._screenObjects   = [];
     this._stepLbl         = null;
     this._navigating      = false;
@@ -334,6 +336,13 @@ export default class UpgradeScene extends Phaser.Scene {
   }
 
   _goToNextBattle() {
+    if (this._returnScene) {
+      this.scene.start(this._returnScene, {
+        ...this._returnData,
+        updatedConfig: this.playerDiceConfig,
+      });
+      return;
+    }
     const base = {
       playerDiceConfig: this.playerDiceConfig,
       playerHp:         this.playerHp,

@@ -11,6 +11,12 @@ const ENEMY_KEYS = ['red_louse', 'cultist', 'jaw_worm'];
 export default class SetupScene extends Phaser.Scene {
   constructor() { super({ key: 'SetupScene' }); }
 
+  init(data) {
+    this._mpMode   = data?.mpMode   ?? false;
+    this._mpPlayer = data?.mpPlayer ?? 1;
+    this._mpP1Config = data?.p1Config ?? null;
+  }
+
   create() {
     this._enemyKey        = ENEMY_KEYS[0];
     this._diceCount       = 2;
@@ -28,6 +34,12 @@ export default class SetupScene extends Phaser.Scene {
       fontSize: '11px', color: '#2a3848',
     }).setOrigin(0, 0);
     this.add.rectangle(W / 2, 1, W, 2, 0x1a4a7a);
+
+    if (this._mpMode) {
+      this.add.text(W / 2, H - 24, `PLAYER ${this._mpPlayer} — Choose your class`, {
+        fontSize: '14px', color: '#00ccff', fontStyle: 'bold',
+      }).setOrigin(0.5);
+    }
 
     this._showClassStep();
   }
@@ -134,12 +146,15 @@ export default class SetupScene extends Phaser.Scene {
     const g = this._stepGroup = this.add.container(0, 0);
     const def = ENEMIES[this._enemyKey];
 
-    g.add(this.add.text(W / 2, 36, 'CHOOSE YOUR CLASS', {
-      fontSize: '20px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3
+    const title = this._mpMode ? `PLAYER ${this._mpPlayer} — CHOOSE CLASS` : 'CHOOSE YOUR CLASS';
+    g.add(this.add.text(W / 2, 36, title, {
+      fontSize: '20px', color: this._mpMode ? '#00ccff' : '#f0c040', fontStyle: 'bold', letterSpacing: 3
     }).setOrigin(0.5));
-    g.add(this.add.text(W / 2, 66, `vs. ${def.name}  ·  ${def.hp} HP`, {
-      fontSize: '17px', color: '#2a3848'
-    }).setOrigin(0.5));
+    if (!this._mpMode) {
+      g.add(this.add.text(W / 2, 66, `vs. ${def.name}  ·  ${def.hp} HP`, {
+        fontSize: '17px', color: '#2a3848'
+      }).setOrigin(0.5));
+    }
 
     const cardW = W - 40, cardH = 108;
     const cx = W / 2;
@@ -1193,6 +1208,27 @@ export default class SetupScene extends Phaser.Scene {
   // ─── LAUNCH ───────────────────────────────────────────────────────────────
 
   _startBattle() {
+    if (this._mpMode) {
+      if (this._mpPlayer === 1) {
+        // P1 done — run setup for P2
+        this.time.delayedCall(1, () => this.scene.start('SetupScene', {
+          mpMode: true, mpPlayer: 2, p1Config: this._diceConfig,
+        }));
+      } else {
+        // Both done — start Dice Duel
+        this.time.delayedCall(1, () => this.scene.start('DiceDuelScene', {
+          p1Config:   this._mpP1Config,
+          p2Config:   this._diceConfig,
+          p1Hp:       30,
+          p2Hp:       30,
+          p1Wins:     0,
+          p2Wins:     0,
+          gameNum:    1,
+          firstPlayer: Math.random() < 0.5 ? 'p1' : 'p2',
+        }));
+      }
+      return;
+    }
     const relics = this._selectedCustomRelics !== null
       ? this._selectedCustomRelics
       : (this._startingRelic ? [this._startingRelic] : []);

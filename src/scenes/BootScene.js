@@ -13,7 +13,7 @@ export default class BootScene extends Phaser.Scene {
     loadRelics().then(relics => {
       this.registry.set('allRelics', relics);
       txt.destroy();
-      this.scene.start('SetupScene');
+      this.scene.start('HomeScene');
     });
   }
 }

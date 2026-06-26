@@ -1,10 +1,12 @@
 import Phaser from 'phaser';
 import BootScene        from './scenes/BootScene.js';
+import HomeScene        from './scenes/HomeScene.js';
 import SetupScene       from './scenes/SetupScene.js';
 import BattleScene      from './scenes/BattleScene.js';
 import UpgradeScene     from './scenes/UpgradeScene.js';
 import ShopSelectScene  from './scenes/ShopSelectScene.js';
 import ShopScene        from './scenes/ShopScene.js';
+import DiceDuelScene    from './scenes/DiceDuelScene.js';
 
 const config = {
   type: Phaser.AUTO,
@@ -24,7 +26,7 @@ const config = {
       debug: false
     }
   },
-  scene: [BootScene, SetupScene, BattleScene, UpgradeScene, ShopSelectScene, ShopScene]
+  scene: [BootScene, HomeScene, SetupScene, BattleScene, UpgradeScene, ShopSelectScene, ShopScene, DiceDuelScene]
 };
 
 new Phaser.Game(config);
