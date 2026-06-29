@@ -172,7 +172,7 @@ export default class SetupScene extends Phaser.Scene {
       borderColor: 0xff6622,
       bgColor: 0x130e08,
       bgHover: 0x1e160a,
-      subtitle: 'The card sharp with a quick draw',
+      subtitle: 'BUF die amplifies all your rolls this turn',
       dice: [
         { type: 'attack', label: 'ATK d6' },
         { type: 'pierce', label: 'BUF d4' },
@@ -196,7 +196,7 @@ export default class SetupScene extends Phaser.Scene {
       borderColor: 0x8844cc,
       bgColor: 0x100a18,
       bgHover: 0x1a1028,
-      subtitle: 'A master of misdirection',
+      subtitle: 'CPY die copies whatever die it collides with',
       dice: [
         { type: 'attack', label: 'ATK d6' },
         { type: 'copy',   label: 'CPY d4' },
@@ -220,7 +220,7 @@ export default class SetupScene extends Phaser.Scene {
       borderColor: 0x27ae60,
       bgColor: 0x081208,
       bgHover: 0x0e1e0e,
-      subtitle: 'Lifts your chips while shaking your hand',
+      subtitle: 'PKP die stacks poison on the enemy',
       dice: [
         { type: 'attack', label: 'ATK d6' },
         { type: 'poison', label: 'PKP d4' },
@@ -244,7 +244,7 @@ export default class SetupScene extends Phaser.Scene {
       borderColor: 0xc0392b,
       bgColor: 0x130808,
       bgHover: 0x1e0e0e,
-      subtitle: 'Built like a brick, moves like one too',
+      subtitle: 'Two heavy BLK dice — built to absorb everything',
       dice: [
         { type: 'block', label: 'BLK d8' },
         { type: 'block', label: 'BLK d8' },
@@ -305,7 +305,7 @@ export default class SetupScene extends Phaser.Scene {
     g.add(cardBg);
 
     g.add(this.add.text(cx, cy - 42, opts.title, {
-      fontSize: '22px', color: opts.titleColor, fontStyle: 'bold', letterSpacing: 4,
+      fontSize: '22px', color: opts.titleColor, fontStyle: 'bold', letterSpacing: 3,
       fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5));
     g.add(this.add.text(cx, cy - 20, opts.subtitle, {

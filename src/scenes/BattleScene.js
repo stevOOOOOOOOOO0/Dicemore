@@ -221,10 +221,20 @@ export default class BattleScene extends Phaser.Scene {
 
   _buildHeaderStrip() {
     const mid = SURFACE_TOP / 2;
-    this.phaseTxt     = this.add.text(W / 2, mid - 16, '', { fontSize: '17px', color: '#5a7a8a', letterSpacing: 2, fontFamily: FONT_DISPLAY }).setOrigin(0.5, 0.5);
+    this.phaseTxt     = this.add.text(W / 2, mid - 16, '', { fontSize: '17px', color: '#5a7a8a', letterSpacing: 3, fontFamily: FONT_DISPLAY }).setOrigin(0.5, 0.5);
     this.battleMsgTxt = this.add.text(W / 2, mid + 16, '', { fontSize: '17px', color: '#ffffff', wordWrap: { width: W - 60 }, fontFamily: FONT_DISPLAY }).setOrigin(0.5, 0.5);
     this.potLabelTxt  = this.add.text(W - 8, 6, 'POT', { fontSize: '10px', color: '#8b7a40', letterSpacing: 1, fontFamily: FONT_DISPLAY }).setOrigin(1, 0);
     this.potTxt       = this.add.text(W - 8, 18, '0', { fontSize: '22px', color: '#f0c040', fontStyle: 'bold', fontFamily: FONT_DISPLAY }).setOrigin(1, 0);
+
+    // Quit button — top-left of header strip
+    const qbx = 14, qby = 14;
+    const qbCircle = this.add.circle(qbx, qby, 11, 0x1a1a2a, 0.95).setDepth(25).setInteractive();
+    qbCircle.setStrokeStyle(1.5, 0x445566, 0.8);
+    this.add.text(qbx, qby, '✕', {
+      fontSize: '11px', color: '#6a8a9a',
+      stroke: '#000000', strokeThickness: 2,
+    }).setOrigin(0.5, 0.5).setDepth(26);
+    qbCircle.on('pointerdown', () => this._showQuitConfirm());
 
     // Info button — bottom-right of header strip
     const ibx = W - 14, iby = 62;
@@ -237,6 +247,43 @@ export default class BattleScene extends Phaser.Scene {
     ibCircle.on('pointerdown', () => this._showHowToPlay());
 
     this._refreshStatusUI();
+  }
+
+  _showQuitConfirm() {
+    if (this._quitPanel) return;
+
+    const cx = W / 2, cy = H / 2;
+    const pop = this._quitPanel = this.add.container(0, 0).setDepth(95);
+
+    const dim = this.add.rectangle(cx, cy, W, H, 0x000000, 0.7).setInteractive();
+    pop.add(dim);
+
+    const panel = this.add.rectangle(cx, cy, 240, 110, 0x080f1c, 0.98)
+      .setStrokeStyle(2, 0x445566, 0.9);
+    pop.add(panel);
+
+    pop.add(this.add.text(cx, cy - 30, 'Quit run?', {
+      fontSize: '17px', color: '#ccddee', fontStyle: 'bold', fontFamily: FONT_DISPLAY,
+    }).setOrigin(0.5, 0.5));
+
+    const self = this;
+    function close() { self._quitPanel?.destroy(); self._quitPanel = null; }
+
+    const yesBtn = this.add.text(cx - 44, cy + 18, 'QUIT', {
+      fontSize: '14px', color: '#ee6644', fontStyle: 'bold', fontFamily: FONT_DISPLAY,
+      backgroundColor: '#1a0a08', padding: { x: 16, y: 7 },
+    }).setOrigin(0.5, 0.5).setInteractive();
+    yesBtn.on('pointerdown', () => { close(); this.scene.start('HomeScene'); });
+    pop.add(yesBtn);
+
+    const noBtn = this.add.text(cx + 44, cy + 18, 'KEEP GOING', {
+      fontSize: '14px', color: '#4488aa', fontStyle: 'bold', fontFamily: FONT_DISPLAY,
+      backgroundColor: '#08141a', padding: { x: 16, y: 7 },
+    }).setOrigin(0.5, 0.5).setInteractive();
+    noBtn.on('pointerdown', close);
+    pop.add(noBtn);
+
+    dim.on('pointerdown', close);
   }
 
   _buildRelicStrip() {

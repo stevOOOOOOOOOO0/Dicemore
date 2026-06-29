@@ -13,20 +13,22 @@ export default class HomeScene extends Phaser.Scene {
       fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5);
 
-    this.add.text(W / 2, H / 2 - 90, 'pre-alpha-beta-0.21', {
+    this.add.text(W / 2, H / 2 - 90, 'pre-alpha-beta-0.22', {
       fontSize: '11px', color: '#2a3848',
     }).setOrigin(0.5);
 
     this._makeBtn(W / 2, H / 2 - 10, 'SOLO', '#d4a820', 0x1a1206, () => {
       this.scene.start('SetupScene', {});
     });
+    this.add.text(W / 2, H / 2 + 24, 'solo run · roguelike', {
+      fontSize: '13px', color: '#6a8a9a',
+    }).setOrigin(0.5);
 
     this._makeBtn(W / 2, H / 2 + 80, 'DICE DUEL', '#00ccff', 0x06141a, () => {
       this.scene.start('SetupScene', { mpMode: true, mpPlayer: 1 });
     });
-
-    this.add.text(W / 2, H / 2 + 136, '2 players · same device', {
-      fontSize: '13px', color: '#6a8a9a',
+    this.add.text(W / 2, H / 2 + 114, '1v1 · same device', {
+      fontSize: '13px', color: '#4a8a9a',
     }).setOrigin(0.5);
   }
 
@@ -35,7 +37,7 @@ export default class HomeScene extends Phaser.Scene {
     const hit = this.add.rectangle(x, y, 240, 52, bg).setStrokeStyle(2, fc, 0.9)
       .setInteractive({ useHandCursor: true });
     this.add.text(x, y, label, {
-      fontSize: '22px', color, fontStyle: 'bold', letterSpacing: 4,
+      fontSize: '22px', color, fontStyle: 'bold', letterSpacing: 3,
       fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5);
 
