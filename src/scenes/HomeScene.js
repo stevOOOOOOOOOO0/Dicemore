@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { W, H } from '../constants.js';
+import { W, H, FONT_DISPLAY } from '../constants.js';
 
 export default class HomeScene extends Phaser.Scene {
   constructor() { super({ key: 'HomeScene' }); }
@@ -10,9 +10,10 @@ export default class HomeScene extends Phaser.Scene {
 
     this.add.text(W / 2, H / 2 - 140, 'DICEMORE', {
       fontSize: '38px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 6,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5);
 
-    this.add.text(W / 2, H / 2 - 90, 'pre-alpha-beta-0.19', {
+    this.add.text(W / 2, H / 2 - 90, 'pre-alpha-beta-0.20', {
       fontSize: '11px', color: '#2a3848',
     }).setOrigin(0.5);
 
@@ -35,6 +36,7 @@ export default class HomeScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     this.add.text(x, y, label, {
       fontSize: '22px', color, fontStyle: 'bold', letterSpacing: 4,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5);
 
     hit.on('pointerover',  () => hit.setFillColor(Phaser.Display.Color.HexStringToColor(color.replace('#', '')).darken(60).color));

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { FACES, ENEMIES, BATTLE_SEQUENCE } from '../data/faces.js';
 import { DIE_TYPES, DIE_TYPE_KEYS, SPECIAL_DIE_KEYS, SIDES_PROGRESSION, FIGHTER_CONFIG, MAGICIAN_CONFIG, ALCHEMIST_CONFIG, BRUTE_CONFIG } from '../data/dice.js';
-import { W, H, PLAYER_MAX_HP } from '../constants.js';
+import { W, H, PLAYER_MAX_HP, FONT_DISPLAY } from '../constants.js';
 import { RUNES, MATERIALS, RUNE_KEYS, MATERIAL_KEYS } from '../data/runes.js';
 import { getRelics } from '../data/relics.js';
 import { UPGRADES, UPGRADE_DESCRIPTIONS } from '../data/upgrades.js';
@@ -31,7 +31,7 @@ export default class SetupScene extends Phaser.Scene {
     this._upgradeActiveDie     = 0;
 
     this.add.rectangle(W / 2, H / 2, W, H, 0x111122);
-    this.add.text(8, 8, 'pre-alpha-beta-0.19', {
+    this.add.text(8, 8, 'pre-alpha-beta-0.20', {
       fontSize: '11px', color: '#2a3848',
     }).setOrigin(0, 0);
     this.add.rectangle(W / 2, 1, W, 2, 0x1a4a7a);
@@ -82,11 +82,13 @@ export default class SetupScene extends Phaser.Scene {
     const g = this._stepGroup = this.add.container(0, 0);
 
     g.add(this.add.text(W / 2, 52, 'DICEMORE', {
-      fontSize: '28px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 4
+      fontSize: '28px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 4,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5));
 
     g.add(this.add.text(W / 2, 88, 'CHOOSE YOUR ENEMY', {
-      fontSize: '17px', color: '#5a7a8a', letterSpacing: 2
+      fontSize: '17px', color: '#5a7a8a', letterSpacing: 2,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5));
 
     const cardW = 108, cardH = 220;
@@ -103,7 +105,8 @@ export default class SetupScene extends Phaser.Scene {
       g.add(bg);
 
       g.add(this.add.text(cx, cy - 94, def.name.toUpperCase(), {
-        fontSize: '17px', color: def.color, fontStyle: 'bold', letterSpacing: 1
+        fontSize: '17px', color: def.color, fontStyle: 'bold', letterSpacing: 1,
+        fontFamily: FONT_DISPLAY,
       }).setOrigin(0.5));
       g.add(this.add.text(cx, cy - 38, `${def.hp}`, {
         fontSize: '36px', color: '#ddeeff', fontStyle: 'bold'
@@ -153,7 +156,8 @@ export default class SetupScene extends Phaser.Scene {
 
     const title = this._mpMode ? `PLAYER ${this._mpPlayer} — CHOOSE CLASS` : 'CHOOSE YOUR CLASS';
     g.add(this.add.text(W / 2, 36, title, {
-      fontSize: '20px', color: this._mpMode ? '#00ccff' : '#f0c040', fontStyle: 'bold', letterSpacing: 3
+      fontSize: '20px', color: this._mpMode ? '#00ccff' : '#f0c040', fontStyle: 'bold', letterSpacing: 3,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5));
     if (!this._mpMode) {
       g.add(this.add.text(W / 2, 66, `vs. ${def.name}  ·  ${def.hp} HP`, {
@@ -304,7 +308,8 @@ export default class SetupScene extends Phaser.Scene {
     g.add(cardBg);
 
     g.add(this.add.text(cx, cy - 42, opts.title, {
-      fontSize: '22px', color: opts.titleColor, fontStyle: 'bold', letterSpacing: 4
+      fontSize: '22px', color: opts.titleColor, fontStyle: 'bold', letterSpacing: 4,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5));
     g.add(this.add.text(cx, cy - 20, opts.subtitle, {
       fontSize: '17px', color: '#6a8090'
@@ -353,7 +358,8 @@ export default class SetupScene extends Phaser.Scene {
     const def = ENEMIES[this._enemyKey];
 
     g.add(this.add.text(W / 2, 80, 'HOW MANY DICE?', {
-      fontSize: '20px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3
+      fontSize: '20px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5));
     g.add(this.add.text(W / 2, 118, `vs. ${def.name}  ·  ${def.hp} HP`, {
       fontSize: '17px', color: '#5a7080'
@@ -404,7 +410,8 @@ export default class SetupScene extends Phaser.Scene {
     const g = this._stepGroup = this.add.container(0, 0);
 
     g.add(this.add.text(W / 2, 36, 'CHOOSE DIE TYPES', {
-      fontSize: '17px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3
+      fontSize: '17px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5));
 
     const startY   = 76;

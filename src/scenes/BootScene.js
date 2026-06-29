@@ -10,7 +10,10 @@ export default class BootScene extends Phaser.Scene {
       fontSize: '17px', color: '#334455', letterSpacing: 2,
     }).setOrigin(0.5);
 
-    loadRelics().then(relics => {
+    Promise.all([
+      loadRelics(),
+      document.fonts.load('bold 16px "Cinzel"').catch(() => null),
+    ]).then(([relics]) => {
       this.registry.set('allRelics', relics);
       txt.destroy();
       this.scene.start('HomeScene');

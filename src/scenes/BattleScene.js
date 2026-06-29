@@ -5,7 +5,7 @@ import { RUNES, MATERIALS } from '../data/runes.js';
 import {
   W, H, SURFACE_TOP, SURFACE_BOTTOM, DIE_SIZE, WALL_T, DIE_STRIP_Y,
   DIE_FRICTION, DIE_FRICTION_AIR, DIE_BOUNCE, SETTLE_VEL,
-  MAX_THROW_SPEED, PLAYER_MAX_HP
+  MAX_THROW_SPEED, PLAYER_MAX_HP, FONT_DISPLAY
 } from '../constants.js';
 import RelicManager from '../systems/RelicManager.js';
 import EventBus from '../systems/EventBus.js';
@@ -406,6 +406,7 @@ export default class BattleScene extends Phaser.Scene {
     this._intentTxt = this.add.text(0, -7, '', {
       fontSize: '11px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 3, align: 'center',
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5, 0.5);
     this.enemyCharContainer.add(this._intentTxt);
 
@@ -418,7 +419,8 @@ export default class BattleScene extends Phaser.Scene {
 
     // Enemy name above circle
     const nameTxt = this.add.text(0, -R - 16, this.enemyDef.name.toUpperCase(), {
-      fontSize: '17px', color: this.enemyDef.color, fontStyle: 'bold', letterSpacing: 2
+      fontSize: '17px', color: this.enemyDef.color, fontStyle: 'bold', letterSpacing: 2,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5, 0.5);
     this.enemyCharContainer.add(nameTxt);
 

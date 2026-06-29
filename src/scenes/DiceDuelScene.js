@@ -3,6 +3,7 @@ import { DIE_TYPES } from '../data/dice.js';
 import {
   W, H, SURFACE_TOP, SURFACE_BOTTOM, DIE_SIZE, WALL_T,
   DIE_FRICTION, DIE_FRICTION_AIR, DIE_BOUNCE, SETTLE_VEL, MAX_THROW_SPEED,
+  FONT_DISPLAY,
 } from '../constants.js';
 import { UPGRADE_MAP, UPGRADE_DESCRIPTIONS } from '../data/upgrades.js';
 
@@ -159,6 +160,7 @@ export default class DiceDuelScene extends Phaser.Scene {
     const topY = SURFACE_TOP / 2;
     this.add.text(HP_CX, topY - 14, 'PLAYER 2', {
       fontSize: '11px', color: '#8b1a1a', letterSpacing: 2,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5).setAngle(180);
     this._p2HpTxt = this.add.text(HP_CX, topY + 4, `${this._p2Hp} / ${PLAYER_HP}`, {
       fontSize: '16px', color: '#e74c3c', fontStyle: 'bold',
@@ -183,6 +185,7 @@ export default class DiceDuelScene extends Phaser.Scene {
     const botY = SURFACE_BOTTOM + (H - SURFACE_BOTTOM) / 2;
     this.add.text(HP_CX, botY - 14, 'PLAYER 1', {
       fontSize: '11px', color: '#6b4400', letterSpacing: 2,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5);
     this._p1HpTxt = this.add.text(HP_CX, botY + 4, `${this._p1Hp} / ${PLAYER_HP}`, {
       fontSize: '16px', color: '#d4a820', fontStyle: 'bold',
@@ -530,6 +533,7 @@ export default class DiceDuelScene extends Phaser.Scene {
     banner.add(this.add.rectangle(W/2, py, W, 36, fc, 0.15));
     const bannerTxt = this.add.text(W/2, py, `${label}'S TURN`, {
       fontSize: '16px', color, fontStyle: 'bold', letterSpacing: 3,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5);
     if (!isP1) bannerTxt.setAngle(180);
     banner.add(bannerTxt);
