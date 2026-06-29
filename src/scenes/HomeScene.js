@@ -12,7 +12,7 @@ export default class HomeScene extends Phaser.Scene {
       fontSize: '38px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 6,
     }).setOrigin(0.5);
 
-    this.add.text(W / 2, H / 2 - 90, 'pre-alpha-beta-0.14', {
+    this.add.text(W / 2, H / 2 - 90, 'pre-alpha-beta-0.19', {
       fontSize: '11px', color: '#2a3848',
     }).setOrigin(0.5);
 
@@ -25,7 +25,7 @@ export default class HomeScene extends Phaser.Scene {
     });
 
     this.add.text(W / 2, H / 2 + 136, '2 players · same device', {
-      fontSize: '13px', color: '#1e3a48',
+      fontSize: '13px', color: '#6a8a9a',
     }).setOrigin(0.5);
   }
 

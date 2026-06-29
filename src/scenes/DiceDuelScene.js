@@ -44,6 +44,8 @@ export default class DiceDuelScene extends Phaser.Scene {
     this._p2Wins    = data.p2Wins     ?? 0;
     this._gameNum   = data.gameNum    ?? 1;
     this._firstPlayer = data.firstPlayer ?? 'p1';
+    this._p1Relic   = data.p1Relic   ?? null;
+    this._p2Relic   = data.p2Relic   ?? null;
   }
 
   // ─── CREATE ───────────────────────────────────────────────────────────────
@@ -57,7 +59,8 @@ export default class DiceDuelScene extends Phaser.Scene {
     this._p2Block        = 0;
     this._p1Poison       = 0;
     this._p2Poison       = 0;
-    this._cleanBonus     = 0;
+    this._p1CleanBonus   = 0;
+    this._p2CleanBonus   = 0;
     this._mines          = [];
     this.aimActive       = false;
     this._aimStartX      = 0;
@@ -66,7 +69,12 @@ export default class DiceDuelScene extends Phaser.Scene {
     this._effectQueue    = [];
     this._queueCards     = [];
     this._queueActive    = false;
+    this._onQueueEmpty   = null;
     this._throwLocked    = false;
+    this._p1PendingDmg   = 0;
+    this._p2PendingDmg   = 0;
+    this._p1SelectedIdx  = 0;
+    this._p2SelectedIdx  = 0;
     this._currentTurn    = this._firstPlayer;
     this._p1Thrown       = 0;
     this._p2Thrown       = 0;
@@ -77,6 +85,7 @@ export default class DiceDuelScene extends Phaser.Scene {
     this._p2BumperBody   = null;
     this._p1BumperGfx    = null;
     this._p2BumperGfx    = null;
+    this._allBumpers     = [];
     this._p1BumperX      = W / 2;
     this._p1BumperY      = SURFACE_BOTTOM - 60;
     this._p2BumperX      = W / 2;
@@ -140,34 +149,71 @@ export default class DiceDuelScene extends Phaser.Scene {
   }
 
   _buildHPBars() {
-    // P2 HP — top strip (rotated 180° visually for P2 perspective)
-    const topY = SURFACE_TOP / 2;
-    this.add.text(W/2, topY - 14, 'PLAYER 2', {
-      fontSize: '11px', color: '#8b1a1a', letterSpacing: 2,
-    }).setOrigin(0.5);
-    this._p2HpTxt = this.add.text(W/2, topY + 4, `${this._p2Hp} / ${PLAYER_HP}`, {
-      fontSize: '18px', color: '#e74c3c', fontStyle: 'bold',
-    }).setOrigin(0.5);
-    this._p2HpBarBg = this.add.rectangle(W/2, topY + 20, 160, 6, 0x3d0808);
-    this._p2HpBarFg = this.add.rectangle(W/2 - 80 + 80*(this._p2Hp/PLAYER_HP), topY + 20, 160*(this._p2Hp/PLAYER_HP), 6, 0xc0392b).setOrigin(0, 0.5);
-    this._p2HpBarFg.setX(W/2 - 80);
+    // HP area occupies the LEFT half of each player strip.
+    // Dice tray occupies the RIGHT half (handled in _buildTray).
+    const HP_CX  = 90;   // horizontal center of HP area
+    const BAR_LX = 10;   // left edge of HP bar
+    const BAR_W  = 160;  // bar width
 
-    // P1 HP — bottom strip
+    // ── P2 strip (top, y = 0–80) — all text rotated 180° for P2's perspective ──
+    const topY = SURFACE_TOP / 2;
+    this.add.text(HP_CX, topY - 14, 'PLAYER 2', {
+      fontSize: '11px', color: '#8b1a1a', letterSpacing: 2,
+    }).setOrigin(0.5).setAngle(180);
+    this._p2HpTxt = this.add.text(HP_CX, topY + 4, `${this._p2Hp} / ${PLAYER_HP}`, {
+      fontSize: '16px', color: '#e74c3c', fontStyle: 'bold',
+    }).setOrigin(0.5).setAngle(180);
+    this._p2HpBarBg = this.add.rectangle(HP_CX, topY + 20, BAR_W, 6, 0x3d0808);
+    this._p2HpBarFg = this.add.rectangle(BAR_LX, topY + 20, BAR_W * (this._p2Hp / PLAYER_HP), 6, 0xc0392b).setOrigin(0, 0.5);
+    // Rotated 180°: origin is mirrored, so (1,0.5) keeps text right of anchor, (0,0.5) keeps it left
+    this._p2PendingTxt = this.add.text(BAR_LX, topY + 4, '', {
+      fontSize: '12px', color: '#ff6633', fontStyle: 'bold',
+    }).setOrigin(1, 0.5).setAngle(180).setDepth(10);
+    this._p2BlockTxt = this.add.text(BAR_LX + BAR_W, topY + 4, '', {
+      fontSize: '12px', color: '#4488ff', fontStyle: 'bold',
+    }).setOrigin(0, 0.5).setAngle(180).setDepth(10);
+    this._p2PoisonLbl = this.add.text(HP_CX - 28, topY + 28, '', {
+      fontSize: '10px', color: '#44ff88', fontStyle: 'bold',
+    }).setOrigin(0.5).setAngle(180).setDepth(10);
+    this._p2BuffLbl = this.add.text(HP_CX + 28, topY + 28, '', {
+      fontSize: '10px', color: '#ff9922', fontStyle: 'bold',
+    }).setOrigin(0.5).setAngle(180).setDepth(10);
+
+    // ── P1 strip (bottom, y = 640–700) ──
     const botY = SURFACE_BOTTOM + (H - SURFACE_BOTTOM) / 2;
-    this.add.text(W/2, botY - 14, 'PLAYER 1', {
+    this.add.text(HP_CX, botY - 14, 'PLAYER 1', {
       fontSize: '11px', color: '#6b4400', letterSpacing: 2,
     }).setOrigin(0.5);
-    this._p1HpTxt = this.add.text(W/2, botY + 4, `${this._p1Hp} / ${PLAYER_HP}`, {
-      fontSize: '18px', color: '#d4a820', fontStyle: 'bold',
+    this._p1HpTxt = this.add.text(HP_CX, botY + 4, `${this._p1Hp} / ${PLAYER_HP}`, {
+      fontSize: '16px', color: '#d4a820', fontStyle: 'bold',
     }).setOrigin(0.5);
-    this._p1HpBarBg = this.add.rectangle(W/2, botY + 20, 160, 6, 0x3d2a00);
-    this._p1HpBarFg = this.add.rectangle(W/2 - 80, botY + 20, 160*(this._p1Hp/PLAYER_HP), 6, 0xd4a820).setOrigin(0, 0.5);
+    this._p1HpBarBg = this.add.rectangle(HP_CX, botY + 20, BAR_W, 6, 0x3d2a00);
+    this._p1HpBarFg = this.add.rectangle(BAR_LX, botY + 20, BAR_W * (this._p1Hp / PLAYER_HP), 6, 0xd4a820).setOrigin(0, 0.5);
+    this._p1PendingTxt = this.add.text(BAR_LX, botY + 4, '', {
+      fontSize: '12px', color: '#ff6633', fontStyle: 'bold',
+    }).setOrigin(0, 0.5).setDepth(10);
+    this._p1BlockTxt = this.add.text(BAR_LX + BAR_W, botY + 4, '', {
+      fontSize: '12px', color: '#4488ff', fontStyle: 'bold',
+    }).setOrigin(1, 0.5).setDepth(10);
+    this._p1PoisonLbl = this.add.text(HP_CX - 28, botY + 28, '', {
+      fontSize: '10px', color: '#44ff88', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(10);
+    this._p1BuffLbl = this.add.text(HP_CX + 28, botY + 28, '', {
+      fontSize: '10px', color: '#ff9922', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(10);
+  }
+
+  _refreshStatusUI() {
+    this._p1PoisonLbl?.setText(this._p1Poison > 0 ? `☠ ${this._p1Poison}` : '');
+    this._p1BuffLbl?.setText(this._p1CleanBonus > 0 ? `BUF +${this._p1CleanBonus}` : '');
+    this._p2PoisonLbl?.setText(this._p2Poison > 0 ? `☠ ${this._p2Poison}` : '');
+    this._p2BuffLbl?.setText(this._p2CleanBonus > 0 ? `BUF +${this._p2CleanBonus}` : '');
   }
 
   _buildMatchUI() {
     const cx = W / 2;
     this._matchTxt = this.add.text(cx, SURFACE_MID, '', {
-      fontSize: '13px', color: '#2a3848', fontStyle: 'bold', letterSpacing: 2,
+      fontSize: '13px', color: '#5a7a8a', fontStyle: 'bold', letterSpacing: 2,
     }).setOrigin(0.5).setDepth(5);
     this._refreshMatchUI();
   }
@@ -185,6 +231,13 @@ export default class DiceDuelScene extends Phaser.Scene {
   }
 
   _setStatus(msg) { this._statusTxt?.setText(msg); }
+
+  _refreshCombatUI() {
+    this._p1PendingTxt?.setText(this._p1PendingDmg > 0 ? `ATK ${this._p1PendingDmg}` : '');
+    this._p2PendingTxt?.setText(this._p2PendingDmg > 0 ? `ATK ${this._p2PendingDmg}` : '');
+    this._p1BlockTxt?.setText(this._p1Block > 0 ? `BLK ${this._p1Block}` : '');
+    this._p2BlockTxt?.setText(this._p2Block > 0 ? `BLK ${this._p2Block}` : '');
+  }
 
   _refreshHPBars() {
     const p1Pct = Math.max(0, this._p1Hp) / PLAYER_HP;
@@ -233,24 +286,24 @@ export default class DiceDuelScene extends Phaser.Scene {
   }
 
   _beginPlayerPlacement(who, onDone) {
-    const isP1 = who === 'p1';
+    const isP1  = who === 'p1';
     const color = isP1 ? '#d4a820' : '#e74c3c';
-    const halfLabel = isP1 ? 'BOTTOM HALF' : 'TOP HALF';
+    const fc    = isP1 ? 0xd4a820 : 0xe74c3c;
+    const py    = isP1 ? H - 56 : SURFACE_TOP + 56;
 
-    // Instruction overlay
-    const panel = this.add.container(0, 0).setDepth(50);
-    const dim = this.add.rectangle(W/2, H/2, W, H, 0x000000, 0.6).setInteractive();
-    panel.add(dim);
+    const banner = this.add.container(0, 0).setDepth(40).setAlpha(0);
+    banner.add(this.add.rectangle(W/2, py, W, 36, fc, 0.15));
+    const txt = this.add.text(W/2, py, `PLAYER ${isP1?1:2} — PLACE BUMPER`, {
+      fontSize: '15px', color, fontStyle: 'bold', letterSpacing: 2,
+    }).setOrigin(0.5);
+    if (!isP1) txt.setAngle(180);
+    banner.add(txt);
+    this.tweens.add({ targets: banner, alpha: 1, duration: 200 });
+    this._updateVignette(who);
 
-    const py = isP1 ? H*0.72 : H*0.28;
-    panel.add(this.add.rectangle(W/2, py, W-32, 88, 0x0a0f1a).setStrokeStyle(2, parseInt(color.replace('#',''), 16), 0.9));
-    panel.add(this.add.text(W/2, py - 22, `PLAYER ${isP1?1:2}`, { fontSize: '14px', color, fontStyle: 'bold', letterSpacing: 3 }).setOrigin(0.5));
-    panel.add(this.add.text(W/2, py,      `Drag your bumper (${halfLabel})`, { fontSize: '13px', color: '#7a8a9a' }).setOrigin(0.5));
-    panel.add(this.add.text(W/2, py + 20, `Then tap the enemy's bumper to confirm`, { fontSize: '12px', color: '#4a5a6a' }).setOrigin(0.5));
-
-    this.time.delayedCall(2000, () => {
-      panel.destroy(true);
-      this._activatePlacementDrag(who, onDone);
+    this._activatePlacementDrag(who, () => {
+      banner.destroy(true);
+      onDone();
     });
   }
 
@@ -317,41 +370,56 @@ export default class DiceDuelScene extends Phaser.Scene {
   }
 
   _lockBumpers() {
-    // Create physics bodies at confirmed positions
     const bOpt = { isStatic: true, friction: 0, frictionStatic: 0, restitution: 1.1 };
-    this._p1BumperBody = this.matter.add.circle(this._p1BumperX, this._p1BumperY, BUMPER_R,
-      { ...bOpt, label: 'p1bumper' });
-    this._p2BumperBody = this.matter.add.circle(this._p2BumperX, this._p2BumperY, BUMPER_R,
-      { ...bOpt, label: 'p2bumper' });
 
-    // Redraw locked bumpers as solid
-    this._drawBumper(this._p1BumperGfx, 0, 0, 0xd4a820, 0.85, 'P1');
-    this._drawBumper(this._p2BumperGfx, 0, 0, 0x8b1a1a, 0.85, 'P2');
+    const addBumper = (who, x, y, gfx) => {
+      const isP1   = who === 'p1';
+      const label  = isP1 ? 'p1bumper' : 'p2bumper';
+      const cat    = isP1 ? 0x0004 : 0x0008;
+      const col    = isP1 ? 0xd4a820 : 0x8b1a1a;
+      const txtCol = isP1 ? '#d4a820' : '#e74c3c';
 
-    // Add labels
-    this.add.text(this._p1BumperX, this._p1BumperY, 'P1', {
-      fontSize: '11px', color: '#d4a820', fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(16);
-    this.add.text(this._p2BumperX, this._p2BumperY, 'P2', {
-      fontSize: '11px', color: '#e74c3c', fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(16);
+      const body = this.matter.add.circle(x, y, BUMPER_R,
+        { ...bOpt, label, collisionFilter: { category: cat, mask: 0xFFFFFFFF } });
+
+      const entry = { body, gfx, x, y, who };
+      body._bumperEntry = entry;
+      this._allBumpers.push(entry);
+
+      this._drawBumper(gfx, 0, 0, col, 0.85, who.toUpperCase());
+      const lbl = this.add.text(x, y, who.toUpperCase(), {
+        fontSize: '11px', color: txtCol, fontStyle: 'bold',
+      }).setOrigin(0.5).setDepth(16);
+      if (!isP1) lbl.setAngle(180);
+
+      return body;
+    };
+
+    this._p1BumperBody = addBumper('p1', this._p1BumperX, this._p1BumperY, this._p1BumperGfx);
+    this._p2BumperBody = addBumper('p2', this._p2BumperX, this._p2BumperY, this._p2BumperGfx);
   }
 
   // ─── THROW PHASE ──────────────────────────────────────────────────────────
 
   _startThrowPhase() {
     this.phase = 1;
-    this._p1Thrown = 0;
-    this._p2Thrown = 0;
-    this._p1Block  = 0;
-    this._p2Block  = 0;
-    this._p1Poison = 0;
-    this._p2Poison = 0;
-    this._cleanBonus = 0;
+    this._p1Thrown     = 0;
+    this._p2Thrown     = 0;
+    this._p1Block      = 0;
+    this._p2Block      = 0;
+    this._p1Poison     = 0;
+    this._p2Poison     = 0;
+    this._p1CleanBonus = 0;
+    this._p2CleanBonus = 0;
+    this._p1PendingDmg = 0;
+    this._p2PendingDmg = 0;
+    this._refreshCombatUI();
+    this._refreshStatusUI();
     this._effectQueue = [];
     this._queueCards.forEach(c => c.container?.destroy());
-    this._queueCards = [];
+    this._queueCards  = [];
     this._queueActive = false;
+    this._onQueueEmpty = null;
     this._throwLocked = false;
     this._clearMines();
     this._clearSurface();
@@ -370,11 +438,16 @@ export default class DiceDuelScene extends Phaser.Scene {
     const isP1    = who === 'p1';
     const config  = isP1 ? this._p1Config : this._p2Config;
     const stripY  = isP1 ? H - 20 : SURFACE_TOP - 20;
-    const tray    = isP1 ? '_p1Tray' : '_p2Tray';
+    const trayKey = isP1 ? '_p1Tray' : '_p2Tray';
+    const ringKey = isP1 ? '_p1SelectRing' : '_p2SelectRing';
     const spacing = 44;
-    const startX  = W/2 - ((config.length - 1) * spacing) / 2;
+    const startX  = 300 - ((config.length - 1) * spacing) / 2;
 
-    this[tray] = config.map((dc, i) => {
+    // Destroy items from previous round
+    this[trayKey]?.forEach(item => { item.img?.destroy(); item.lbl?.destroy(); });
+    this[ringKey]?.destroy();
+
+    this[trayKey] = config.map((dc, i) => {
       const x   = startX + i * spacing;
       const key = isP1 ? 'pdie' : 'edie';
       const img = this.add.image(x, stripY, key).setDepth(5);
@@ -384,8 +457,63 @@ export default class DiceDuelScene extends Phaser.Scene {
         fontSize: '15px', color: dt?.color ?? '#ffffff', fontStyle: 'bold',
         stroke: '#000', strokeThickness: 3,
       }).setOrigin(0.5).setDepth(6);
+      if (!isP1) lbl.setAngle(180);
       return { img, lbl, configIdx: i, thrown: false };
     });
+
+    // Selection ring — drawn at depth below die image
+    this[ringKey] = this.add.graphics().setDepth(4);
+
+    // Default: leftmost die from each player's own perspective
+    // P1 left = lowest index; P2 left = highest index (they face the other way)
+    const initIdx = isP1 ? 0 : config.length - 1;
+    this._setSelectedDie(who, initIdx);
+  }
+
+  _setSelectedDie(who, idx) {
+    const isP1 = who === 'p1';
+    const tray = isP1 ? this._p1Tray : this._p2Tray;
+    const ring = isP1 ? this._p1SelectRing : this._p2SelectRing;
+    if (!tray?.[idx] || tray[idx].thrown) return;
+    if (isP1) this._p1SelectedIdx = idx; else this._p2SelectedIdx = idx;
+    ring?.clear();
+    if (ring) {
+      const col = isP1 ? 0xd4a820 : 0xe74c3c;
+      ring.lineStyle(2.5, col, 1);
+      ring.strokeCircle(tray[idx].img.x, tray[idx].img.y, 22);
+    }
+  }
+
+  _autoSelectNextDie(who) {
+    const isP1 = who === 'p1';
+    const tray = isP1 ? this._p1Tray : this._p2Tray;
+    const ring = isP1 ? this._p1SelectRing : this._p2SelectRing;
+    if (!tray) return;
+    const n     = tray.length;
+    const start = isP1 ? 0 : n - 1;
+    const step  = isP1 ? 1 : -1;
+    for (let i = start; i >= 0 && i < n; i += step) {
+      if (!tray[i].thrown) { this._setSelectedDie(who, i); return; }
+    }
+    ring?.clear();
+  }
+
+  // Returns true if the tap landed on an unthrown die in the current player's tray.
+  _trySelectTrayDie(ptr) {
+    const hitR = 24;
+    const who  = this._currentTurn;
+    const isP1 = who === 'p1';
+    const stripY = isP1 ? H - 20 : SURFACE_TOP - 20;
+    if (Math.abs(ptr.y - stripY) > hitR) return false;
+    const tray = isP1 ? this._p1Tray : this._p2Tray;
+    if (!tray) return false;
+    for (let i = 0; i < tray.length; i++) {
+      if (!tray[i].thrown && Math.abs(ptr.x - tray[i].img.x) < hitR) {
+        this._setSelectedDie(who, i);
+        return true;
+      }
+    }
+    return false;
   }
 
   _showTurnBanner(who) {
@@ -400,11 +528,40 @@ export default class DiceDuelScene extends Phaser.Scene {
     const banner = this._turnBanner = this.add.container(0, 0).setDepth(40).setAlpha(0);
 
     banner.add(this.add.rectangle(W/2, py, W, 36, fc, 0.15));
-    banner.add(this.add.text(W/2, py, `${label}'S TURN`, {
+    const bannerTxt = this.add.text(W/2, py, `${label}'S TURN`, {
       fontSize: '16px', color, fontStyle: 'bold', letterSpacing: 3,
-    }).setOrigin(0.5));
+    }).setOrigin(0.5);
+    if (!isP1) bannerTxt.setAngle(180);
+    banner.add(bannerTxt);
 
     this.tweens.add({ targets: banner, alpha: 1, duration: 200 });
+    this._updateVignette(who);
+  }
+
+  _updateVignette(who) {
+    // Build both vignettes once, then cross-fade between them
+    if (!this._vigP1) {
+      this._vigP1 = this._makeVigGfx(0xd4a820).setAlpha(0);
+      this._vigP2 = this._makeVigGfx(0xe74c3c).setAlpha(0);
+    }
+    const [show, hide] = who === 'p1'
+      ? [this._vigP1, this._vigP2]
+      : [this._vigP2, this._vigP1];
+    this.tweens.killTweensOf(show);
+    this.tweens.killTweensOf(hide);
+    this.tweens.add({ targets: show, alpha: 0.1, duration: 350 });
+    this.tweens.add({ targets: hide, alpha: 0, duration: 350 });
+  }
+
+  _makeVigGfx(col) {
+    const gfx = this.add.graphics().setDepth(3);
+    const s   = 0.45;
+    const w   = 90;
+    gfx.fillGradientStyle(col, col, col, col, s, 0, s, 0); gfx.fillRect(0, 0, w, H);
+    gfx.fillGradientStyle(col, col, col, col, 0, s, 0, s); gfx.fillRect(W - w, 0, w, H);
+    gfx.fillGradientStyle(col, col, col, col, s, s, 0, 0); gfx.fillRect(0, 0, W, w);
+    gfx.fillGradientStyle(col, col, col, col, 0, 0, s, s); gfx.fillRect(0, H - w, W, w);
+    return gfx;
   }
 
   // ─── TURN ADVANCE ─────────────────────────────────────────────────────────
@@ -412,17 +569,21 @@ export default class DiceDuelScene extends Phaser.Scene {
   _advanceTurn() {
     if (this.phase !== 1) return;
     this._throwLocked = false;
-    const next = this._currentTurn === 'p1' ? 'p2' : 'p1';
-    const nextLeft = next === 'p1' ? this._p1DiceLeft() : this._p2DiceLeft();
-    const curLeft  = this._currentTurn === 'p1' ? this._p1DiceLeft() : this._p2DiceLeft();
 
-    if (nextLeft === 0 && curLeft === 0) {
-      // Both out of dice — resolve
-      this._startResolvePhase();
+    const p1Left = this._p1DiceLeft();
+    const p2Left = this._p2DiceLeft();
+
+    if (p1Left === 0 && p2Left === 0) {
+      // All dice thrown and queue already drained — end the round
+      this._handleRoundEnd();
       return;
     }
+
+    const next     = this._currentTurn === 'p1' ? 'p2' : 'p1';
+    const nextLeft = next === 'p1' ? p1Left : p2Left;
+
     if (nextLeft === 0) {
-      // Other player still has dice — don't switch
+      // Other player is out — current player throws again
       this._showTurnBanner(this._currentTurn);
       return;
     }
@@ -436,10 +597,7 @@ export default class DiceDuelScene extends Phaser.Scene {
     this.input.on('pointerdown', (ptr) => {
       if (this.phase !== 1)  return;
       if (this._throwLocked) return;
-      // Gate to correct half of screen
-      const isP1Turn = this._currentTurn === 'p1';
-      const inMyZone = isP1Turn ? ptr.y > SURFACE_MID : ptr.y < SURFACE_MID;
-      if (!inMyZone) return;
+      if (this._trySelectTrayDie(ptr)) return; // tray tap — switch selection, don't aim
       this.aimActive  = true;
       this._aimStartX = ptr.x;
       this._aimStartY = ptr.y;
@@ -447,19 +605,15 @@ export default class DiceDuelScene extends Phaser.Scene {
 
     this.input.on('pointermove', (ptr) => {
       if (!this.aimActive || this.phase !== 1) return;
+      const dragDx = ptr.x - this._aimStartX;
+      const dragDy = ptr.y - this._aimStartY;
+      const ox = this._currentTurn === 'p1' ? this._p1BumperX : this._p2BumperX;
+      const oy = this._currentTurn === 'p1' ? this._p1BumperY : this._p2BumperY;
       this.aimGfx.clear();
-      const dx  = ptr.x - this._aimStartX;
-      const dy  = ptr.y - this._aimStartY;
-      const len = Math.hypot(dx, dy);
-      if (len < 12) return;
-      const nx = -dx / len;
-      const ny = -dy / len;
-      const ox = this._currentTurn === 'p1' ? THROW_ORIGIN_X : THROW_ORIGIN_X;
-      const oy = this._currentTurn === 'p1' ? P1_THROW_Y     : P2_THROW_Y;
-      this.aimGfx.lineStyle(1.5, 0xffffff, 0.25);
+      this.aimGfx.lineStyle(2, 0xffffff, 0.45);
       this.aimGfx.beginPath();
       this.aimGfx.moveTo(ox, oy);
-      this.aimGfx.lineTo(ox + nx*80, oy + ny*80);
+      this.aimGfx.lineTo(ox - dragDx, oy - dragDy);
       this.aimGfx.strokePath();
     });
 
@@ -474,37 +628,48 @@ export default class DiceDuelScene extends Phaser.Scene {
       const len    = Math.hypot(dragDx, dragDy);
       if (len < 20) return;
 
-      const spd = Math.min(MAX_THROW_SPEED, Math.max(7, len * 0.14));
-      const ox  = THROW_ORIGIN_X;
-      const oy  = this._currentTurn === 'p1' ? P1_THROW_Y : P2_THROW_Y;
+      const spd = Math.min(MAX_THROW_SPEED, Math.max(7, len * 0.14)) * 0.8;
+      const ox  = this._currentTurn === 'p1' ? this._p1BumperX : this._p2BumperX;
+      const oy  = this._currentTurn === 'p1' ? this._p1BumperY : this._p2BumperY;
       this._throwNextDie(this._currentTurn, ox, oy, (-dragDx/len)*spd, (-dragDy/len)*spd);
     });
   }
 
   _throwNextDie(who, ox, oy, vx, vy) {
-    const isP1   = who === 'p1';
+    const isP1  = who === 'p1';
     const config = isP1 ? this._p1Config : this._p2Config;
-    const thrown = isP1 ? this._p1Thrown : this._p2Thrown;
-    if (thrown >= config.length) return;
+    const tray   = isP1 ? this._p1Tray   : this._p2Tray;
+    const idx    = isP1 ? this._p1SelectedIdx : this._p2SelectedIdx;
 
-    const dc  = config[thrown];
+    if (!tray || idx < 0 || idx >= config.length || tray[idx]?.thrown) return;
+
+    const dc  = config[idx];
     const die = this._spawnDie(dc, ox, oy, vx, vy, who);
 
-    // Mark tray card thrown
-    const tray = isP1 ? this._p1Tray : this._p2Tray;
-    const card = tray?.[thrown];
+    // Mark selected tray slot as thrown
+    const card = tray[idx];
     if (card) { card.thrown = true; card.img.setAlpha(0.3); card.lbl.setAlpha(0.3); }
 
     if (isP1) this._p1Thrown++; else this._p2Thrown++;
 
+    // Advance ring to next unthrown die from this player's left
+    this._autoSelectNextDie(who);
+
     this._throwLocked = true;
     die._rolling = true;
 
-    // Wait for settle
+    // After the thrown die settles, wait for ALL dice (cascade hits), drain the
+    // queue so effects fire now, then advance the turn.
     this._waitForSettle(die, () => {
       if (this.phase !== 1) return;
-      this._queueDie(die);
-      this._advanceTurn();
+      this._waitForAllSettle(() => {
+        if (this.phase !== 1) return;
+        this._onQueueEmpty = () => {
+          if (this.phase !== 1) return;
+          this._advanceTurn();
+        };
+        this._processQueue();
+      });
     });
   }
 
@@ -516,6 +681,15 @@ export default class DiceDuelScene extends Phaser.Scene {
     this.time.delayedCall(400, check);
   }
 
+  _waitForAllSettle(cb) {
+    const check = () => {
+      const anyRolling = this.allDice.some(d => d._rolling && d.img?.active);
+      if (!anyRolling) { cb(); return; }
+      this.time.delayedCall(150, check);
+    };
+    this.time.delayedCall(300, check);
+  }
+
   // ─── DIE SPAWNING ─────────────────────────────────────────────────────────
 
   _spawnDie(data, x, y, vx, vy, owner) {
@@ -523,12 +697,18 @@ export default class DiceDuelScene extends Phaser.Scene {
     const key  = isP1 ? 'pdie' : 'edie';
     const lbl  = isP1 ? 'p1die' : 'p2die';
 
+    // Exclude own bumper from collision until die has cleared the launch point
+    const startMask = isP1 ? 0xFFFFFFFB : 0xFFFFFFF7; // drops bit 0x0004 (P1) or 0x0008 (P2)
     const img = this.matter.add.image(x, y, key, undefined, {
       isStatic: false, friction: DIE_FRICTION, frictionAir: DIE_FRICTION_AIR,
       restitution: DIE_BOUNCE, label: lbl, density: 0.004,
       shape: { type: 'circle', radius: DIE_SIZE/2 - 2 },
+      collisionFilter: { mask: startMask },
     });
     img.setVelocity(vx, vy);
+    this.time.delayedCall(500, () => {
+      if (img?.active && img.body) img.body.collisionFilter.mask = 0xFFFFFFFF;
+    });
 
     const dt     = DIE_TYPES[data.type];
     const faceNo = Math.floor(data.currentFaceIdx/2) + 1;
@@ -540,6 +720,7 @@ export default class DiceDuelScene extends Phaser.Scene {
       fontSize: '9px', color: dt?.color ?? '#aaaaaa',
       stroke: '#000', strokeThickness: 2,
     }).setOrigin(0.5).setDepth(10);
+    if (!isP1) { valTxt.setAngle(180); lblTxt.setAngle(180); }
 
     const dieRef = {
       img, data: { ...data }, valTxt, lblTxt,
@@ -566,25 +747,30 @@ export default class DiceDuelScene extends Phaser.Scene {
 
       if (d._rolling && Math.hypot(vx, vy) < SETTLE_VEL) {
         const roll  = Phaser.Math.Between(0, d.data.sides - 1);
-        d.data.currentFaceIdx = roll * 2;
-        const faceNo = roll + 1;
+        d.data.currentFaceIdx = roll;
         const dt     = DIE_TYPES[d.data.type];
+        const faceNo = Math.floor(roll / 2) + 1;
         d.valTxt?.setText(String(faceNo));
         d.valTxt?.setColor(dt?.color ?? '#ffffff');
         d.lblTxt?.setText(dt?.label?.slice(0,3).toUpperCase() ?? '');
         d.lblTxt?.setColor(dt?.color ?? '#aaaaaa');
         d._rolling = false;
+        // Queue every time a die settles — hit dice retrigger with new face
+        if (this.phase === 1) this._queueDie(d);
       }
     });
   }
 
+  // No _rolling guard — settled dice that get physically hit will roll again and retrigger
   _rerollDie(dieRef) {
-    if (!dieRef._rolling) return;
-    const sides = dieRef.data.sides ?? 6;
-    const roll  = Phaser.Math.Between(0, sides - 1);
-    dieRef.data.currentFaceIdx = roll * 2;
-    const dt = DIE_TYPES[dieRef.data.type];
-    dieRef.valTxt?.setText(String(roll + 1));
+    if (!dieRef.img?.active) return;
+    dieRef._hadCollision = false; // reset so each roll is judged independently for Steady Hand
+    const sides  = dieRef.data.sides ?? 6;
+    const roll   = Phaser.Math.Between(0, sides - 1);
+    dieRef.data.currentFaceIdx = roll;
+    dieRef._rolling = true;
+    const dt     = DIE_TYPES[dieRef.data.type];
+    dieRef.valTxt?.setText(String(Math.floor(roll / 2) + 1));
     dieRef.valTxt?.setColor(dt?.color ?? '#ffffff');
     dieRef.lblTxt?.setText(dt?.label?.slice(0,3).toUpperCase() ?? '');
     dieRef.lblTxt?.setColor(dt?.color ?? '#aaaaaa');
@@ -675,17 +861,22 @@ export default class DiceDuelScene extends Phaser.Scene {
 
         if (isOppBumper || isOwnBumper) {
           dieRef._hadCollision = true;
-          const bx = other.label === 'p1bumper' ? this._p1BumperX : this._p2BumperX;
-          const by = other.label === 'p1bumper' ? this._p1BumperY : this._p2BumperY;
+          // Use the actual hit bumper's position (not the latest stored one)
+          const entry = other._bumperEntry;
+          const bx = entry?.x ?? other.position?.x ?? this._p1BumperX;
+          const by = entry?.y ?? other.position?.y ?? this._p1BumperY;
           this._applyBumperKick(dieBody, bx, by);
           if (!rerolled.has(dieRef)) { rerolled.add(dieRef); this._rerollDie(dieRef); }
-          this._flashBumper(other.label === 'p1bumper' ? 'p1' : 'p2');
+          this._flashGfx(entry?.gfx);
 
           if (isOppBumper) {
-            // Chip damage to opponent
-            const bonus   = this._hasDieUpgrade(dieRef.data, 'bumper') ? 1 : 0;
-            const target  = dieRef.mpOwner === 'p1' ? 'p2' : 'p1';
-            const chip    = 1 + bonus;
+            const target = dieRef.mpOwner === 'p1' ? 'p2' : 'p1';
+            let chip = 1 + (this._hasDieUpgrade(dieRef.data, 'bumper') ? 1 : 0);
+            if (this._hasRelic(dieRef.mpOwner, 'spiked_bumper')) {
+              const spike = Math.floor((dieRef.data.sides ?? 6) / 2);
+              chip += spike;
+              this._floatText(bx, by - 40, `SPIKE +${spike}`, '#e74c3c');
+            }
             this._dealDamageTo(target, chip, true);
           }
 
@@ -818,36 +1009,14 @@ export default class DiceDuelScene extends Phaser.Scene {
     });
   }
 
-  // ─── RESOLVE PHASE ────────────────────────────────────────────────────────
-
-  _startResolvePhase() {
-    this.phase = 2;
-    this._setStatus('Resolving...');
-    if (this._turnBanner) { this._turnBanner.destroy(true); this._turnBanner = null; }
-
-    // Apply poison at start of resolve
-    if (this._p1Poison > 0) {
-      const dmg = this._p1Poison;
-      this._p1Hp = Math.max(0, this._p1Hp - dmg);
-      this._floatText(W/2, P1_THROW_Y, `☠ -${dmg} POISON`, '#44ff88');
-      this._p1Poison = Math.max(0, this._p1Poison - 1);
-      this._refreshHPBars();
-    }
-    if (this._p2Poison > 0) {
-      const dmg = this._p2Poison;
-      this._p2Hp = Math.max(0, this._p2Hp - dmg);
-      this._floatText(W/2, P2_THROW_Y, `☠ -${dmg} POISON`, '#44ff88');
-      this._p2Poison = Math.max(0, this._p2Poison - 1);
-      this._refreshHPBars();
-    }
-
-    this.time.delayedCall(600, () => this._processQueue());
-  }
+  // ─── QUEUE DRAIN ──────────────────────────────────────────────────────────
 
   _processQueue() {
     if (this.phase === 99) return;
     if (this._effectQueue.length === 0) {
-      this.time.delayedCall(800, () => this._handleRoundEnd());
+      const cb = this._onQueueEmpty;
+      this._onQueueEmpty = null;
+      if (cb) this.time.delayedCall(300, cb);
       return;
     }
     if (this._queueActive) return;
@@ -898,7 +1067,8 @@ export default class DiceDuelScene extends Phaser.Scene {
     const { dieRef, snapX, snapY, owner } = entry;
     const { data }  = dieRef;
     const opponent  = owner === 'p1' ? 'p2' : 'p1';
-    let value = Math.floor(data.currentFaceIdx / 2) + 1;
+    const rawFace   = Math.floor(data.currentFaceIdx / 2) + 1;
+    let value = rawFace;
     if (dieRef._cracked)    { value = Math.ceil(value / 2); dieRef._cracked = false; }
     if (dieRef._valueBonus) { value += dieRef._valueBonus;  dieRef._valueBonus = 0;  }
     value = Math.max(0, value);
@@ -909,38 +1079,61 @@ export default class DiceDuelScene extends Phaser.Scene {
       value += myDice.length - 1;
     }
 
+    // Relic: Steady Hand — no wall or bumper hit grants +4 to effect
+    if (!dieRef._hadCollision && this._hasRelic(owner, 'steady_hand')) {
+      value += 4;
+      this._floatText(snapX, snapY - 34, 'STEADY +4', '#f0c040');
+    }
+
+    // Relic: Lucky Coin — rolled max face means effect fires twice (×2 value)
+    if (rawFace === Math.floor(data.sides / 2) && this._hasRelic(owner, 'lucky_coin')) {
+      value *= 2;
+      this._floatText(snapX, snapY - 34, 'LUCKY ×2', '#f0c040');
+    }
+
     // Poison upgrade redirects all damage to stacks
     if (this._hasDieUpgrade(data, 'poison')) {
       if (owner === 'p1') this._p2Poison += value;
       else                this._p1Poison += value;
       this._floatText(snapX, snapY - 20, `☠ +${value}`, '#44ff88');
+      this._refreshStatusUI();
       return;
     }
 
     switch (data.type) {
       case 'attack': {
-        let dmg = value;
+        const buf = owner === 'p1' ? this._p1CleanBonus : this._p2CleanBonus;
+        let dmg = value + buf;
         if (this._hasDieUpgrade(data, 'status_damage')) dmg += 5;
         dmg = Math.max(0, dmg);
-        this._laserBeam(snapX, snapY,
-          opponent === 'p1' ? this._p1BumperX : this._p2BumperX,
-          opponent === 'p1' ? this._p1BumperY : this._p2BumperY, 0xff4444);
-        this._dealDamageTo(opponent, dmg, false);
+        if (owner === 'p1') this._p1PendingDmg += dmg;
+        else                this._p2PendingDmg += dmg;
+        this._floatText(snapX, snapY - 20, `+${dmg} ATK`, '#ff6633');
+        this._refreshCombatUI();
         break;
       }
       case 'block': {
-        if (owner === 'p1') this._p1Block += value; else this._p2Block += value;
-        this._floatText(snapX, snapY - 20, `+${value} BLK`, '#3498db');
+        const buf = owner === 'p1' ? this._p1CleanBonus : this._p2CleanBonus;
+        const blk = value + buf;
+        if (owner === 'p1') this._p1Block += blk; else this._p2Block += blk;
+        this._floatText(snapX, snapY - 20, `+${blk} BLK`, '#4488ff');
+        this._refreshCombatUI();
         break;
       }
       case 'pierce': {
-        this._cleanBonus += value;
+        if (owner === 'p1') this._p1CleanBonus += value;
+        else                this._p2CleanBonus += value;
         this._floatText(snapX, snapY - 20, `+${value} BOOST`, '#ff9900');
+        this._refreshStatusUI();
         break;
       }
       case 'poison': {
-        if (owner === 'p1') this._p2Poison += value; else this._p1Poison += value;
-        this._floatText(snapX, snapY - 20, `☠ +${value}`, '#44ff88');
+        let stacks = value;
+        // Relic: Pickpocket's Thumb — +1 extra poison stack whenever a poison die settles
+        if (this._hasRelic(owner, 'pickpockets_thumb')) stacks += 1;
+        if (owner === 'p1') this._p2Poison += stacks; else this._p1Poison += stacks;
+        this._floatText(snapX, snapY - 20, `☠ +${stacks}`, '#44ff88');
+        this._refreshStatusUI();
         break;
       }
       default:
@@ -965,6 +1158,12 @@ export default class DiceDuelScene extends Phaser.Scene {
     else                 this._p2Hp = Math.max(0, this._p2Hp - net);
     this._refreshHPBars();
     this._flashHPBar(target, net);
+
+    // Mid-round KO — end the game immediately without waiting for round end
+    if (this.phase === 1 && (this._p1Hp <= 0 || this._p2Hp <= 0)) {
+      const loser = this._p1Hp <= 0 ? 'p1' : 'p2';
+      this.time.delayedCall(500, () => this._handleGameEnd(loser));
+    }
   }
 
   _flashHPBar(target, amount) {
@@ -978,24 +1177,171 @@ export default class DiceDuelScene extends Phaser.Scene {
 
   _handleRoundEnd() {
     if (this.phase === 99 || this.phase === 3) return;
+    this.phase = 2;
+    if (this._turnBanner) { this._turnBanner.destroy(true); this._turnBanner = null; }
     this._clearSurface();
     this._clearMines();
 
-    const p1Dead = this._p1Hp <= 0;
-    const p2Dead = this._p2Hp <= 0;
+    this._animateDamageSequence(() => {
+      // Apply end-of-round poison
+      if (this._p1Poison > 0) {
+        const dmg = this._p1Poison;
+        this._p1Hp = Math.max(0, this._p1Hp - dmg);
+        this._floatText(90, SURFACE_BOTTOM + (H - SURFACE_BOTTOM) / 2, `☠ -${dmg}`, '#44ff88');
+        this._p1Poison = Math.max(0, this._p1Poison - 1);
+        this._refreshHPBars();
+        this._refreshStatusUI();
+      }
+      if (this._p2Poison > 0) {
+        const dmg = this._p2Poison;
+        this._p2Hp = Math.max(0, this._p2Hp - dmg);
+        this._floatText(90, SURFACE_TOP / 2, `☠ -${dmg}`, '#44ff88');
+        this._p2Poison = Math.max(0, this._p2Poison - 1);
+        this._refreshHPBars();
+        this._refreshStatusUI();
+      }
 
-    if (p1Dead || p2Dead) {
-      const loser = p1Dead ? 'p1' : 'p2';
-      this._handleGameEnd(loser);
-      return;
+      const p1Dead = this._p1Hp <= 0;
+      const p2Dead = this._p2Hp <= 0;
+
+      if (p1Dead || p2Dead) {
+        const loser = p1Dead ? 'p1' : 'p2';
+        this._handleGameEnd(loser);
+        return;
+      }
+
+      this._setStatus('');
+      this.time.delayedCall(600, () => this._startPlacement());
+    });
+  }
+
+  // ─── DAMAGE ANIMATION SEQUENCE ────────────────────────────────────────────
+
+  _animateDamageSequence(cb) {
+    // Snapshot values before animation mutates them
+    const p1Atk = this._p1PendingDmg;
+    const p2Atk = this._p2PendingDmg;
+    const p2Blk = this._p2Block;
+    const p1Blk = this._p1Block;
+
+    // Strip centres for the HP area (left side, x = 90)
+    const HP_X  = 90;
+    const P1_Y  = SURFACE_BOTTOM + (H - SURFACE_BOTTOM) / 2; // ≈ 670
+    const P2_Y  = SURFACE_TOP / 2;                            // ≈ 40
+
+    const doP1Attack = (next) => {
+      if (p1Atk <= 0) { next(); return; }
+      const net = Math.max(0, p1Atk - p2Blk);
+      this._flyDamage(HP_X, P1_Y, HP_X, P2_Y, p1Atk, () => {
+        // Apply damage at the moment of impact
+        const absorbed = Math.min(p2Blk, p1Atk);
+        this._p2Block = Math.max(0, p2Blk - absorbed);
+        this._p2Hp    = Math.max(0, this._p2Hp - net);
+        this._p1PendingDmg = 0;
+        this._refreshHPBars();
+        this._showImpact(HP_X, P2_Y, p1Atk, p2Blk, 180, () => {
+          this._refreshCombatUI();
+          this.time.delayedCall(400, next);
+        });
+      });
+    };
+
+    const doP2Attack = (next) => {
+      if (p2Atk <= 0) { next(); return; }
+      const net = Math.max(0, p2Atk - p1Blk);
+      this._flyDamage(HP_X, P2_Y, HP_X, P1_Y, p2Atk, () => {
+        const absorbed = Math.min(p1Blk, p2Atk);
+        this._p1Block = Math.max(0, p1Blk - absorbed);
+        this._p1Hp    = Math.max(0, this._p1Hp - net);
+        this._p2PendingDmg = 0;
+        this._refreshHPBars();
+        this._showImpact(HP_X, P1_Y, p2Atk, p1Blk, 0, () => {
+          this._refreshCombatUI();
+          this.time.delayedCall(400, next);
+        });
+      });
+    };
+
+    const finish = () => {
+      this._p1Block = 0;
+      this._p2Block = 0;
+      this._p1PendingDmg = 0;
+      this._p2PendingDmg = 0;
+      this._refreshCombatUI();
+      this.time.delayedCall(300, cb);
+    };
+
+    if (p1Atk === 0 && p2Atk === 0) { finish(); return; }
+
+    doP1Attack(() => this.time.delayedCall(200, () => doP2Attack(finish)));
+  }
+
+  // Sends a large damage number flying from (sx,sy) to (ex,ey), calls cb on arrival.
+  _flyDamage(sx, sy, ex, ey, damage, cb) {
+    const txt = this.add.text(sx, sy, String(damage), {
+      fontSize: '38px', color: '#ff6622', fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 5,
+    }).setOrigin(0.5).setDepth(95).setAlpha(0).setScale(0.6);
+
+    this.tweens.add({
+      targets: txt, alpha: 1, scaleX: 1, scaleY: 1, duration: 180,
+      onComplete: () => {
+        this.tweens.add({
+          targets: txt, x: ex, y: ey, duration: 480, ease: 'Sine.InOut',
+          onComplete: () => { txt.destroy(); cb(); },
+        });
+      },
+    });
+  }
+
+  // Shows the block/shatter/hit result at (cx,cy) for a defender.
+  // textAngle: 0 for P1 (bottom), 180 for P2 (top, so they can read it).
+  _showImpact(cx, cy, damage, block, textAngle, cb) {
+    const net     = Math.max(0, damage - block);
+    const driftY  = textAngle === 0 ? -28 : 28; // drift toward play area from each player's view
+
+    // Shockwave ring at impact point
+    const ring = this.add.graphics().setDepth(94);
+    ring.lineStyle(4, 0xff6622, 1);
+    ring.strokeCircle(cx, cy, 8);
+    this.tweens.add({ targets: ring, scaleX: 7, scaleY: 7, alpha: 0, duration: 380,
+      onComplete: () => ring.destroy() });
+
+    const makeText = (str, color, size = 20) =>
+      this.add.text(cx, cy, str, {
+        fontSize: `${size}px`, color, fontStyle: 'bold',
+        stroke: '#000', strokeThickness: 4,
+      }).setOrigin(0.5).setDepth(96).setAngle(textAngle);
+
+    const floatOut = (obj, delay, onDone) =>
+      this.time.delayedCall(delay, () =>
+        this.tweens.add({ targets: obj, y: cy + driftY, alpha: 0, duration: 480,
+          onComplete: () => { obj.destroy(); onDone(); } }));
+
+    if (block > 0 && net === 0) {
+      // ── Fully blocked ──
+      const shield = makeText('BLOCKED!', '#4488ff', 22);
+      floatOut(shield, 80, cb);
+
+    } else if (block > 0 && net > 0) {
+      // ── Block shatters, residual damage gets through ──
+      const shatter = makeText(`BLK SHATTERED  -${block}`, '#4488ff', 16);
+      floatOut(shatter, 60, () => {
+        const hit = makeText(`-${net}`, '#ff2222', 28);
+        this._flashBumper(textAngle === 0 ? 'p1' : 'p2');
+        floatOut(hit, 80, cb);
+      });
+
+    } else {
+      // ── No block — direct hit ──
+      const hit = makeText(`-${damage}`, '#ff2222', 28);
+      this._flashBumper(textAngle === 0 ? 'p1' : 'p2');
+      floatOut(hit, 80, cb);
     }
-
-    // Next round — re-run placement
-    this._setStatus('');
-    this.time.delayedCall(600, () => this._startPlacement());
   }
 
   _handleGameEnd(loser) {
+    if (this.phase === 3) return;
     this.phase = 3;
     const winner = loser === 'p1' ? 'p2' : 'p1';
     if (winner === 'p1') this._p1Wins++; else this._p2Wins++;
@@ -1031,7 +1377,7 @@ export default class DiceDuelScene extends Phaser.Scene {
         fontSize: '16px', color: '#8899aa',
       }).setOrigin(0.5));
       panel.add(this.add.text(W/2, H/2 + 10, `Pass the device to Player ${loser === 'p1' ? 1 : 2}`, {
-        fontSize: '14px', color: '#445566',
+        fontSize: '14px', color: '#6a8a9a',
       }).setOrigin(0.5));
 
       const contBtn = this.add.text(W/2, H/2 + 70, 'CONTINUE', {
@@ -1051,6 +1397,8 @@ export default class DiceDuelScene extends Phaser.Scene {
           p2Wins:      this._p2Wins,
           gameNum:     this._gameNum + 1,
           firstPlayer: nextFirstPlayer,
+          p1Relic:     this._p1Relic,
+          p2Relic:     this._p2Relic,
         };
         this.scene.start('UpgradeScene', {
           playerDiceConfig: loserConfig,
@@ -1088,11 +1436,15 @@ export default class DiceDuelScene extends Phaser.Scene {
     this.tweens.add({ targets: g, alpha: 0, duration: 300, onComplete: () => g.destroy() });
   }
 
-  _flashBumper(who) {
-    const gfx = who === 'p1' ? this._p1BumperGfx : this._p2BumperGfx;
+  _flashGfx(gfx) {
     if (!gfx) return;
     this.tweens.add({ targets: gfx, scaleX: 1.4, scaleY: 1.4, duration: 60, yoyo: true, ease: 'Sine.Out',
       onComplete: () => gfx?.setScale(1) });
+  }
+
+  // Flashes the latest-placed bumper gfx for a given player (used by damage animations).
+  _flashBumper(who) {
+    this._flashGfx(who === 'p1' ? this._p1BumperGfx : this._p2BumperGfx);
   }
 
   _applyCrackOverlay(dieRef) {
@@ -1190,6 +1542,10 @@ export default class DiceDuelScene extends Phaser.Scene {
 
   _hasDieUpgrade(data, id) {
     return data?.upgradeState?.takenUpgrades?.includes(id) ?? false;
+  }
+
+  _hasRelic(who, id) {
+    return (who === 'p1' ? this._p1Relic : this._p2Relic) === id;
   }
 
   _getMaterialBonus(data) {

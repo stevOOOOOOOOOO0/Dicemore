@@ -16,12 +16,23 @@ const PHASE = { PREP: 0, ENEMY_ROLL: 1, PLAYER_ROLL: 2, COMMIT: 3 };
 const ENEMY_DIE_TYPE_COLORS = { attack: '#e74c3c', block: '#3498db', strength: '#e67e22', vulnerable: '#bb44cc', frail: '#1abc9c' };
 const ENEMY_DIE_TYPE_SYMS   = { attack: 'ATK', block: 'BLK', strength: 'STR', vulnerable: 'VUL', frail: 'FRL' };
 
+const ABILITY_INFO = {
+  bumper_enrage:   { name: 'ENRAGE',         desc: 'Each time you hit my bumper, I gain permanent Strength.' },
+  flat_reduction:  { name: 'FLAT DRAIN',     desc: 'All your dice roll lower — every value reduced by {v}.' },
+  glass_curse:     { name: 'GLASS CURSE',    desc: 'Your dice are Glass this round — they shatter on first contact.' },
+  contact_drain:   { name: 'CONTACT DRAIN',  desc: 'Every collision shaves −1 off that die\'s value.' },
+  obstacle_buff:   { name: 'OBSTACLE BUFF',  desc: 'Each obstacle hit feeds me permanent Strength.' },
+  bouncy_bumpers:  { name: 'ULTRA BOUNCE',   desc: 'My bumper launches dice at double force — impossible to aim into.' },
+  sticky_walls:    { name: 'STICKY WALLS',   desc: 'Walls absorb all momentum — dice stop dead on contact.' },
+  bullet_throws:   { name: 'BULLET THROWS',  desc: 'Your minimum throw speed is locked to max — no soft tosses.' },
+};
+
 const INTENT = {
   attack:     { label: 'ATTACK',  color: '#e74c3c' },
   block:      { label: 'BLOCK',   color: '#3498db' },
-  strength:   { label: 'LOADED',  color: '#e67e22' },
-  vulnerable: { label: 'HUSTLE',  color: '#bb44cc' },
-  frail:      { label: 'RATTLE',  color: '#1abc9c' },
+  strength:   { label: 'LOADED',  color: '#e67e22', hint: '+STR' },
+  vulnerable: { label: 'HUSTLE',  color: '#bb44cc', hint: '+DMG' },
+  frail:      { label: 'RATTLE',  color: '#1abc9c', hint: '−DEF' },
 };
 const THROW_ZONE_BOTTOM  = SURFACE_BOTTOM - 8;
 const THROW_ORIGIN_X     = W / 2;
@@ -271,7 +282,7 @@ export default class BattleScene extends Phaser.Scene {
       fontSize: '16px', color: relic.color, fontStyle: 'bold',
     }).setOrigin(0, 0.5));
     pop.add(this.add.text(dotX + 18, panelY - 3, relic.rarity.toUpperCase(), {
-      fontSize: '10px', color: '#334455', letterSpacing: 1,
+      fontSize: '10px', color: '#567090', letterSpacing: 1,
     }).setOrigin(0, 0.5));
     pop.add(this.add.text(panelX - panelW / 2 + 14, panelY + 18, relic.description, {
       fontSize: '13px', color: '#8899aa', wordWrap: { width: panelW - 28 },
@@ -392,11 +403,18 @@ export default class BattleScene extends Phaser.Scene {
     this.enemyCharContainer.add(ring);
 
     // Intent text inside circle
-    this._intentTxt = this.add.text(0, -3, '', {
+    this._intentTxt = this.add.text(0, -7, '', {
       fontSize: '11px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 3, align: 'center',
     }).setOrigin(0.5, 0.5);
     this.enemyCharContainer.add(this._intentTxt);
+
+    // Mechanical hint below main intent label (decodes LOADED/HUSTLE/RATTLE)
+    this._intentHintTxt = this.add.text(0, 7, '', {
+      fontSize: '9px', color: '#aaaacc',
+      stroke: '#000000', strokeThickness: 2, align: 'center',
+    }).setOrigin(0.5, 0.5);
+    this.enemyCharContainer.add(this._intentHintTxt);
 
     // Enemy name above circle
     const nameTxt = this.add.text(0, -R - 16, this.enemyDef.name.toUpperCase(), {
@@ -617,7 +635,11 @@ export default class BattleScene extends Phaser.Scene {
 
   _refreshIntentDisplay() {
     if (!this._intentTxt) return;
-    if (!this.currentIntent) { this._intentTxt.setText(''); return; }
+    if (!this.currentIntent) {
+      this._intentTxt.setText('');
+      this._intentHintTxt?.setText('');
+      return;
+    }
     const intent = this.currentIntent;
     if (intent.type === 'multi') {
       const parts = intent.intents.map(sub => {
@@ -628,6 +650,7 @@ export default class BattleScene extends Phaser.Scene {
       });
       this._intentTxt.setText(parts.join('\n'));
       this._intentTxt.setColor('#ffffff');
+      this._intentHintTxt?.setText('');
     } else {
       const cfg = INTENT[intent.type];
       if (cfg) {
@@ -641,9 +664,12 @@ export default class BattleScene extends Phaser.Scene {
         }
         this._intentTxt.setText(label);
         this._intentTxt.setColor(cfg.color);
+        this._intentHintTxt?.setText(cfg.hint ?? '');
+        this._intentHintTxt?.setColor(cfg.color ?? '#aaaacc');
       } else {
         this._intentTxt.setText(intent.type.toUpperCase());
         this._intentTxt.setColor('#ffffff');
+        this._intentHintTxt?.setText('');
       }
     }
   }
@@ -727,6 +753,35 @@ export default class BattleScene extends Phaser.Scene {
       }).setOrigin(0.5, 1).setDepth(51);
       this._webViewLabels.push(lbl);
     });
+
+    // Ability card — shown whenever this enemy has passive abilities
+    const abilities = this.enemyDef.abilities ?? [];
+    if (abilities.length > 0) {
+      const cardW = 260, lineH = 38, padY = 14, padX = 16;
+      const cardH = padY * 2 + abilities.length * lineH;
+      const cardX = W / 2;
+      const cardY = this.enemyPos.y + 72;
+
+      const cardBg = this.add.rectangle(cardX, cardY, cardW, cardH, 0x0a0a18, 0.92)
+        .setDepth(52).setStrokeStyle(1, eCol, 0.6);
+      this._webViewLabels.push(cardBg);
+
+      abilities.forEach((ab, i) => {
+        const info = ABILITY_INFO[ab.id];
+        if (!info) return;
+        const lineY = cardY - cardH / 2 + padY + i * lineH + lineH / 2;
+
+        const desc = info.desc.replace('{v}', ab.value ?? '?');
+        const nameTxt = this.add.text(cardX - cardW / 2 + padX, lineY - 7, info.name, {
+          fontSize: '11px', color: this.enemyDef.color, fontStyle: 'bold', letterSpacing: 1,
+        }).setOrigin(0, 0.5).setDepth(53);
+        const descTxt = this.add.text(cardX - cardW / 2 + padX, lineY + 8, desc, {
+          fontSize: '10px', color: '#99aabb',
+          wordWrap: { width: cardW - padX * 2 },
+        }).setOrigin(0, 0.5).setDepth(53);
+        this._webViewLabels.push(nameTxt, descTxt);
+      });
+    }
 
     const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0)
       .setDepth(49).setInteractive();
@@ -1087,7 +1142,7 @@ export default class BattleScene extends Phaser.Scene {
     pop.add(this.add.rectangle(W / 2, panelY, panelW, panelH, 0x080814)
       .setStrokeStyle(1.5, 0x2a3a5a, 0.9));
     pop.add(this.add.text(W / 2, panelY - panelH / 2 + 16, 'YOUR STATUS', {
-      fontSize: '12px', color: '#2a3848', letterSpacing: 2,
+      fontSize: '12px', color: '#5a7a8a', letterSpacing: 2,
     }).setOrigin(0.5, 0.5));
 
     rows.forEach((row, i) => {
@@ -3708,7 +3763,7 @@ export default class BattleScene extends Phaser.Scene {
     }).setOrigin(0.5, 0.5));
 
     this._tutPanel.add(this.add.text(W / 2, panY + panH / 2 - 16, 'tap anywhere to continue', {
-      fontSize: '10px', color: '#334455', fontStyle: 'italic',
+      fontSize: '10px', color: '#567090', fontStyle: 'italic',
     }).setOrigin(0.5, 0.5));
 
     this._tutPanel.add(this.add.text(W / 2 + panW / 2 - 12, panY - panH / 2 + 12,

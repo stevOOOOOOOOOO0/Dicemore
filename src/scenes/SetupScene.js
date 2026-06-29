@@ -12,9 +12,10 @@ export default class SetupScene extends Phaser.Scene {
   constructor() { super({ key: 'SetupScene' }); }
 
   init(data) {
-    this._mpMode   = data?.mpMode   ?? false;
-    this._mpPlayer = data?.mpPlayer ?? 1;
+    this._mpMode     = data?.mpMode   ?? false;
+    this._mpPlayer   = data?.mpPlayer ?? 1;
     this._mpP1Config = data?.p1Config ?? null;
+    this._mpP1Relic  = data?.p1Relic  ?? null;
   }
 
   create() {
@@ -30,7 +31,7 @@ export default class SetupScene extends Phaser.Scene {
     this._upgradeActiveDie     = 0;
 
     this.add.rectangle(W / 2, H / 2, W, H, 0x111122);
-    this.add.text(8, 8, 'pre-alpha-beta-0.14', {
+    this.add.text(8, 8, 'pre-alpha-beta-0.19', {
       fontSize: '11px', color: '#2a3848',
     }).setOrigin(0, 0);
     this.add.rectangle(W / 2, 1, W, 2, 0x1a4a7a);
@@ -67,11 +68,11 @@ export default class SetupScene extends Phaser.Scene {
 
   _addBackBtn(g, fn) {
     const btn = this.add.text(20, H - 44, '←', {
-      fontSize: '20px', color: '#2a3a4a'
+      fontSize: '20px', color: '#8aaabb'
     }).setOrigin(0, 0.5).setInteractive();
     btn.on('pointerdown', () => this._transitionTo(fn));
-    btn.on('pointerover',  () => btn.setColor('#8899aa'));
-    btn.on('pointerout',   () => btn.setColor('#2a3a4a'));
+    btn.on('pointerover',  () => btn.setColor('#b0ccdd'));
+    btn.on('pointerout',   () => btn.setColor('#8aaabb'));
     g.add(btn);
   }
 
@@ -85,7 +86,7 @@ export default class SetupScene extends Phaser.Scene {
     }).setOrigin(0.5));
 
     g.add(this.add.text(W / 2, 88, 'CHOOSE YOUR ENEMY', {
-      fontSize: '17px', color: '#2a3848', letterSpacing: 2
+      fontSize: '17px', color: '#5a7a8a', letterSpacing: 2
     }).setOrigin(0.5));
 
     const cardW = 108, cardH = 220;
@@ -108,25 +109,29 @@ export default class SetupScene extends Phaser.Scene {
         fontSize: '36px', color: '#ddeeff', fontStyle: 'bold'
       }).setOrigin(0.5));
       g.add(this.add.text(cx, cy + 12, 'HP', {
-        fontSize: '17px', color: '#334455', letterSpacing: 2
+        fontSize: '17px', color: '#567090', letterSpacing: 2
       }).setOrigin(0.5));
       g.add(this.add.text(cx, cy + 44, `${def.obstacleCount} obstacle${def.obstacleCount !== 1 ? 's' : ''}`, {
-        fontSize: '17px', color: '#445566'
+        fontSize: '17px', color: '#5a7090'
       }).setOrigin(0.5));
 
       const INTENT_CLR = {
         attack: '#e74c3c', block: '#3498db', strength: '#e67e22',
         vulnerable: '#bb44cc', frail: '#1abc9c',
       };
+      const INTENT_LBL = { attack: 'ATK', block: 'BLK', strength: 'STR', vulnerable: 'VUL', frail: 'FRL' };
       const intentTypes = [...new Set(
         def.intents.flatMap(e => e.type === 'multi' ? e.intents.map(s => s.type) : [e.type])
       )].slice(0, 4);
       intentTypes.forEach((iType, fi) => {
         const fc    = parseInt((INTENT_CLR[iType] ?? '#555555').replace('#', ''), 16);
         const chipX = cx - ((intentTypes.length - 1) * 20) / 2 + fi * 20;
-        const chip  = this.add.rectangle(chipX, cy + 82, 16, 16, 0x0a0a18);
+        const chip  = this.add.rectangle(chipX, cy + 79, 16, 14, 0x0a0a18);
         chip.setStrokeStyle(1.5, fc, 0.8);
         g.add(chip);
+        g.add(this.add.text(chipX, cy + 93, INTENT_LBL[iType] ?? iType.slice(0, 3).toUpperCase(), {
+          fontSize: '7px', color: INTENT_CLR[iType] ?? '#555555',
+        }).setOrigin(0.5, 0));
       });
 
       bg.on('pointerdown', () => {
@@ -152,7 +157,7 @@ export default class SetupScene extends Phaser.Scene {
     }).setOrigin(0.5));
     if (!this._mpMode) {
       g.add(this.add.text(W / 2, 66, `vs. ${def.name}  ·  ${def.hp} HP`, {
-        fontSize: '17px', color: '#2a3848'
+        fontSize: '17px', color: '#5a7080'
       }).setOrigin(0.5));
     }
 
@@ -262,7 +267,7 @@ export default class SetupScene extends Phaser.Scene {
     customBg.setStrokeStyle(1, 0x2a3a5a, 0.7).setInteractive();
     g.add(customBg);
     g.add(this.add.text(cx, 562, 'The Drifter  — build custom', {
-      fontSize: '14px', color: '#2a3848', letterSpacing: 1
+      fontSize: '14px', color: '#5a7a8a', letterSpacing: 1
     }).setOrigin(0.5));
     customBg.on('pointerdown', () => {
       this._usedClassPreset = false;
@@ -273,11 +278,11 @@ export default class SetupScene extends Phaser.Scene {
 
     // Tutorial link
     const tutTxt = this.add.text(cx, 612, '? First time? Try the Tutorial', {
-      fontSize: '13px', color: '#2a3848',
+      fontSize: '13px', color: '#7aaccc',
     }).setOrigin(0.5).setInteractive();
     g.add(tutTxt);
-    tutTxt.on('pointerover', () => tutTxt.setColor('#5588aa'));
-    tutTxt.on('pointerout',  () => tutTxt.setColor('#2a3848'));
+    tutTxt.on('pointerover', () => tutTxt.setColor('#aaddf0'));
+    tutTxt.on('pointerout',  () => tutTxt.setColor('#7aaccc'));
     tutTxt.on('pointerdown', () => {
       this.time.delayedCall(1, () => this.scene.start('BattleScene', {
         playerDiceConfig: JSON.parse(JSON.stringify(FIGHTER_CONFIG)),
@@ -302,7 +307,7 @@ export default class SetupScene extends Phaser.Scene {
       fontSize: '22px', color: opts.titleColor, fontStyle: 'bold', letterSpacing: 4
     }).setOrigin(0.5));
     g.add(this.add.text(cx, cy - 20, opts.subtitle, {
-      fontSize: '17px', color: '#445566'
+      fontSize: '17px', color: '#6a8090'
     }).setOrigin(0.5));
 
     // Die type pills
@@ -333,7 +338,7 @@ export default class SetupScene extends Phaser.Scene {
     }
 
     g.add(this.add.text(cx, hasRelic ? cy + 48 : cy + 44, 'tap to play  →', {
-      fontSize: '17px', color: '#2a2a3a'
+      fontSize: '17px', color: '#4a6878'
     }).setOrigin(0.5));
 
     cardBg.on('pointerdown', opts.onTap);
@@ -351,7 +356,7 @@ export default class SetupScene extends Phaser.Scene {
       fontSize: '20px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3
     }).setOrigin(0.5));
     g.add(this.add.text(W / 2, 118, `vs. ${def.name}  ·  ${def.hp} HP`, {
-      fontSize: '17px', color: '#2a3848'
+      fontSize: '17px', color: '#5a7080'
     }).setOrigin(0.5));
 
     const btnW = 96, btnH = 86;
@@ -373,7 +378,7 @@ export default class SetupScene extends Phaser.Scene {
         fontSize: '34px', color: '#ddeeff', fontStyle: 'bold'
       }).setOrigin(0.5));
       g.add(this.add.text(x, y + 26, n === 1 ? 'die' : 'dice', {
-        fontSize: '17px', color: '#334455', letterSpacing: 1
+        fontSize: '17px', color: '#567090', letterSpacing: 1
       }).setOrigin(0.5));
 
       bg.on('pointerdown', () => {
@@ -1212,18 +1217,22 @@ export default class SetupScene extends Phaser.Scene {
       if (this._mpPlayer === 1) {
         // P1 done — run setup for P2
         this.time.delayedCall(1, () => this.scene.start('SetupScene', {
-          mpMode: true, mpPlayer: 2, p1Config: this._diceConfig,
+          mpMode: true, mpPlayer: 2,
+          p1Config: this._diceConfig,
+          p1Relic:  this._startingRelic?.id ?? null,
         }));
       } else {
         // Both done — start Dice Duel
         this.time.delayedCall(1, () => this.scene.start('DiceDuelScene', {
-          p1Config:   this._mpP1Config,
-          p2Config:   this._diceConfig,
-          p1Hp:       30,
-          p2Hp:       30,
-          p1Wins:     0,
-          p2Wins:     0,
-          gameNum:    1,
+          p1Config:    this._mpP1Config,
+          p2Config:    this._diceConfig,
+          p1Relic:     this._mpP1Relic,
+          p2Relic:     this._startingRelic?.id ?? null,
+          p1Hp:        30,
+          p2Hp:        30,
+          p1Wins:      0,
+          p2Wins:      0,
+          gameNum:     1,
           firstPlayer: Math.random() < 0.5 ? 'p1' : 'p2',
         }));
       }
