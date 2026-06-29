@@ -30,6 +30,8 @@ export default class SetupScene extends Phaser.Scene {
     this._selectedCustomRelics = null;
     this._upgradeActiveDie     = 0;
 
+    this.cameras.main.fadeIn(300, 0, 0, 0);
+
     this.add.rectangle(W / 2, H / 2, W, H, 0x111122);
     this.add.rectangle(W / 2, 1, W, 2, 0x1a4a7a);
 
@@ -172,7 +174,7 @@ export default class SetupScene extends Phaser.Scene {
       borderColor: 0xff6622,
       bgColor: 0x130e08,
       bgHover: 0x1e160a,
-      subtitle: 'BUF die amplifies all your rolls this turn',
+      subtitle: 'The boost die amplifies all your dice this turn',
       dice: [
         { type: 'attack', label: 'ATK d6' },
         { type: 'pierce', label: 'BUF d4' },
@@ -196,7 +198,7 @@ export default class SetupScene extends Phaser.Scene {
       borderColor: 0x8844cc,
       bgColor: 0x100a18,
       bgHover: 0x1a1028,
-      subtitle: 'CPY die copies whatever die it collides with',
+      subtitle: 'The copy die becomes whatever it strikes',
       dice: [
         { type: 'attack', label: 'ATK d6' },
         { type: 'copy',   label: 'CPY d4' },
@@ -220,7 +222,7 @@ export default class SetupScene extends Phaser.Scene {
       borderColor: 0x27ae60,
       bgColor: 0x081208,
       bgHover: 0x0e1e0e,
-      subtitle: 'PKP die stacks poison on the enemy',
+      subtitle: 'Poison die stacks on the enemy each turn',
       dice: [
         { type: 'attack', label: 'ATK d6' },
         { type: 'poison', label: 'PKP d4' },
@@ -244,7 +246,7 @@ export default class SetupScene extends Phaser.Scene {
       borderColor: 0xc0392b,
       bgColor: 0x130808,
       bgHover: 0x1e0e0e,
-      subtitle: 'Two heavy BLK dice — built to absorb everything',
+      subtitle: 'Pure block dice — built to absorb everything',
       dice: [
         { type: 'block', label: 'BLK d8' },
         { type: 'block', label: 'BLK d8' },
@@ -308,39 +310,61 @@ export default class SetupScene extends Phaser.Scene {
       fontSize: '22px', color: opts.titleColor, fontStyle: 'bold', letterSpacing: 3,
       fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5));
-    g.add(this.add.text(cx, cy - 20, opts.subtitle, {
-      fontSize: '17px', color: '#6a8090'
+    g.add(this.add.text(cx, cy - 22, opts.subtitle, {
+      fontSize: '12px', color: '#6a8090',
+      wordWrap: { width: cardW - 24 }, align: 'center',
     }).setOrigin(0.5));
 
-    // Die type pills
+    // Die shapes
     const hasRelic = !!opts.startingRelicName;
-    const pillsY   = hasRelic ? cy + 2 : cy + 12;
-    const pillW = 76, pillGap = 8;
-    const totalW = opts.dice.length * pillW + (opts.dice.length - 1) * pillGap;
+    const shapesY  = hasRelic ? cy + 2 : cy + 10;
+    const S = 26, shapeGap = 22;
+    const totalShapeW = opts.dice.length * S + (opts.dice.length - 1) * shapeGap;
+    const startX = cx - totalShapeW / 2 + S / 2;
+
+    const gfx = this.add.graphics();
+    g.add(gfx);
+
     opts.dice.forEach((d, i) => {
       const dt = DIE_TYPES[d.type];
-      const fc = dt ? parseInt(dt.color.replace('#', ''), 16) : 0x555555;
-      const px = cx - totalW / 2 + i * (pillW + pillGap) + pillW / 2;
-      const pill = this.add.rectangle(px, pillsY, pillW, 30, 0x0a0a18);
-      pill.setStrokeStyle(1, fc, 0.7);
-      g.add(pill);
-      g.add(this.add.text(px, pillsY, d.label, {
-        fontSize: '17px', color: dt ? dt.color : '#777777', fontStyle: 'bold'
-      }).setOrigin(0.5));
+      const colorStr = dt ? dt.color : '#777777';
+      const c = parseInt(colorStr.replace('#', ''), 16);
+      const px = startX + i * (S + shapeGap);
+      const py = shapesY;
+      const dieSide = d.label.split(' ')[1]; // 'd4', 'd6', 'd8'
+
+      gfx.fillStyle(c, 0.18);
+      gfx.lineStyle(1.5, c, 0.85);
+
+      if (dieSide === 'd4') {
+        // Upward triangle
+        gfx.fillTriangle(px, py - S * 0.58, px - S * 0.52, py + S * 0.42, px + S * 0.52, py + S * 0.42);
+        gfx.strokeTriangle(px, py - S * 0.58, px - S * 0.52, py + S * 0.42, px + S * 0.52, py + S * 0.42);
+      } else if (dieSide === 'd6') {
+        // Square
+        const h = S * 0.46;
+        gfx.fillRect(px - h, py - h, h * 2, h * 2);
+        gfx.strokeRect(px - h, py - h, h * 2, h * 2);
+      } else if (dieSide === 'd8') {
+        // Diamond
+        const hw = S * 0.46, hh = S * 0.58;
+        gfx.fillPoints([{ x: px, y: py - hh }, { x: px + hw, y: py }, { x: px, y: py + hh }, { x: px - hw, y: py }], true);
+        gfx.strokePoints([{ x: px, y: py - hh }, { x: px + hw, y: py }, { x: px, y: py + hh }, { x: px - hw, y: py }], true);
+      }
     });
 
     if (hasRelic) {
       const rc = parseInt((opts.startingRelicColor ?? '#e74c3c').replace('#', ''), 16);
-      const relicPill = this.add.rectangle(cx, cy + 32, 170, 22, 0x0a0a18);
+      const relicPill = this.add.rectangle(cx, cy + 30, 170, 22, 0x0a0a18);
       relicPill.setStrokeStyle(1, rc, 0.7);
       g.add(relicPill);
-      g.add(this.add.text(cx, cy + 32, `⬟ ${opts.startingRelicName}`, {
+      g.add(this.add.text(cx, cy + 30, `⬟ ${opts.startingRelicName}`, {
         fontSize: '12px', color: opts.startingRelicColor ?? '#e74c3c', fontStyle: 'bold',
       }).setOrigin(0.5));
     }
 
-    g.add(this.add.text(cx, hasRelic ? cy + 48 : cy + 44, 'tap to play  →', {
-      fontSize: '17px', color: '#4a6878'
+    g.add(this.add.text(cx, hasRelic ? cy + 47 : cy + 44, 'tap to play  →', {
+      fontSize: '13px', color: '#4a6878'
     }).setOrigin(0.5));
 
     cardBg.on('pointerdown', opts.onTap);
@@ -1222,40 +1246,41 @@ export default class SetupScene extends Phaser.Scene {
   // ─── LAUNCH ───────────────────────────────────────────────────────────────
 
   _startBattle() {
-    if (this._mpMode) {
-      if (this._mpPlayer === 1) {
-        // P1 done — run setup for P2
-        this.time.delayedCall(1, () => this.scene.start('SetupScene', {
-          mpMode: true, mpPlayer: 2,
-          p1Config: this._diceConfig,
-          p1Relic:  this._startingRelic?.id ?? null,
-        }));
-      } else {
-        // Both done — start Dice Duel
-        this.time.delayedCall(1, () => this.scene.start('DiceDuelScene', {
-          p1Config:    this._mpP1Config,
-          p2Config:    this._diceConfig,
-          p1Relic:     this._mpP1Relic,
-          p2Relic:     this._startingRelic?.id ?? null,
-          p1Hp:        30,
-          p2Hp:        30,
-          p1Wins:      0,
-          p2Wins:      0,
-          gameNum:     1,
-          firstPlayer: Math.random() < 0.5 ? 'p1' : 'p2',
-        }));
+    this.cameras.main.fadeOut(200, 0, 0, 0);
+    this.cameras.main.once('camerafadeoutcomplete', () => {
+      if (this._mpMode) {
+        if (this._mpPlayer === 1) {
+          this.scene.start('SetupScene', {
+            mpMode: true, mpPlayer: 2,
+            p1Config: this._diceConfig,
+            p1Relic:  this._startingRelic?.id ?? null,
+          });
+        } else {
+          this.scene.start('DiceDuelScene', {
+            p1Config:    this._mpP1Config,
+            p2Config:    this._diceConfig,
+            p1Relic:     this._mpP1Relic,
+            p2Relic:     this._startingRelic?.id ?? null,
+            p1Hp:        30,
+            p2Hp:        30,
+            p1Wins:      0,
+            p2Wins:      0,
+            gameNum:     1,
+            firstPlayer: Math.random() < 0.5 ? 'p1' : 'p2',
+          });
+        }
+        return;
       }
-      return;
-    }
-    const relics = this._selectedCustomRelics !== null
-      ? this._selectedCustomRelics
-      : (this._startingRelic ? [this._startingRelic] : []);
-    this.time.delayedCall(1, () => this.scene.start('BattleScene', {
-      playerDiceConfig: this._diceConfig,
-      playerHp:         PLAYER_MAX_HP,
-      playerMaxHp:      PLAYER_MAX_HP,
-      battleIndex:      BATTLE_SEQUENCE.indexOf(this._enemyKey),
-      activeRelics:     relics,
-    }));
+      const relics = this._selectedCustomRelics !== null
+        ? this._selectedCustomRelics
+        : (this._startingRelic ? [this._startingRelic] : []);
+      this.scene.start('BattleScene', {
+        playerDiceConfig: this._diceConfig,
+        playerHp:         PLAYER_MAX_HP,
+        playerMaxHp:      PLAYER_MAX_HP,
+        battleIndex:      BATTLE_SEQUENCE.indexOf(this._enemyKey),
+        activeRelics:     relics,
+      });
+    });
   }
 }

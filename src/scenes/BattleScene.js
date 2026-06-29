@@ -174,6 +174,12 @@ export default class BattleScene extends Phaser.Scene {
 
     if (this._tutorialMode) this._initTutorial();
     this.time.delayedCall(400, () => this._startTurn());
+
+    // Danger overlay — pulses red when HP is critical
+    this._dangerOverlay = this.add.rectangle(W / 2, H / 2, W, H, 0xff1100, 0).setDepth(1);
+    this._dangerTween   = null;
+
+    this.cameras.main.fadeIn(350, 0, 0, 0);
   }
 
   // ─── TEXTURES ─────────────────────────────────────────────────────────────
@@ -273,7 +279,11 @@ export default class BattleScene extends Phaser.Scene {
       fontSize: '14px', color: '#ee6644', fontStyle: 'bold', fontFamily: FONT_DISPLAY,
       backgroundColor: '#1a0a08', padding: { x: 16, y: 7 },
     }).setOrigin(0.5, 0.5).setInteractive();
-    yesBtn.on('pointerdown', () => { close(); this.scene.start('HomeScene'); });
+    yesBtn.on('pointerdown', () => {
+      close();
+      this.cameras.main.fadeOut(200, 0, 0, 0);
+      this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('HomeScene'));
+    });
     pop.add(yesBtn);
 
     const noBtn = this.add.text(cx + 44, cy + 18, 'KEEP GOING', {
@@ -721,6 +731,17 @@ export default class BattleScene extends Phaser.Scene {
         this._intentHintTxt?.setText('');
       }
     }
+
+    // Pop the bumper to draw attention to the new intent
+    if (this.enemyCharContainer) {
+      this.tweens.killTweensOf(this.enemyCharContainer);
+      this.enemyCharContainer.setScale(1);
+      this.tweens.add({
+        targets: this.enemyCharContainer,
+        scaleX: 1.1, scaleY: 1.1,
+        duration: 120, yoyo: true, ease: 'Sine.Out',
+      });
+    }
   }
 
   _toggleIntentPopup() {
@@ -1070,6 +1091,23 @@ export default class BattleScene extends Phaser.Scene {
     const hp = Math.max(0, this.playerHp);
     this.playerHpTxt?.setText(`${hp} / ${this.playerMaxHp}`);
     this.potTxt?.setText(`${this.pot}`);
+
+    // Danger pulse: start when HP ≤ 25% of max, stop when recovered
+    const dangerThreshold = Math.ceil(this.playerMaxHp * 0.25);
+    if (hp > 0 && hp <= dangerThreshold) {
+      if (!this._dangerTween?.isPlaying()) {
+        this._dangerTween?.stop();
+        this._dangerOverlay?.setAlpha(0);
+        this._dangerTween = this.tweens.add({
+          targets: this._dangerOverlay, alpha: 0.10,
+          duration: 700, yoyo: true, repeat: -1, ease: 'Sine.InOut',
+        });
+      }
+    } else {
+      this._dangerTween?.stop();
+      this._dangerTween = null;
+      this._dangerOverlay?.setAlpha(0);
+    }
     if (this.playerBlockTxt) {
       if (this.block > 0) {
         this.playerBlockTxt.setText(`BLK ${this.block}`).setVisible(true);
@@ -3563,7 +3601,17 @@ export default class BattleScene extends Phaser.Scene {
 
   // ─── UI HELPERS ───────────────────────────────────────────────────────────
 
-  _setPhase(txt) { this.phaseTxt?.setText(txt); }
+  _setPhase(txt) {
+    if (!this.phaseTxt || this.phaseTxt.text === txt) return;
+    this.tweens.killTweensOf(this.phaseTxt);
+    this.tweens.add({
+      targets: this.phaseTxt, alpha: 0, duration: 80,
+      onComplete: () => {
+        this.phaseTxt.setText(txt);
+        this.tweens.add({ targets: this.phaseTxt, alpha: 1, duration: 160 });
+      },
+    });
+  }
   _showMsg(txt)  { this.battleMsgTxt?.setText(txt); }
 
   _flashDamage(amount) {
