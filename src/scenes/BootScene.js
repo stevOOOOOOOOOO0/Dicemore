@@ -7,7 +7,7 @@ export default class BootScene extends Phaser.Scene {
 
   create() {
     const txt = this.add.text(W / 2, H / 2, 'Loading…', {
-      fontSize: '17px', color: '#334455', letterSpacing: 2,
+      fontSize: '17px', color: '#5a7a8a', letterSpacing: 2,
     }).setOrigin(0.5);
 
     Promise.all([

@@ -13,7 +13,7 @@ export default class HomeScene extends Phaser.Scene {
       fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5);
 
-    this.add.text(W / 2, H / 2 - 90, 'pre-alpha-beta-0.20', {
+    this.add.text(W / 2, H / 2 - 90, 'pre-alpha-beta-0.21', {
       fontSize: '11px', color: '#2a3848',
     }).setOrigin(0.5);
 

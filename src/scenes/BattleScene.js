@@ -221,10 +221,10 @@ export default class BattleScene extends Phaser.Scene {
 
   _buildHeaderStrip() {
     const mid = SURFACE_TOP / 2;
-    this.phaseTxt     = this.add.text(W / 2, mid - 16, '', { fontSize: '17px', color: '#556677', letterSpacing: 2 }).setOrigin(0.5, 0.5);
-    this.battleMsgTxt = this.add.text(W / 2, mid + 16, '', { fontSize: '17px', color: '#ffffff', wordWrap: { width: W - 60 } }).setOrigin(0.5, 0.5);
-    this.potLabelTxt  = this.add.text(W - 8, 6, 'POT', { fontSize: '10px', color: '#8b7a40', letterSpacing: 1 }).setOrigin(1, 0);
-    this.potTxt       = this.add.text(W - 8, 18, '0', { fontSize: '22px', color: '#f0c040', fontStyle: 'bold' }).setOrigin(1, 0);
+    this.phaseTxt     = this.add.text(W / 2, mid - 16, '', { fontSize: '17px', color: '#5a7a8a', letterSpacing: 2, fontFamily: FONT_DISPLAY }).setOrigin(0.5, 0.5);
+    this.battleMsgTxt = this.add.text(W / 2, mid + 16, '', { fontSize: '17px', color: '#ffffff', wordWrap: { width: W - 60 }, fontFamily: FONT_DISPLAY }).setOrigin(0.5, 0.5);
+    this.potLabelTxt  = this.add.text(W - 8, 6, 'POT', { fontSize: '10px', color: '#8b7a40', letterSpacing: 1, fontFamily: FONT_DISPLAY }).setOrigin(1, 0);
+    this.potTxt       = this.add.text(W - 8, 18, '0', { fontSize: '22px', color: '#f0c040', fontStyle: 'bold', fontFamily: FONT_DISPLAY }).setOrigin(1, 0);
 
     // Info button — bottom-right of header strip
     const ibx = W - 14, iby = 62;

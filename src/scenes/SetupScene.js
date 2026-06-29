@@ -31,9 +31,6 @@ export default class SetupScene extends Phaser.Scene {
     this._upgradeActiveDie     = 0;
 
     this.add.rectangle(W / 2, H / 2, W, H, 0x111122);
-    this.add.text(8, 8, 'pre-alpha-beta-0.20', {
-      fontSize: '11px', color: '#2a3848',
-    }).setOrigin(0, 0);
     this.add.rectangle(W / 2, 1, W, 2, 0x1a4a7a);
 
     if (this._mpMode) {
@@ -507,7 +504,8 @@ export default class SetupScene extends Phaser.Scene {
     this._runeObjs = [];
 
     g.add(this.add.text(W / 2, 36, 'BRANDS & MATERIALS', {
-      fontSize: '17px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3
+      fontSize: '17px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5));
 
     const cardH = 64, gap = 8, startY = 64;
@@ -601,6 +599,7 @@ export default class SetupScene extends Phaser.Scene {
 
     g.add(this.add.text(W / 2, 36, 'CHOOSE A BRAND', {
       fontSize: '17px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5));
     g.add(this.add.text(W / 2, 62, `Die ${di + 1} — ${dt?.sym ?? '?'} d${dc.sides}`, {
       fontSize: '13px', color: dt ? dt.color : '#445566',
@@ -876,9 +875,10 @@ export default class SetupScene extends Phaser.Scene {
 
     g.add(this.add.text(W / 2, 36, 'STARTING CHIP', {
       fontSize: '20px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5));
     g.add(this.add.text(W / 2, 66, 'Pick one to carry into your first battle — or skip.', {
-      fontSize: '13px', color: '#445566', wordWrap: { width: W - 40 }, align: 'center',
+      fontSize: '13px', color: '#5a7a8a', wordWrap: { width: W - 40 }, align: 'center',
     }).setOrigin(0.5));
 
     const all = getRelics().filter(r => !r.exclusive);
@@ -957,6 +957,7 @@ export default class SetupScene extends Phaser.Scene {
     // Title
     g.add(this.add.text(W / 2, 28, 'UPGRADES', {
       fontSize: '20px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5));
 
     // Die selector tabs
@@ -1109,9 +1110,10 @@ export default class SetupScene extends Phaser.Scene {
 
     g.add(this.add.text(W / 2, 36, 'CHOOSE CHIPS', {
       fontSize: '20px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5));
     g.add(this.add.text(W / 2, 68, 'Select any to take into battle.', {
-      fontSize: '13px', color: '#445566',
+      fontSize: '13px', color: '#5a7a8a',
     }).setOrigin(0.5));
 
     let scrollY = 0;
