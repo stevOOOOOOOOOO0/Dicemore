@@ -17,7 +17,7 @@ export default class HomeScene extends Phaser.Scene {
     }).setOrigin(0.5).setAlpha(0);
     this.tweens.add({ targets: title, alpha: 1, y: H / 2 - 140, duration: 700, ease: 'Sine.Out' });
 
-    this.add.text(W / 2, H / 2 - 90, 'pre-alpha-beta-0.23', {
+    this.add.text(W / 2, H / 2 - 90, 'pre-alpha-beta-0.24', {
       fontSize: '11px', color: '#2a3848',
     }).setOrigin(0.5);
 
