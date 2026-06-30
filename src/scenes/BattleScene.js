@@ -3582,12 +3582,30 @@ export default class BattleScene extends Phaser.Scene {
     this.phase = 99;
     this._setPhase('GAME OVER');
     this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.72).setDepth(80);
-    this.add.text(W / 2, H / 2 - 28, 'GAME OVER', {
-      fontSize: '34px', color: '#e74c3c', fontStyle: 'bold'
+
+    this.add.text(W / 2, H / 2 - 64, 'GAME OVER', {
+      fontSize: '34px', color: '#e74c3c', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(81);
-    this.add.text(W / 2, H / 2 + 28, 'Tap to restart', {
-      fontSize: '17px', color: '#aaaaaa'
+
+    const battlesWon = this._tutorialMode ? 0 : (this.battleIndex ?? 0);
+    const cause = this.poisonStacks > 0 ? 'poison' : 'direct attack';
+
+    this.add.text(W / 2, H / 2 - 4, `${battlesWon} battle${battlesWon !== 1 ? 's' : ''} survived`, {
+      fontSize: '17px', color: '#8aaabb',
     }).setOrigin(0.5).setDepth(81);
+
+    this.add.text(W / 2, H / 2 + 22, `defeated by  ${this.enemyDef.name.toUpperCase()}`, {
+      fontSize: '14px', color: this.enemyDef.color,
+    }).setOrigin(0.5).setDepth(81);
+
+    this.add.text(W / 2, H / 2 + 44, `cause: ${cause}`, {
+      fontSize: '12px', color: '#5a7a8a',
+    }).setOrigin(0.5).setDepth(81);
+
+    this.add.text(W / 2, H / 2 + 80, 'tap to restart', {
+      fontSize: '15px', color: '#445566',
+    }).setOrigin(0.5).setDepth(81);
+
     this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0)
       .setDepth(82).setInteractive()
       .on('pointerdown', () => this.scene.start('BattleScene',
