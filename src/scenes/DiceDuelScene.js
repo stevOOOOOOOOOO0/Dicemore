@@ -6,6 +6,9 @@ import {
   FONT_DISPLAY,
 } from '../constants.js';
 import { UPGRADE_MAP, UPGRADE_DESCRIPTIONS } from '../data/upgrades.js';
+import { RADIUS, hexNum } from '../ui/theme.js';
+import { drawBumper } from '../ui/components.js';
+import StatsManager from '../systems/StatsManager.js';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -165,8 +168,11 @@ export default class DiceDuelScene extends Phaser.Scene {
     this._p2HpTxt = this.add.text(HP_CX, topY + 4, `${this._p2Hp} / ${PLAYER_HP}`, {
       fontSize: '16px', color: '#e74c3c', fontStyle: 'bold',
     }).setOrigin(0.5).setAngle(180);
-    this._p2HpBarBg = this.add.rectangle(HP_CX, topY + 20, BAR_W, 6, 0x3d0808);
-    this._p2HpBarFg = this.add.rectangle(BAR_LX, topY + 20, BAR_W * (this._p2Hp / PLAYER_HP), 6, 0xc0392b).setOrigin(0, 0.5);
+    this._p2HpBarY = topY + 20;
+    this._p2HpBarBg = this.add.graphics();
+    this._p2HpBarBg.fillStyle(0x3d0808, 1);
+    this._p2HpBarBg.fillRoundedRect(BAR_LX, this._p2HpBarY - 3, BAR_W, 6, RADIUS.soft);
+    this._p2HpBarFg = this.add.graphics();
     // Rotated 180°: origin is mirrored, so (1,0.5) keeps text right of anchor, (0,0.5) keeps it left
     this._p2PendingTxt = this.add.text(BAR_LX, topY + 4, '', {
       fontSize: '12px', color: '#ff6633', fontStyle: 'bold',
@@ -190,8 +196,13 @@ export default class DiceDuelScene extends Phaser.Scene {
     this._p1HpTxt = this.add.text(HP_CX, botY + 4, `${this._p1Hp} / ${PLAYER_HP}`, {
       fontSize: '16px', color: '#d4a820', fontStyle: 'bold',
     }).setOrigin(0.5);
-    this._p1HpBarBg = this.add.rectangle(HP_CX, botY + 20, BAR_W, 6, 0x3d2a00);
-    this._p1HpBarFg = this.add.rectangle(BAR_LX, botY + 20, BAR_W * (this._p1Hp / PLAYER_HP), 6, 0xd4a820).setOrigin(0, 0.5);
+    this._p1HpBarY = botY + 20;
+    this._p1HpBarBg = this.add.graphics();
+    this._p1HpBarBg.fillStyle(0x3d2a00, 1);
+    this._p1HpBarBg.fillRoundedRect(BAR_LX, this._p1HpBarY - 3, BAR_W, 6, RADIUS.soft);
+    this._p1HpBarFg = this.add.graphics();
+    this._hpBarW = BAR_W;
+    this._hpBarLx = BAR_LX;
     this._p1PendingTxt = this.add.text(BAR_LX, botY + 4, '', {
       fontSize: '12px', color: '#ff6633', fontStyle: 'bold',
     }).setOrigin(0, 0.5).setDepth(10);
@@ -204,6 +215,16 @@ export default class DiceDuelScene extends Phaser.Scene {
     this._p1BuffLbl = this.add.text(HP_CX + 28, botY + 28, '', {
       fontSize: '10px', color: '#ff9922', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(10);
+
+    this._refreshHPBars();
+  }
+
+  _drawHpFill(gfx, y, pct, color) {
+    gfx.clear();
+    const fw = this._hpBarW * pct;
+    if (fw <= 0) return;
+    gfx.fillStyle(color, 1);
+    gfx.fillRoundedRect(this._hpBarLx, y - 3, fw, 6, RADIUS.soft);
   }
 
   _refreshStatusUI() {
@@ -247,8 +268,8 @@ export default class DiceDuelScene extends Phaser.Scene {
     const p2Pct = Math.max(0, this._p2Hp) / PLAYER_HP;
     this._p1HpTxt?.setText(`${Math.max(0,this._p1Hp)} / ${PLAYER_HP}`);
     this._p2HpTxt?.setText(`${Math.max(0,this._p2Hp)} / ${PLAYER_HP}`);
-    this._p1HpBarFg?.setDisplaySize(160 * p1Pct, 6);
-    this._p2HpBarFg?.setDisplaySize(160 * p2Pct, 6);
+    if (this._p1HpBarFg) this._drawHpFill(this._p1HpBarFg, this._p1HpBarY, p1Pct, 0xd4a820);
+    if (this._p2HpBarFg) this._drawHpFill(this._p2HpBarFg, this._p2HpBarY, p2Pct, 0xc0392b);
   }
 
   // ─── PLACEMENT PHASE ──────────────────────────────────────────────────────
@@ -272,20 +293,14 @@ export default class DiceDuelScene extends Phaser.Scene {
   _buildBumperGraphics() {
     // P1 bumper (bottom half) — gold
     this._p1BumperGfx = this.add.graphics().setDepth(15);
-    this._drawBumper(this._p1BumperGfx, 0, 0, 0xd4a820, 0.4, 'P1');
+    drawBumper(this._p1BumperGfx, 0, 0, BUMPER_R, 0xd4a820, { ringAlpha: 0.4, glowAlpha: 0.16 });
 
     // P2 bumper (top half) — red
     this._p2BumperGfx = this.add.graphics().setDepth(15);
-    this._drawBumper(this._p2BumperGfx, 0, 0, 0x8b1a1a, 0.4, 'P2');
+    drawBumper(this._p2BumperGfx, 0, 0, BUMPER_R, 0x8b1a1a, { ringAlpha: 0.4, glowAlpha: 0.16 });
 
     this._p1BumperGfx.setPosition(this._p1BumperX, this._p1BumperY);
     this._p2BumperGfx.setPosition(this._p2BumperX, this._p2BumperY);
-  }
-
-  _drawBumper(gfx, x, y, color, alpha, label) {
-    gfx.clear();
-    gfx.fillStyle(color, alpha);   gfx.fillCircle(x, y, BUMPER_R);
-    gfx.lineStyle(2.5, color, 0.9); gfx.strokeCircle(x, y, BUMPER_R);
   }
 
   _beginPlayerPlacement(who, onDone) {
@@ -317,7 +332,7 @@ export default class DiceDuelScene extends Phaser.Scene {
     const color  = isP1 ? 0xd4a820 : 0x8b1a1a;
 
     // Show pulsing ring on draggable bumper
-    this._drawBumper(myGfx, 0, 0, color, 0.8, isP1 ? 'P1' : 'P2');
+    drawBumper(myGfx, 0, 0, BUMPER_R, color, { ringAlpha: 0.8, glowAlpha: 0.32 });
     this._pulseGfx = this.tweens.add({ targets: myGfx, alpha: 0.5, duration: 600, yoyo: true, repeat: -1 });
 
     let dragging = false;
@@ -363,7 +378,7 @@ export default class DiceDuelScene extends Phaser.Scene {
       this.input.off('pointerdown', onDown);
       this.input.off('pointermove', onMove);
       this.input.off('pointerup',   onUp);
-      this._drawBumper(myGfx, 0, 0, color, 0.8, isP1 ? 'P1' : 'P2');
+      drawBumper(myGfx, 0, 0, BUMPER_R, color, { ringAlpha: 0.8, glowAlpha: 0.32 });
       myGfx.setAlpha(1);
     };
 
@@ -389,7 +404,7 @@ export default class DiceDuelScene extends Phaser.Scene {
       body._bumperEntry = entry;
       this._allBumpers.push(entry);
 
-      this._drawBumper(gfx, 0, 0, col, 0.85, who.toUpperCase());
+      drawBumper(gfx, 0, 0, BUMPER_R, col, { ringAlpha: 0.85, glowAlpha: 0.34 });
       const lbl = this.add.text(x, y, who.toUpperCase(), {
         fontSize: '11px', color: txtCol, fontStyle: 'bold',
       }).setOrigin(0.5).setDepth(16);
@@ -655,6 +670,7 @@ export default class DiceDuelScene extends Phaser.Scene {
     if (card) { card.thrown = true; card.img.setAlpha(0.3); card.lbl.setAlpha(0.3); }
 
     if (isP1) this._p1Thrown++; else this._p2Thrown++;
+    StatsManager.recordDiceThrown();
 
     // Advance ring to next unthrown die from this player's left
     this._autoSelectNextDie(who);
@@ -987,12 +1003,16 @@ export default class DiceDuelScene extends Phaser.Scene {
 
     const dt     = DIE_TYPES[dieRef.data.type];
     const faceNo = Math.floor(dieRef.data.currentFaceIdx / 2) + 1;
+    StatsManager.recordDieLanded(faceNo);
     const color  = dieRef.mpOwner === 'p1' ? 0xd4a820 : 0x8b1a1a;
     const idx    = this._queueCards.length;
     const cardY  = QUEUE_START_Y + idx * (QUEUE_CARD_H + QUEUE_CARD_GAP);
     const cont   = this.add.container(QUEUE_CARD_X, cardY).setDepth(28);
-    const bg     = this.add.rectangle(0, 0, 58, QUEUE_CARD_H, color, 0.18)
-      .setStrokeStyle(1, color, 0.6);
+    const bg     = this.add.graphics();
+    bg.fillStyle(color, 0.18);
+    bg.fillRoundedRect(-29, -QUEUE_CARD_H / 2, 58, QUEUE_CARD_H, RADIUS.soft);
+    bg.lineStyle(1, color, 0.6);
+    bg.strokeRoundedRect(-29, -QUEUE_CARD_H / 2, 58, QUEUE_CARD_H, RADIUS.soft);
     const numTxt = this.add.text(0, -14, String(faceNo), {
       fontSize: '22px', color: dt?.color ?? '#ffffff', fontStyle: 'bold',
     }).setOrigin(0.5);
@@ -1120,6 +1140,7 @@ export default class DiceDuelScene extends Phaser.Scene {
         const buf = owner === 'p1' ? this._p1CleanBonus : this._p2CleanBonus;
         const blk = value + buf;
         if (owner === 'p1') this._p1Block += blk; else this._p2Block += blk;
+        StatsManager.recordBlockGained(blk);
         this._floatText(snapX, snapY - 20, `+${blk} BLK`, '#4488ff');
         this._refreshCombatUI();
         break;
@@ -1351,6 +1372,7 @@ export default class DiceDuelScene extends Phaser.Scene {
     if (winner === 'p1') this._p1Wins++; else this._p2Wins++;
 
     const matchOver = this._p1Wins >= WINS_NEEDED || this._p2Wins >= WINS_NEEDED;
+    if (matchOver) StatsManager.recordDiceDuelMatchEnd();
     this._refreshMatchUI();
 
     // Winner / loser announcement
@@ -1372,10 +1394,14 @@ export default class DiceDuelScene extends Phaser.Scene {
 
       const homeBtn = this.add.text(W/2, H/2 + 80, 'PLAY AGAIN', {
         fontSize: '18px', color: '#aaccff', fontStyle: 'bold',
-        backgroundColor: '#0d1a2e', padding: { x: 28, y: 10 },
-      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+      }).setOrigin(0.5);
+      const homeBtnBg = this.add.graphics();
+      homeBtnBg.fillStyle(hexNum('#0d1a2e'), 1);
+      homeBtnBg.fillRoundedRect(W/2 - homeBtn.width/2 - 28, H/2 + 80 - homeBtn.height/2 - 10,
+        homeBtn.width + 56, homeBtn.height + 20, RADIUS.soft);
+      homeBtn.setInteractive({ useHandCursor: true });
       homeBtn.on('pointerdown', () => this.scene.start('HomeScene'));
-      panel.add(homeBtn);
+      panel.add([homeBtnBg, homeBtn]);
     } else {
       panel.add(this.add.text(W/2, H/2 - 30, `Player ${loser === 'p1' ? 1 : 2} — Pick an upgrade`, {
         fontSize: '16px', color: '#8899aa',
@@ -1386,8 +1412,13 @@ export default class DiceDuelScene extends Phaser.Scene {
 
       const contBtn = this.add.text(W/2, H/2 + 70, 'CONTINUE', {
         fontSize: '18px', color: '#aaccff', fontStyle: 'bold',
-        backgroundColor: '#0d1a2e', padding: { x: 28, y: 10 },
-      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+      }).setOrigin(0.5);
+      const contBtnBg = this.add.graphics();
+      contBtnBg.fillStyle(hexNum('#0d1a2e'), 1);
+      contBtnBg.fillRoundedRect(W/2 - contBtn.width/2 - 28, H/2 + 70 - contBtn.height/2 - 10,
+        contBtn.width + 56, contBtn.height + 20, RADIUS.soft);
+      panel.add(contBtnBg);
+      contBtn.setInteractive({ useHandCursor: true });
       contBtn.on('pointerdown', () => {
         const loserConfig = loser === 'p1' ? this._p1Config : this._p2Config;
         const nextFirstPlayer = loser; // loser goes first next game

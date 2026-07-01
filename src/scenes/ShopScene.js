@@ -4,6 +4,7 @@ import { RUNES, RUNE_KEYS, MATERIALS, MATERIAL_KEYS } from '../data/runes.js';
 import { getRelics } from '../data/relics.js';
 import { DIE_TYPES } from '../data/dice.js';
 import LotterySystem from '../systems/LotterySystem.js';
+import { RADIUS } from '../ui/theme.js';
 
 const SHOP_DEFS = {
   trenchcoat: { name: 'Trench Coat Guy', color: '#cc8844', sec2Label: 'CHIPS',     sec2Color: '#f0c040' },
@@ -107,7 +108,6 @@ export default class ShopScene extends Phaser.Scene {
     const labels   = TAB_LABELS[this.shopType];
     const tabW     = W / 3;
     const barY     = this._headerH + this._tabBarH / 2;
-    const def      = SHOP_DEFS[this.shopType];
 
     this.add.rectangle(W / 2, this._headerH + this._tabBarH / 2, W, this._tabBarH, 0x0e0e1e);
 
@@ -116,31 +116,33 @@ export default class ShopScene extends Phaser.Scene {
 
     labels.forEach((lbl, i) => {
       const cx = tabW * i + tabW / 2;
-      const bg = this.add.rectangle(cx, barY, tabW - 2, this._tabBarH - 4, 0x0a0a14).setInteractive();
+      const w  = tabW - 2, h = this._tabBarH - 4;
+      const gfx = this.add.graphics();
+      const redraw = (active) => {
+        gfx.clear();
+        gfx.fillStyle(active ? 0x161626 : 0x0a0a14, 1);
+        gfx.fillRoundedRect(cx - w / 2, barY - h / 2, w, h, RADIUS.soft);
+      };
+      redraw(false);
+      const hit = this.add.rectangle(cx, barY, w, h, 0x000000, 0).setInteractive();
       const tx = this.add.text(cx, barY, lbl, {
         fontSize: '12px', color: '#445566', fontStyle: 'bold', letterSpacing: 1,
       }).setOrigin(0.5);
 
-      bg.on('pointerdown', () => this._showTab(i));
-      bg.on('pointerover',  () => { if (this._activeTab !== i) bg.setFillStyle(0x181828); });
-      bg.on('pointerout',   () => { if (this._activeTab !== i) bg.setFillStyle(0x0a0a14); });
+      hit.on('pointerdown', () => this._showTab(i));
+      hit.on('pointerover',  () => { if (this._activeTab !== i) redraw(true); });
+      hit.on('pointerout',   () => { if (this._activeTab !== i) redraw(false); });
 
-      this._tabBgs.push(bg);
+      this._tabBgs.push({ redraw });
       this._tabTxts.push(tx);
     });
   }
 
   _setActiveTab(idx) {
     const def = SHOP_DEFS[this.shopType];
-    const fc  = parseInt(def.color.replace('#', ''), 16);
     this._tabBgs.forEach((bg, i) => {
-      if (i === idx) {
-        bg.setFillStyle(0x161626);
-        this._tabTxts[i].setColor(def.color);
-      } else {
-        bg.setFillStyle(0x0a0a14);
-        this._tabTxts[i].setColor('#445566');
-      }
+      bg.redraw(i === idx);
+      this._tabTxts[i].setColor(i === idx ? def.color : '#445566');
     });
     this._activeTab = idx;
   }
@@ -155,6 +157,50 @@ export default class ShopScene extends Phaser.Scene {
   _track(obj) { this._screenObjs.push(obj); return obj; }
 
   _nav(fn) { this.time.delayedCall(1, fn); }
+
+  // Rounded Graphics fill+stroke with a separate interactive hit zone. Both tracked for cleanup.
+  _roundedBg(cx, cy, w, h, opts = {}) {
+    const {
+      fill = 0x0d0d1c, fillHover = 0x181828,
+      stroke = 0xffffff, strokeWidth = 1, strokeAlpha = 0.5,
+      strokeHoverWidth = strokeWidth, strokeHoverAlpha = 0.9,
+      interactive = true,
+    } = opts;
+    const gfx = this._track(this.add.graphics());
+    const redraw = (hover) => {
+      gfx.clear();
+      gfx.fillStyle(hover ? fillHover : fill, 1);
+      gfx.fillRoundedRect(cx - w / 2, cy - h / 2, w, h, RADIUS.soft);
+      gfx.lineStyle(hover ? strokeHoverWidth : strokeWidth, stroke, hover ? strokeHoverAlpha : strokeAlpha);
+      gfx.strokeRoundedRect(cx - w / 2, cy - h / 2, w, h, RADIUS.soft);
+    };
+    redraw(false);
+    const hit = this._track(this.add.rectangle(cx, cy, w, h, 0x000000, 0));
+    if (interactive) hit.setInteractive();
+    return { gfx, hit, redraw };
+  }
+
+  _faceCell(ax, ay, isCulled, strokeColor, onTap) {
+    const FACE = 41;
+    if (isCulled) {
+      this._roundedBg(ax, ay, FACE, FACE, { fill: 0x0a0a14, stroke: 0x333344, strokeAlpha: 0.2, interactive: false });
+      return;
+    }
+    const { hit } = this._roundedBg(ax, ay, FACE, FACE, {
+      fill: 0x141428, fillHover: 0x1a2e4a,
+      stroke: strokeColor, strokeAlpha: 0.6, strokeHoverWidth: 2, strokeHoverAlpha: 0.9,
+    });
+    if (onTap) hit.on('pointerdown', onTap);
+  }
+
+  _backButton(label, onTap) {
+    const cy = this._contentY + this._contentH - 20;
+    const { hit } = this._roundedBg(W / 2, cy, W - 32, 40, {
+      fill: 0x1a1a2e, fillHover: 0x2a2a44, stroke: 0x2a2a4a, strokeAlpha: 0.8, strokeHoverAlpha: 0.8,
+    });
+    hit.on('pointerdown', onTap);
+    this._track(this.add.text(W / 2, cy, label, { fontSize: '15px', color: '#445566' }).setOrigin(0.5));
+  }
 
   _showTab(idx) {
     this._nav(() => {
@@ -180,8 +226,7 @@ export default class ShopScene extends Phaser.Scene {
       const cy  = startY + row * (CELL_H + 4) + CELL_H / 2;
       const fc  = parseInt(rune.color.replace('#', ''), 16);
 
-      const bg = this._track(this.add.rectangle(cx, cy, CELL_W, CELL_H, 0x0d0d1c));
-      bg.setStrokeStyle(1, fc, 0.5).setInteractive();
+      const { hit } = this._roundedBg(cx, cy, CELL_W, CELL_H, { stroke: fc, strokeAlpha: 0.5, strokeHoverWidth: 1.5, strokeHoverAlpha: 0.9 });
 
       this._track(this.add.text(cx - CELL_W / 2 + PAD, cy - 12, rune.label, {
         fontSize: '13px', color: rune.color, fontStyle: 'bold',
@@ -195,13 +240,11 @@ export default class ShopScene extends Phaser.Scene {
         fontSize: '11px', color: '#f0c040',
       }).setOrigin(1, 0.5));
 
-      bg.on('pointerover', () => { bg.setFillStyle(0x181828); bg.setStrokeStyle(1.5, fc, 0.9); });
-      bg.on('pointerout',  () => { bg.setFillStyle(0x0d0d1c); bg.setStrokeStyle(1, fc, 0.5); });
-      bg.on('pointerdown', () => this._buyRune(rune, bg, priceTxt, BRAND_PRICE));
+      hit.on('pointerdown', () => this._buyRune(rune, priceTxt, BRAND_PRICE));
     });
   }
 
-  _buyRune(rune, bg, priceTxt, price) {
+  _buyRune(rune, priceTxt, price) {
     if (this.playerGold < price) { this._flashCantAfford(priceTxt); return; }
     this.playerGold -= price;
     this._refreshGold();
@@ -229,8 +272,7 @@ export default class ShopScene extends Phaser.Scene {
       const tcol = dt ? parseInt(dt.color.replace('#', ''), 16) : 0xffffff;
       const x    = startX + dieIdx * (sz + gap);
 
-      const bg = this._track(this.add.rectangle(x, rowY, sz, sz, 0x0d0d1c));
-      bg.setStrokeStyle(2, tcol, 0.8).setInteractive();
+      const { hit } = this._roundedBg(x, rowY, sz, sz, { stroke: tcol, strokeWidth: 2, strokeAlpha: 0.8, strokeHoverWidth: 2, strokeHoverAlpha: 0.8 });
       this._track(this.add.text(x, rowY - 10, dt ? dt.sym : '?', {
         fontSize: '15px', color: dt ? dt.color : '#fff', fontStyle: 'bold',
       }).setOrigin(0.5));
@@ -238,20 +280,10 @@ export default class ShopScene extends Phaser.Scene {
         fontSize: '12px', color: '#aaaaaa',
       }).setOrigin(0.5));
 
-      bg.on('pointerdown',  () => this._nav(() => this._showRuneFacePicker(dieIdx)));
-      bg.on('pointerover',  () => bg.setFillStyle(0x181828));
-      bg.on('pointerout',   () => bg.setFillStyle(0x0d0d1c));
+      hit.on('pointerdown', () => this._nav(() => this._showRuneFacePicker(dieIdx)));
     });
 
-    // Back to tab
-    const backBg = this._track(this.add.rectangle(W / 2, this._contentY + this._contentH - 20, W - 32, 40, 0x1a1a2e).setInteractive());
-    backBg.setStrokeStyle(1, 0x2a2a4a, 0.8);
-    backBg.on('pointerdown', () => this._showTab(0));
-    backBg.on('pointerover',  () => backBg.setFillStyle(0x2a2a44));
-    backBg.on('pointerout',   () => backBg.setFillStyle(0x1a1a2e));
-    this._track(this.add.text(W / 2, this._contentY + this._contentH - 20, '← Back', {
-      fontSize: '15px', color: '#445566',
-    }).setOrigin(0.5));
+    this._backButton('← Back', () => this._showTab(0));
   }
 
   _showRuneFacePicker(dieIdx) {
@@ -284,9 +316,12 @@ export default class ShopScene extends Phaser.Scene {
       const runeOnFace = !isCulled ? dc.runeMap?.[fi] : null;
       const dispValue  = Math.floor(fi / 2) + 1;
 
-      const fb = this._track(this.add.rectangle(ax, ay, FACE, FACE, isCulled ? 0x0a0a14 : 0x141428));
-      fb.setStrokeStyle(1, isCulled ? 0x333344 : (runeOnFace ? 0xf0c040 : typeColor), isCulled ? 0.2 : 0.6);
-      if (!isCulled) fb.setInteractive();
+      this._faceCell(ax, ay, isCulled, runeOnFace ? 0xf0c040 : typeColor, () => {
+        dc.runeMap = dc.runeMap ?? {};
+        dc.runeMap[fi] = rune.id;
+        this._pendingRune = null;
+        this._showTab(0);
+      });
 
       this._track(this.add.text(ax, ay, isCulled ? '✕' : String(dispValue), {
         fontSize: '17px', color: isCulled ? '#2a2a3a' : '#aaaaaa',
@@ -298,27 +333,9 @@ export default class ShopScene extends Phaser.Scene {
           fontSize: '9px', color: r?.color ?? '#f0c040',
         }).setOrigin(0.5));
       }
-
-      if (!isCulled) {
-        fb.on('pointerdown', () => {
-          dc.runeMap = dc.runeMap ?? {};
-          dc.runeMap[fi] = rune.id;
-          this._pendingRune = null;
-          this._showTab(0);
-        });
-        fb.on('pointerover',  () => { fb.setFillStyle(0x1a2e4a); fb.setStrokeStyle(2, typeColor, 0.9); });
-        fb.on('pointerout',   () => { fb.setFillStyle(0x141428); fb.setStrokeStyle(1, runeOnFace ? 0xf0c040 : typeColor, 0.6); });
-      }
     }
 
-    const backBg = this._track(this.add.rectangle(W / 2, this._contentY + this._contentH - 20, W - 32, 40, 0x1a1a2e).setInteractive());
-    backBg.setStrokeStyle(1, 0x2a2a4a, 0.8);
-    backBg.on('pointerdown', () => this._nav(() => { this._clearContent(); this._showRuneDiePicker(); }));
-    backBg.on('pointerover',  () => backBg.setFillStyle(0x2a2a44));
-    backBg.on('pointerout',   () => backBg.setFillStyle(0x1a1a2e));
-    this._track(this.add.text(W / 2, this._contentY + this._contentH - 20, '← Back', {
-      fontSize: '15px', color: '#445566',
-    }).setOrigin(0.5));
+    this._backButton('← Back', () => this._nav(() => { this._clearContent(); this._showRuneDiePicker(); }));
   }
 
   // ─── TAB 2: SECTION 2 (varies by shop) ────────────────────────────────────
@@ -337,8 +354,7 @@ export default class ShopScene extends Phaser.Scene {
       const cy = startY + i * (CARD_H + GAP) + CARD_H / 2;
       const fc = parseInt((relic.color ?? '#ffffff').replace('#', ''), 16);
 
-      const bg = this._track(this.add.rectangle(W / 2, cy, W - 24, CARD_H, 0x0d0d1c));
-      bg.setStrokeStyle(1.5, fc, 0.5).setInteractive();
+      const { hit, redraw } = this._roundedBg(W / 2, cy, W - 24, CARD_H, { stroke: fc, strokeWidth: 1.5, strokeAlpha: 0.5, strokeHoverWidth: 1.5, strokeHoverAlpha: 0.9 });
 
       this._track(this.add.rectangle(16, cy, 4, CARD_H - 16, fc, 0.7));
       this._track(this.add.text(30, cy - 26, relic.name, {
@@ -356,11 +372,9 @@ export default class ShopScene extends Phaser.Scene {
       }).setOrigin(1, 0.5));
 
       const already = this.activeRelics.some(r => r.id === relic.id);
-      if (already) { priceTxt.setText('owned').setColor('#445566'); bg.disableInteractive(); return; }
+      if (already) { priceTxt.setText('owned').setColor('#445566'); hit.disableInteractive(); return; }
 
-      bg.on('pointerover', () => { bg.setFillStyle(0x181828); bg.setStrokeStyle(1.5, fc, 0.9); });
-      bg.on('pointerout',  () => { bg.setFillStyle(0x0d0d1c); bg.setStrokeStyle(1.5, fc, 0.5); });
-      bg.on('pointerdown', () => {
+      hit.on('pointerdown', () => {
         if (this.playerGold < 30) { this._flashCantAfford(priceTxt); return; }
         this.playerGold -= 30;
         this._refreshGold();
@@ -369,9 +383,9 @@ export default class ShopScene extends Phaser.Scene {
           this.playerHp = Math.min(this.playerMaxHp, this.playerHp + relic.value);
         }
         this.activeRelics.push(relic);
-        bg.disableInteractive();
+        hit.disableInteractive();
         priceTxt.setText('✓').setColor('#2ecc71');
-        bg.setStrokeStyle(1.5, fc, 0.3);
+        redraw(false);
       });
     });
   }
@@ -384,8 +398,7 @@ export default class ShopScene extends Phaser.Scene {
       const cy = startY + i * (CARD_H + GAP) + CARD_H / 2;
       const fc = parseInt(mat.color.replace('#', ''), 16);
 
-      const bg = this._track(this.add.rectangle(W / 2, cy, W - 24, CARD_H, 0x0d0d1c));
-      bg.setStrokeStyle(1.5, fc, 0.5).setInteractive();
+      const { hit } = this._roundedBg(W / 2, cy, W - 24, CARD_H, { stroke: fc, strokeWidth: 1.5, strokeAlpha: 0.5, strokeHoverWidth: 1.5, strokeHoverAlpha: 0.9 });
 
       this._track(this.add.rectangle(16, cy, 4, CARD_H - 16, fc, 0.7));
       this._track(this.add.text(30, cy - 26, mat.label, {
@@ -402,14 +415,12 @@ export default class ShopScene extends Phaser.Scene {
         fontSize: '13px', color: '#f0c040',
       }).setOrigin(1, 0.5));
 
-      bg.on('pointerover', () => { bg.setFillStyle(0x181828); bg.setStrokeStyle(1.5, fc, 0.9); });
-      bg.on('pointerout',  () => { bg.setFillStyle(0x0d0d1c); bg.setStrokeStyle(1.5, fc, 0.5); });
-      bg.on('pointerdown', () => {
+      hit.on('pointerdown', () => {
         if (this.playerGold < 30) { this._flashCantAfford(priceTxt); return; }
         this._pendingMaterial = mat;
         this.playerGold -= 30;
         this._refreshGold();
-        bg.disableInteractive();
+        hit.disableInteractive();
         priceTxt.setText('✓').setColor('#2ecc71');
         this._nav(() => { this._clearContent(); this._showMaterialDiePicker(); });
       });
@@ -435,8 +446,7 @@ export default class ShopScene extends Phaser.Scene {
       const tcol = dt ? parseInt(dt.color.replace('#', ''), 16) : 0xffffff;
       const x    = startX + dieIdx * (sz + gap);
 
-      const bg = this._track(this.add.rectangle(x, rowY, sz, sz, 0x0d0d1c));
-      bg.setStrokeStyle(2, tcol, 0.8).setInteractive();
+      const { hit } = this._roundedBg(x, rowY, sz, sz, { stroke: tcol, strokeWidth: 2, strokeAlpha: 0.8, strokeHoverWidth: 2, strokeHoverAlpha: 0.8 });
       this._track(this.add.text(x, rowY - 10, dt ? dt.sym : '?', {
         fontSize: '15px', color: dt ? dt.color : '#fff', fontStyle: 'bold',
       }).setOrigin(0.5));
@@ -450,7 +460,7 @@ export default class ShopScene extends Phaser.Scene {
         }).setOrigin(0, 0));
       }
 
-      bg.on('pointerdown', () => {
+      hit.on('pointerdown', () => {
         // Restore any uranium-culled faces from old material
         if (dc.material === 'uranium' && dc.uraniumCulledFaces?.length) {
           dc.culledFaces = (dc.culledFaces ?? []).filter(f => !dc.uraniumCulledFaces.includes(f));
@@ -469,18 +479,9 @@ export default class ShopScene extends Phaser.Scene {
         this._pendingMaterial = null;
         this._showTab(1);
       });
-      bg.on('pointerover',  () => bg.setFillStyle(0x181828));
-      bg.on('pointerout',   () => bg.setFillStyle(0x0d0d1c));
     });
 
-    const backBg = this._track(this.add.rectangle(W / 2, this._contentY + this._contentH - 20, W - 32, 40, 0x1a1a2e).setInteractive());
-    backBg.setStrokeStyle(1, 0x2a2a4a, 0.8);
-    backBg.on('pointerdown', () => this._showTab(1));
-    backBg.on('pointerover',  () => backBg.setFillStyle(0x2a2a44));
-    backBg.on('pointerout',   () => backBg.setFillStyle(0x1a1a2e));
-    this._track(this.add.text(W / 2, this._contentY + this._contentH - 20, '← Back', {
-      fontSize: '15px', color: '#445566',
-    }).setOrigin(0.5));
+    this._backButton('← Back', () => this._showTab(1));
   }
 
   // ─── WITCH TAB ────────────────────────────────────────────────────────────
@@ -502,11 +503,8 @@ export default class ShopScene extends Phaser.Scene {
         fontSize: '14px', color: '#f0c040',
       }).setOrigin(0.5));
 
-      const unlockBg = this._track(this.add.rectangle(W / 2, startY + 148, W - 64, 44, 0x1a0e2e).setInteractive());
-      unlockBg.setStrokeStyle(1.5, 0x9b59b6, 0.8);
-      unlockBg.on('pointerover', () => unlockBg.setFillStyle(0x2a1a4a));
-      unlockBg.on('pointerout',  () => unlockBg.setFillStyle(0x1a0e2e));
-      unlockBg.on('pointerdown', () => {
+      const { hit: unlockHit } = this._roundedBg(W / 2, startY + 148, W - 64, 44, { fill: 0x1a0e2e, fillHover: 0x2a1a4a, stroke: 0x9b59b6, strokeWidth: 1.5, strokeAlpha: 0.8, strokeHoverWidth: 1.5, strokeHoverAlpha: 0.8 });
+      unlockHit.on('pointerdown', () => {
         if (this.playerGold < cost) { this._flashCantAfford(priceTxt); return; }
         this.playerGold -= cost;
         this._refreshGold();
@@ -541,8 +539,7 @@ export default class ShopScene extends Phaser.Scene {
       const tcol = dt ? parseInt(dt.color.replace('#', ''), 16) : 0xffffff;
       const x    = startX + dieIdx * (sz + gap);
 
-      const bg = this._track(this.add.rectangle(x, rowY, sz, sz, 0x0d0d1c));
-      bg.setStrokeStyle(2, tcol, 0.8).setInteractive();
+      const { hit } = this._roundedBg(x, rowY, sz, sz, { stroke: tcol, strokeWidth: 2, strokeAlpha: 0.8, strokeHoverWidth: 2, strokeHoverAlpha: 0.8 });
       this._track(this.add.text(x, rowY - 10, dt ? dt.sym : '?', {
         fontSize: '14px', color: dt ? dt.color : '#fff', fontStyle: 'bold',
       }).setOrigin(0.5));
@@ -550,9 +547,7 @@ export default class ShopScene extends Phaser.Scene {
         fontSize: '11px', color: '#aaaaaa',
       }).setOrigin(0.5));
 
-      bg.on('pointerdown',  () => this._nav(() => this._showWitchFacePicker(dieIdx)));
-      bg.on('pointerover',  () => bg.setFillStyle(0x181828));
-      bg.on('pointerout',   () => bg.setFillStyle(0x0d0d1c));
+      hit.on('pointerdown', () => this._nav(() => this._showWitchFacePicker(dieIdx)));
     });
   }
 
@@ -584,8 +579,8 @@ export default class ShopScene extends Phaser.Scene {
       const runeOnFace = !isCulled ? (dc.runeMap?.[fi] ?? null) : null;
       const dispValue  = Math.floor(fi / 2) + 1;
 
-      const fb = this._track(this.add.rectangle(ax, ay, FACE, FACE, isCulled ? 0x0a0a14 : 0x141428));
-      fb.setStrokeStyle(1, isCulled ? 0x333344 : (runeOnFace ? 0xf0c040 : typeColor), isCulled ? 0.2 : 0.6);
+      this._faceCell(ax, ay, isCulled, runeOnFace ? 0xf0c040 : typeColor, () => this._nav(() => this._showWitchFaceActions(dieIdx, fi, runeOnFace)));
+
       this._track(this.add.text(ax, ay, isCulled ? '✕' : String(dispValue), {
         fontSize: '17px', color: isCulled ? '#2a2a3a' : '#aaaaaa',
       }).setOrigin(0.5));
@@ -596,23 +591,9 @@ export default class ShopScene extends Phaser.Scene {
           fontSize: '9px', color: r?.color ?? '#f0c040',
         }).setOrigin(0.5));
       }
-
-      if (!isCulled) {
-        fb.setInteractive();
-        fb.on('pointerdown',  () => this._nav(() => this._showWitchFaceActions(dieIdx, fi, runeOnFace)));
-        fb.on('pointerover',  () => { fb.setFillStyle(0x1a2e4a); fb.setStrokeStyle(2, typeColor, 0.9); });
-        fb.on('pointerout',   () => { fb.setFillStyle(0x141428); fb.setStrokeStyle(1, runeOnFace ? 0xf0c040 : typeColor, 0.6); });
-      }
     }
 
-    const backBg = this._track(this.add.rectangle(W / 2, this._contentY + this._contentH - 20, W - 32, 40, 0x1a1a2e).setInteractive());
-    backBg.setStrokeStyle(1, 0x2a2a4a, 0.8);
-    backBg.on('pointerdown', () => this._showTab(1));
-    backBg.on('pointerover',  () => backBg.setFillStyle(0x2a2a44));
-    backBg.on('pointerout',   () => backBg.setFillStyle(0x1a1a2e));
-    this._track(this.add.text(W / 2, this._contentY + this._contentH - 20, '← Back', {
-      fontSize: '15px', color: '#445566',
-    }).setOrigin(0.5));
+    this._backButton('← Back', () => this._showTab(1));
   }
 
   _showWitchFaceActions(dieIdx, faceIdx, currentRuneId) {
@@ -627,11 +608,8 @@ export default class ShopScene extends Phaser.Scene {
     y += 36;
 
     const addBtn = (label, color, action) => {
-      const bg = this._track(this.add.rectangle(W / 2, y + 20, W - 48, 44, 0x0d0d1c).setInteractive());
-      bg.setStrokeStyle(1.5, parseInt(color.replace('#', ''), 16), 0.7);
-      bg.on('pointerdown', action);
-      bg.on('pointerover',  () => bg.setFillStyle(0x181828));
-      bg.on('pointerout',   () => bg.setFillStyle(0x0d0d1c));
+      const { hit } = this._roundedBg(W / 2, y + 20, W - 48, 44, { stroke: parseInt(color.replace('#', ''), 16), strokeWidth: 1.5, strokeAlpha: 0.7, strokeHoverWidth: 1.5, strokeHoverAlpha: 0.7 });
+      hit.on('pointerdown', action);
       this._track(this.add.text(W / 2, y + 20, label, { fontSize: '14px', color }).setOrigin(0.5));
       y += 56;
     };
@@ -681,14 +659,7 @@ export default class ShopScene extends Phaser.Scene {
       y += 40;
     }
 
-    const backBg = this._track(this.add.rectangle(W / 2, this._contentY + this._contentH - 20, W - 32, 40, 0x1a1a2e).setInteractive());
-    backBg.setStrokeStyle(1, 0x2a2a4a, 0.8);
-    backBg.on('pointerdown', () => this._nav(() => this._showWitchFacePicker(dieIdx)));
-    backBg.on('pointerover',  () => backBg.setFillStyle(0x2a2a44));
-    backBg.on('pointerout',   () => backBg.setFillStyle(0x1a1a2e));
-    this._track(this.add.text(W / 2, this._contentY + this._contentH - 20, '← Back', {
-      fontSize: '15px', color: '#445566',
-    }).setOrigin(0.5));
+    this._backButton('← Back', () => this._nav(() => this._showWitchFacePicker(dieIdx)));
   }
 
   _showWitchMovePicker() {
@@ -711,8 +682,7 @@ export default class ShopScene extends Phaser.Scene {
       const tcol = dt ? parseInt(dt.color.replace('#', ''), 16) : 0xffffff;
       const x    = startX + dieIdx * (sz + gap);
 
-      const bg = this._track(this.add.rectangle(x, rowY, sz, sz, 0x0d0d1c));
-      bg.setStrokeStyle(2, tcol, 0.8).setInteractive();
+      const { hit } = this._roundedBg(x, rowY, sz, sz, { stroke: tcol, strokeWidth: 2, strokeAlpha: 0.8, strokeHoverWidth: 2, strokeHoverAlpha: 0.8 });
       this._track(this.add.text(x, rowY - 10, dt ? dt.sym : '?', {
         fontSize: '14px', color: dt ? dt.color : '#fff', fontStyle: 'bold',
       }).setOrigin(0.5));
@@ -720,14 +690,10 @@ export default class ShopScene extends Phaser.Scene {
         fontSize: '11px', color: '#aaaaaa',
       }).setOrigin(0.5));
 
-      bg.on('pointerdown',  () => this._nav(() => this._showWitchMoveTargetFace(dieIdx)));
-      bg.on('pointerover',  () => bg.setFillStyle(0x181828));
-      bg.on('pointerout',   () => bg.setFillStyle(0x0d0d1c));
+      hit.on('pointerdown', () => this._nav(() => this._showWitchMoveTargetFace(dieIdx)));
     });
 
-    const backBg = this._track(this.add.rectangle(W / 2, this._contentY + this._contentH - 20, W - 32, 40, 0x1a1a2e).setInteractive());
-    backBg.setStrokeStyle(1, 0x2a2a4a, 0.8);
-    backBg.on('pointerdown', () => {
+    this._backButton('← Cancel', () => {
       // Restore the rune to its original face
       const dc = this.playerDiceConfig[this._witchMoveFromDie];
       dc.runeMap = dc.runeMap ?? {};
@@ -735,11 +701,6 @@ export default class ShopScene extends Phaser.Scene {
       this._witchMovingRune = null;
       this._nav(() => this._showWitchFacePicker(this._witchMoveFromDie));
     });
-    backBg.on('pointerover',  () => backBg.setFillStyle(0x2a2a44));
-    backBg.on('pointerout',   () => backBg.setFillStyle(0x1a1a2e));
-    this._track(this.add.text(W / 2, this._contentY + this._contentH - 20, '← Cancel', {
-      fontSize: '15px', color: '#445566',
-    }).setOrigin(0.5));
   }
 
   _showWitchMoveTargetFace(dieIdx) {
@@ -771,8 +732,14 @@ export default class ShopScene extends Phaser.Scene {
       const runeOnFace = !isCulled ? (dc.runeMap?.[fi] ?? null) : null;
       const dispValue  = Math.floor(fi / 2) + 1;
 
-      const fb = this._track(this.add.rectangle(ax, ay, FACE, FACE, isCulled ? 0x0a0a14 : 0x141428));
-      fb.setStrokeStyle(1, isCulled ? 0x333344 : (runeOnFace ? 0xf0c040 : typeColor), isCulled ? 0.2 : 0.6);
+      this._faceCell(ax, ay, isCulled, runeOnFace ? 0xf0c040 : typeColor, () => {
+        dc.runeMap = dc.runeMap ?? {};
+        if (runeOnFace) this.witchRunes.push(runeOnFace); // displaced rune → inventory
+        dc.runeMap[fi] = this._witchMovingRune;
+        this._witchMovingRune = null;
+        this._showTab(1);
+      });
+
       this._track(this.add.text(ax, ay, isCulled ? '✕' : String(dispValue), {
         fontSize: '17px', color: isCulled ? '#2a2a3a' : '#aaaaaa',
       }).setOrigin(0.5));
@@ -783,29 +750,9 @@ export default class ShopScene extends Phaser.Scene {
           fontSize: '9px', color: r?.color ?? '#f0c040',
         }).setOrigin(0.5));
       }
-
-      if (!isCulled) {
-        fb.setInteractive();
-        fb.on('pointerdown', () => {
-          dc.runeMap = dc.runeMap ?? {};
-          if (runeOnFace) this.witchRunes.push(runeOnFace); // displaced rune → inventory
-          dc.runeMap[fi] = this._witchMovingRune;
-          this._witchMovingRune = null;
-          this._showTab(1);
-        });
-        fb.on('pointerover',  () => { fb.setFillStyle(0x1a2e4a); fb.setStrokeStyle(2, typeColor, 0.9); });
-        fb.on('pointerout',   () => { fb.setFillStyle(0x141428); fb.setStrokeStyle(1, runeOnFace ? 0xf0c040 : typeColor, 0.6); });
-      }
     }
 
-    const backBg = this._track(this.add.rectangle(W / 2, this._contentY + this._contentH - 20, W - 32, 40, 0x1a1a2e).setInteractive());
-    backBg.setStrokeStyle(1, 0x2a2a4a, 0.8);
-    backBg.on('pointerdown', () => this._nav(() => this._showWitchMovePicker()));
-    backBg.on('pointerover',  () => backBg.setFillStyle(0x2a2a44));
-    backBg.on('pointerout',   () => backBg.setFillStyle(0x1a1a2e));
-    this._track(this.add.text(W / 2, this._contentY + this._contentH - 20, '← Back', {
-      fontSize: '15px', color: '#445566',
-    }).setOrigin(0.5));
+    this._backButton('← Back', () => this._nav(() => this._showWitchMovePicker()));
   }
 
   // ─── TAB 3: SPECIAL (cull a face) ─────────────────────────────────────────
@@ -832,16 +779,13 @@ export default class ShopScene extends Phaser.Scene {
       }).setOrigin(0.5));
     }
 
-    const buyBg = this._track(this.add.rectangle(W / 2, startY + 168, W - 64, 44, 0x2a0e0e).setInteractive());
-    buyBg.setStrokeStyle(1.5, 0xff6644, 0.7);
-    buyBg.on('pointerover', () => buyBg.setFillStyle(0x4a1a0e));
-    buyBg.on('pointerout',  () => buyBg.setFillStyle(0x2a0e0e));
-    buyBg.on('pointerdown', () => {
+    const { hit: buyHit } = this._roundedBg(W / 2, startY + 168, W - 64, 44, { fill: 0x2a0e0e, fillHover: 0x4a1a0e, stroke: 0xff6644, strokeWidth: 1.5, strokeAlpha: 0.7, strokeHoverWidth: 1.5, strokeHoverAlpha: 0.7 });
+    buyHit.on('pointerdown', () => {
       if (this.playerGold < cost) { this._flashCantAfford(priceTxt); return; }
       this.playerGold -= cost;
       this.cullCount++;
       this._refreshGold();
-      buyBg.disableInteractive();
+      buyHit.disableInteractive();
       priceTxt.setText('✓').setColor('#2ecc71');
       this._nav(() => { this._clearContent(); this._showCullDiePicker(); });
     });
@@ -868,8 +812,7 @@ export default class ShopScene extends Phaser.Scene {
       const tcol = dt ? parseInt(dt.color.replace('#', ''), 16) : 0xffffff;
       const x    = startX + dieIdx * (sz + gap);
 
-      const bg = this._track(this.add.rectangle(x, rowY, sz, sz, 0x0d0d1c));
-      bg.setStrokeStyle(2, tcol, 0.8).setInteractive();
+      const { hit } = this._roundedBg(x, rowY, sz, sz, { stroke: tcol, strokeWidth: 2, strokeAlpha: 0.8, strokeHoverWidth: 2, strokeHoverAlpha: 0.8 });
       this._track(this.add.text(x, rowY - 10, dt ? dt.sym : '?', {
         fontSize: '15px', color: dt ? dt.color : '#fff', fontStyle: 'bold',
       }).setOrigin(0.5));
@@ -877,19 +820,10 @@ export default class ShopScene extends Phaser.Scene {
         fontSize: '12px', color: '#aaaaaa',
       }).setOrigin(0.5));
 
-      bg.on('pointerdown',  () => this._nav(() => this._showCullFacePicker(dieIdx)));
-      bg.on('pointerover',  () => bg.setFillStyle(0x181828));
-      bg.on('pointerout',   () => bg.setFillStyle(0x0d0d1c));
+      hit.on('pointerdown', () => this._nav(() => this._showCullFacePicker(dieIdx)));
     });
 
-    const backBg = this._track(this.add.rectangle(W / 2, this._contentY + this._contentH - 20, W - 32, 40, 0x1a1a2e).setInteractive());
-    backBg.setStrokeStyle(1, 0x2a2a4a, 0.8);
-    backBg.on('pointerdown', () => this._showTab(2));
-    backBg.on('pointerover',  () => backBg.setFillStyle(0x2a2a44));
-    backBg.on('pointerout',   () => backBg.setFillStyle(0x1a1a2e));
-    this._track(this.add.text(W / 2, this._contentY + this._contentH - 20, '← Back', {
-      fontSize: '15px', color: '#445566',
-    }).setOrigin(0.5));
+    this._backButton('← Back', () => this._showTab(2));
   }
 
   _showCullFacePicker(dieIdx) {
@@ -924,15 +858,18 @@ export default class ShopScene extends Phaser.Scene {
       const dispValue  = Math.floor(fi / 2) + 1;
       const canCull   = !isCulled && uniqueValues > 1;
 
-      const fb = this._track(this.add.rectangle(ax, ay, FACE, FACE, isCulled ? 0x0a0a14 : 0x141428));
-      fb.setStrokeStyle(1, isCulled ? 0x333344 : typeColor, isCulled ? 0.2 : 0.6);
+      const { hit } = this._roundedBg(ax, ay, FACE, FACE, {
+        fill: isCulled ? 0x0a0a14 : 0x141428, fillHover: 0x2a1010,
+        stroke: isCulled ? 0x333344 : typeColor, strokeAlpha: isCulled ? 0.2 : 0.6,
+        strokeHoverWidth: 2, strokeHoverAlpha: 0.9,
+        interactive: canCull,
+      });
       this._track(this.add.text(ax, ay, isCulled ? '✕' : String(dispValue), {
         fontSize: '17px', color: isCulled ? '#2a2a3a' : '#aaaaaa',
       }).setOrigin(0.5));
 
       if (canCull) {
-        fb.setInteractive();
-        fb.on('pointerdown', () => {
+        hit.on('pointerdown', () => {
           const targetVal = Math.floor((slotId - 1) / 2) + 1;
           dc.culledFaces = dc.culledFaces ?? [];
           for (let s = 1; s <= dc.sides; s++) {
@@ -943,19 +880,10 @@ export default class ShopScene extends Phaser.Scene {
           }
           this._showTab(2);
         });
-        fb.on('pointerover',  () => { fb.setFillStyle(0x2a1010); fb.setStrokeStyle(2, 0xff6644, 0.9); });
-        fb.on('pointerout',   () => { fb.setFillStyle(0x141428); fb.setStrokeStyle(1, typeColor, 0.6); });
       }
     }
 
-    const backBg = this._track(this.add.rectangle(W / 2, this._contentY + this._contentH - 20, W - 32, 40, 0x1a1a2e).setInteractive());
-    backBg.setStrokeStyle(1, 0x2a2a4a, 0.8);
-    backBg.on('pointerdown', () => this._nav(() => this._showCullDiePicker()));
-    backBg.on('pointerover',  () => backBg.setFillStyle(0x2a2a44));
-    backBg.on('pointerout',   () => backBg.setFillStyle(0x1a1a2e));
-    this._track(this.add.text(W / 2, this._contentY + this._contentH - 20, '← Back', {
-      fontSize: '15px', color: '#445566',
-    }).setOrigin(0.5));
+    this._backButton('← Back', () => this._nav(() => this._showCullDiePicker()));
   }
 
   // ─── FOOTER ───────────────────────────────────────────────────────────────
@@ -965,11 +893,20 @@ export default class ShopScene extends Phaser.Scene {
     this.add.rectangle(W / 2, y, W, this._footerH, 0x0a0a16);
     this.add.rectangle(W / 2, H - this._footerH, W, 2, 0x1a1a3a, 0.5);
 
-    const bg = this.add.rectangle(W / 2, y, W - 32, 40, 0x1a1a2e).setInteractive();
-    bg.setStrokeStyle(1, 0x2a2a4a, 0.8);
-    bg.on('pointerdown',  () => this._leaveShop());
-    bg.on('pointerover',  () => bg.setFillStyle(0x2a2a44));
-    bg.on('pointerout',   () => bg.setFillStyle(0x1a1a2e));
+    const w = W - 32, h = 40;
+    const gfx = this.add.graphics();
+    const redraw = (hover) => {
+      gfx.clear();
+      gfx.fillStyle(hover ? 0x2a2a44 : 0x1a1a2e, 1);
+      gfx.fillRoundedRect(W / 2 - w / 2, y - h / 2, w, h, RADIUS.soft);
+      gfx.lineStyle(1, 0x2a2a4a, 0.8);
+      gfx.strokeRoundedRect(W / 2 - w / 2, y - h / 2, w, h, RADIUS.soft);
+    };
+    redraw(false);
+    const hit = this.add.rectangle(W / 2, y, w, h, 0x000000, 0).setInteractive();
+    hit.on('pointerdown', () => this._leaveShop());
+    hit.on('pointerover', () => redraw(true));
+    hit.on('pointerout',  () => redraw(false));
     this.add.text(W / 2, y, 'Leave Shop  →', {
       fontSize: '16px', color: '#445566',
     }).setOrigin(0.5);

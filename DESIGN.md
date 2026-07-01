@@ -68,26 +68,26 @@ components:
   button-primary:
     backgroundColor: "#131320"
     textColor: "#f0c040"
-    rounded: "{rounded.none}"
+    rounded: "{rounded.soft}"
     padding: "14px 24px"
   button-primary-hover:
     backgroundColor: "#1e2840"
     textColor: "#f0c040"
-    rounded: "{rounded.none}"
+    rounded: "{rounded.soft}"
     padding: "14px 24px"
   button-confirm:
     backgroundColor: "#163824"
     textColor: "#aaffaa"
-    rounded: "{rounded.none}"
+    rounded: "{rounded.soft}"
     padding: "14px 24px"
   button-confirm-hover:
     backgroundColor: "#27ae60"
     textColor: "#ffffff"
-    rounded: "{rounded.none}"
+    rounded: "{rounded.soft}"
     padding: "14px 24px"
   class-card:
     backgroundColor: "#0d0d1c"
-    rounded: "{rounded.none}"
+    rounded: "{rounded.soft}"
     padding: "16px"
     height: "108px"
 ---
@@ -208,10 +208,10 @@ The enemy bumper outer glow ring (`lineStyle(4, enemyColor, 0.30)`, 1100ms yoyo 
 
 ### Buttons
 
-Buttons in Dicemore are rectangular and geometric. The current implementation uses 0px border-radius. The chosen design direction is **tactile but softer**, targeting 4px radius in a future polish pass — enough softness to feel touchable on a phone without losing the flat authority of the rectangle.
+Buttons in Dicemore are rectangular and geometric, with a 4px "soft" corner radius — **tactile but softer**, enough softness to feel touchable on a phone without losing the flat authority of the rectangle.
 
 **Primary Action Button** (gold variant — SOLO, DICE DUEL):
-- Shape: Rectangle (0px radius; 4px target), 240×52px
+- Shape: Rectangle (4px radius), 240×52px
 - Fill: `#131320`, `#1e2840` on hover
 - Stroke: 2px at button's accent color (`#f0c040` for SOLO, `#00ccff` for DICE DUEL), alpha 0.90
 - Label: Cinzel 22px 700, letterSpacing 3, accent color
@@ -249,7 +249,7 @@ Full-width horizontal cards (360×108px) for class selection.
 - Stroke: 2px, class color at 0.65 alpha
 - Hover: `bgHover` — slightly lighter than `bgColor`
 - Internal layout (top to bottom, anchor point at `cy`): class title (22px Cinzel, `cy − 42`) → subtitle (12px body, `cy − 22`, wordWrap) → die shapes (`cy + 2`) → relic pill (`cy + 30`, 170×22px) → tap cue (`cy + 47`, 13px, `#4a6878`)
-- Corner radius: 0px now; 4px with the soft-radius pass
+- Corner radius: 4px (soft)
 
 ### Enemy Cards
 
@@ -285,7 +285,7 @@ Confirmation dialogs, relic popups, intent popups, how-to-play.
 - Stroke: 1.5–2px colored by context (quit `#445566`, intent: enemy color, relic: rarity color, tutorial `#2255aa`)
 - Dim overlay: `0x000000` at 0.65–0.70 alpha, covers full 400×700 canvas
 - Close: tap dim anywhere (dismiss) or explicit labeled button. Never a ✕ icon alone.
-- Corner radius: 0px now; 4px with the soft-radius pass
+- Corner radius: 4px (soft)
 
 ### The Enemy Bumper (Signature Component)
 

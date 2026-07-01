@@ -11,6 +11,9 @@ import RelicManager from '../systems/RelicManager.js';
 import EventBus from '../systems/EventBus.js';
 import { RUNE_HANDLERS } from '../systems/RuneRegistry.js';
 import { UPGRADE_MAP, UPGRADE_DESCRIPTIONS } from '../data/upgrades.js';
+import { COLORS, RADIUS, hexNum } from '../ui/theme.js';
+import SaveManager from '../systems/SaveManager.js';
+import StatsManager from '../systems/StatsManager.js';
 
 const PHASE = { PREP: 0, ENEMY_ROLL: 1, PLAYER_ROLL: 2, COMMIT: 3 };
 const ENEMY_DIE_TYPE_COLORS = { attack: '#e74c3c', block: '#3498db', strength: '#e67e22', vulnerable: '#bb44cc', frail: '#1abc9c' };
@@ -68,6 +71,8 @@ export default class BattleScene extends Phaser.Scene {
   // ─── CREATE ───────────────────────────────────────────────────────────────
 
   create() {
+    if (!this._tutorialMode) this._autosave();
+
     this.phase           = PHASE.PREP;
     this.allDice         = [];
     this.playerDice      = [];
@@ -264,8 +269,12 @@ export default class BattleScene extends Phaser.Scene {
     const dim = this.add.rectangle(cx, cy, W, H, 0x000000, 0.7).setInteractive();
     pop.add(dim);
 
-    const panel = this.add.rectangle(cx, cy, 240, 110, 0x080f1c, 0.98)
-      .setStrokeStyle(2, 0x445566, 0.9);
+    const panelW = 240, panelH = 110;
+    const panel = this.add.graphics();
+    panel.fillStyle(hexNum(COLORS.panelVoid), 0.98);
+    panel.fillRoundedRect(cx - panelW / 2, cy - panelH / 2, panelW, panelH, RADIUS.soft);
+    panel.lineStyle(2, hexNum('#445566'), 0.9);
+    panel.strokeRoundedRect(cx - panelW / 2, cy - panelH / 2, panelW, panelH, RADIUS.soft);
     pop.add(panel);
 
     pop.add(this.add.text(cx, cy - 30, 'Quit run?', {
@@ -277,8 +286,12 @@ export default class BattleScene extends Phaser.Scene {
 
     const yesBtn = this.add.text(cx - 44, cy + 18, 'QUIT', {
       fontSize: '14px', color: '#ee6644', fontStyle: 'bold', fontFamily: FONT_DISPLAY,
-      backgroundColor: '#1a0a08', padding: { x: 16, y: 7 },
-    }).setOrigin(0.5, 0.5).setInteractive();
+    }).setOrigin(0.5, 0.5);
+    const yesGfx = this.add.graphics();
+    yesGfx.fillStyle(hexNum('#1a0a08'), 1);
+    yesGfx.fillRoundedRect(cx - 44 - yesBtn.width / 2 - 16, cy + 18 - yesBtn.height / 2 - 7, yesBtn.width + 32, yesBtn.height + 14, RADIUS.soft);
+    pop.add(yesGfx);
+    yesBtn.setInteractive({ useHandCursor: true });
     yesBtn.on('pointerdown', () => {
       close();
       this.cameras.main.fadeOut(200, 0, 0, 0);
@@ -288,8 +301,12 @@ export default class BattleScene extends Phaser.Scene {
 
     const noBtn = this.add.text(cx + 44, cy + 18, 'KEEP GOING', {
       fontSize: '14px', color: '#4488aa', fontStyle: 'bold', fontFamily: FONT_DISPLAY,
-      backgroundColor: '#08141a', padding: { x: 16, y: 7 },
-    }).setOrigin(0.5, 0.5).setInteractive();
+    }).setOrigin(0.5, 0.5);
+    const noGfx = this.add.graphics();
+    noGfx.fillStyle(hexNum('#08141a'), 1);
+    noGfx.fillRoundedRect(cx + 44 - noBtn.width / 2 - 16, cy + 18 - noBtn.height / 2 - 7, noBtn.width + 32, noBtn.height + 14, RADIUS.soft);
+    pop.add(noGfx);
+    noBtn.setInteractive({ useHandCursor: true });
     noBtn.on('pointerdown', close);
     pop.add(noBtn);
 
@@ -326,8 +343,12 @@ export default class BattleScene extends Phaser.Scene {
     dim.on('pointerdown', () => { this._relicPopup?.destroy(); this._relicPopup = null; });
     pop.add(dim);
 
-    pop.add(this.add.rectangle(panelX, panelY, panelW, panelH, 0x0d0d1c)
-      .setStrokeStyle(2, rarCol, 0.9));
+    const relicPanelGfx = this.add.graphics();
+    relicPanelGfx.fillStyle(hexNum(COLORS.cardDark), 1);
+    relicPanelGfx.fillRoundedRect(panelX - panelW / 2, panelY - panelH / 2, panelW, panelH, RADIUS.soft);
+    relicPanelGfx.lineStyle(2, rarCol, 0.9);
+    relicPanelGfx.strokeRoundedRect(panelX - panelW / 2, panelY - panelH / 2, panelW, panelH, RADIUS.soft);
+    pop.add(relicPanelGfx);
 
     const dotX = panelX - panelW / 2 + 22;
     pop.add(this.add.circle(dotX, panelY - 18, 10, fc, 0.9));
@@ -360,8 +381,11 @@ export default class BattleScene extends Phaser.Scene {
     pop.add(dim);
 
     // Panel background + border
-    const panel = this.add.rectangle(cx, cy, panelW, panelH, 0x080f1c, 0.98)
-      .setStrokeStyle(2, 0x2255aa, 0.9);
+    const panel = this.add.graphics();
+    panel.fillStyle(hexNum(COLORS.panelVoid), 0.98);
+    panel.fillRoundedRect(cx - panelW / 2, cy - panelH / 2, panelW, panelH, RADIUS.soft);
+    panel.lineStyle(2, hexNum('#2255aa'), 0.9);
+    panel.strokeRoundedRect(cx - panelW / 2, cy - panelH / 2, panelW, panelH, RADIUS.soft);
     pop.add(panel);
 
     // Title
@@ -416,8 +440,15 @@ export default class BattleScene extends Phaser.Scene {
     // Close button
     const closeBtn = this.add.text(cx, cy + panelH / 2 - 22, 'CLOSE', {
       fontSize: '14px', color: '#4488ff', fontStyle: 'bold',
-      backgroundColor: '#111a2e', padding: { x: 24, y: 7 },
-    }).setOrigin(0.5, 0.5).setInteractive();
+    }).setOrigin(0.5, 0.5);
+    const closeGfx = this.add.graphics();
+    closeGfx.fillStyle(hexNum('#111a2e'), 1);
+    closeGfx.fillRoundedRect(
+      cx - closeBtn.width / 2 - 24, cy + panelH / 2 - 22 - closeBtn.height / 2 - 7,
+      closeBtn.width + 48, closeBtn.height + 14, RADIUS.soft,
+    );
+    pop.add(closeGfx);
+    closeBtn.setInteractive({ useHandCursor: true });
     closeBtn.on('pointerdown', close);
     pop.add(closeBtn);
 
@@ -762,10 +793,15 @@ export default class BattleScene extends Phaser.Scene {
     const panelH = 44 + lines.length * 22 + 16;
     const panelW = 280;
 
-    const bg = this.add.rectangle(0, 0, panelW, panelH, 0x0d0d1e, 0.97);
-    bg.setStrokeStyle(1.5, parseInt(this.enemyDef.color.replace('#', ''), 16), 0.7).setInteractive();
-    bg.on('pointerdown', (ptr) => { ptr.event.stopPropagation(); this._hideIntentPopup(); });
-    this._intentPopup.add(bg);
+    const bgGfx = this.add.graphics();
+    bgGfx.fillStyle(hexNum('#0d0d1e'), 0.97);
+    bgGfx.fillRoundedRect(-panelW / 2, -panelH / 2, panelW, panelH, RADIUS.soft);
+    bgGfx.lineStyle(1.5, parseInt(this.enemyDef.color.replace('#', ''), 16), 0.7);
+    bgGfx.strokeRoundedRect(-panelW / 2, -panelH / 2, panelW, panelH, RADIUS.soft);
+    this._intentPopup.add(bgGfx);
+    const bgHit = this.add.rectangle(0, 0, panelW, panelH, 0x000000, 0).setInteractive();
+    bgHit.on('pointerdown', (ptr) => { ptr.event.stopPropagation(); this._hideIntentPopup(); });
+    this._intentPopup.add(bgHit);
 
     this._intentPopup.add(
       this.add.text(0, -panelH / 2 + 20, this.enemyDef.name.toUpperCase(), {
@@ -832,8 +868,11 @@ export default class BattleScene extends Phaser.Scene {
       const cardX = W / 2;
       const cardY = this.enemyPos.y + 72;
 
-      const cardBg = this.add.rectangle(cardX, cardY, cardW, cardH, 0x0a0a18, 0.92)
-        .setDepth(52).setStrokeStyle(1, eCol, 0.6);
+      const cardBg = this.add.graphics().setDepth(52);
+      cardBg.fillStyle(hexNum('#0a0a18'), 0.92);
+      cardBg.fillRoundedRect(cardX - cardW / 2, cardY - cardH / 2, cardW, cardH, RADIUS.soft);
+      cardBg.lineStyle(1, eCol, 0.6);
+      cardBg.strokeRoundedRect(cardX - cardW / 2, cardY - cardH / 2, cardW, cardH, RADIUS.soft);
       this._webViewLabels.push(cardBg);
 
       abilities.forEach((ab, i) => {
@@ -1147,8 +1186,11 @@ export default class BattleScene extends Phaser.Scene {
     active.forEach((s, i) => {
       const pw = widths[i];
       const fc = parseInt(s.color.replace('#', ''), 16);
-      const bg = this.add.rectangle(cx + pw / 2, 0, pw, PILL_H, fc, 0.2);
-      bg.setStrokeStyle(1.5, fc, 0.75);
+      const bg = this.add.graphics();
+      bg.fillStyle(fc, 0.2);
+      bg.fillRoundedRect(cx, -PILL_H / 2, pw, PILL_H, RADIUS.soft);
+      bg.lineStyle(1.5, fc, 0.75);
+      bg.strokeRoundedRect(cx, -PILL_H / 2, pw, PILL_H, RADIUS.soft);
       txts[i].setPosition(cx + PAD, 0);
       this._playerPillsCont.add([bg, txts[i]]);
       cx += pw + GAP;
@@ -1182,8 +1224,11 @@ export default class BattleScene extends Phaser.Scene {
     active.forEach((s, i) => {
       const pw = widths[i];
       const fc = parseInt(s.color.replace('#', ''), 16);
-      const bg = this.add.rectangle(cx + pw / 2, 0, pw, PILL_H, fc, 0.2);
-      bg.setStrokeStyle(1.5, fc, 0.75);
+      const bg = this.add.graphics();
+      bg.fillStyle(fc, 0.2);
+      bg.fillRoundedRect(cx, -PILL_H / 2, pw, PILL_H, RADIUS.soft);
+      bg.lineStyle(1.5, fc, 0.75);
+      bg.strokeRoundedRect(cx, -PILL_H / 2, pw, PILL_H, RADIUS.soft);
       txts[i].setPosition(cx + PAD, 0);
       this._enemyPillsCont.add([bg, txts[i]]);
       cx += pw + GAP;
@@ -2126,6 +2171,7 @@ export default class BattleScene extends Phaser.Scene {
     card.img.setVisible(false);
     card.lbl.setVisible(false);
     this.throwCount++;
+    StatsManager.recordDiceThrown();
     this._snapAllCards();
     this._showMsg('Die thrown — waiting to settle…');
   }
@@ -2216,6 +2262,7 @@ export default class BattleScene extends Phaser.Scene {
         if (!dieRef._hadCollision) blk += this.relicManager.getCleanLandBonus();
         blk  = Math.floor(blk * this.relicManager.getBlockMultiplier());
         this.block += blk;
+        StatsManager.recordBlockGained(blk);
         this._refreshStatusUI();
         this._flashDieImpact(dieRef, `+${blk} BLK`, '#3498db');
         this.bus.emit('ON_BLOCK_GAINED', { amount: blk });
@@ -2354,7 +2401,7 @@ export default class BattleScene extends Phaser.Scene {
     }
 
     // BLOCKING STANCE
-    if (has('blocking_stance')) { this.block += value; this._refreshStatusUI(); this._floatText(imgX, imgY - 32, `+${value} BLK`, '#3498db'); this.bus.emit('ON_BLOCK_GAINED', { amount: value }); }
+    if (has('blocking_stance')) { this.block += value; StatsManager.recordBlockGained(value); this._refreshStatusUI(); this._floatText(imgX, imgY - 32, `+${value} BLK`, '#3498db'); this.bus.emit('ON_BLOCK_GAINED', { amount: value }); }
 
     // BUFF
     if (has('buff')) { dieRef._valueBonus = (dieRef._valueBonus ?? 0) + 1; this._floatText(imgX, imgY - 32, 'BUFF +1', '#ffaa00'); }
@@ -3336,6 +3383,17 @@ export default class BattleScene extends Phaser.Scene {
 
   // ─── SETTLE DETECTION ─────────────────────────────────────────────────────
 
+  // Ground-truth check via actual body velocity — not the `_rolling` flag, which
+  // can go stale: a die already marked settled can get knocked again later (e.g.
+  // a shatter triggered by a later contact) without anything resetting `_rolling`.
+  _anyPlayerDieMoving() {
+    return this.allDice.some(d => {
+      if (!d.isPlayer) return false;
+      const v = d.img?.body?.velocity;
+      return v && (Math.abs(v.x) >= SETTLE_VEL || Math.abs(v.y) >= SETTLE_VEL);
+    });
+  }
+
   _waitSettle(cb) {
     let attempts = 0;
     if (this._settleChecker) this._settleChecker.destroy();
@@ -3343,12 +3401,7 @@ export default class BattleScene extends Phaser.Scene {
       delay: 220, startAt: 500, loop: true,
       callback: () => {
         attempts++;
-        const ok = this.allDice.every(d => {
-          if (!d.isPlayer || !d._rolling) return true;
-          const v = d.img?.body?.velocity;
-          return !v || (Math.abs(v.x) < SETTLE_VEL && Math.abs(v.y) < SETTLE_VEL);
-        });
-        if (ok || attempts > 22) {
+        if (!this._anyPlayerDieMoving() || attempts > 22) {
           this._settleChecker.destroy(); this._settleChecker = null; cb();
         }
       }
@@ -3363,6 +3416,7 @@ export default class BattleScene extends Phaser.Scene {
     const settleVal = Math.floor(data.currentFaceIdx / 2) + 1;
     this._settledValuesThisTurn = this._settledValuesThisTurn ?? [];
     this._settledValuesThisTurn.push(settleVal);
+    StatsManager.recordDieLanded(settleVal);
 
     // Finisher: +1 per die settled before it (applied at queue-add time)
     if (this._hasDieUpgrade(data, 'finisher')) {
@@ -3481,7 +3535,7 @@ export default class BattleScene extends Phaser.Scene {
 
         // Wait long enough for rune delays (e.g. Egyptian's 250ms) to initiate movement
         this.time.delayedCall(800, () => {
-          const anyRolling = this.allDice.some(d => d._rolling);
+          const anyRolling = this._anyPlayerDieMoving();
 
           // Slide card off-screen left and destroy
           this.tweens.add({
@@ -3540,6 +3594,21 @@ export default class BattleScene extends Phaser.Scene {
     });
   }
 
+  // ─── SAVE / STATS ───────────────────────────────────────────────────────────
+
+  _autosave() {
+    SaveManager.save({
+      playerDiceConfig: this.playerDiceConfig,
+      battleIndex:      this.battleIndex,
+      playerHp:         this.playerHp,
+      playerMaxHp:      this.playerMaxHp,
+      activeRelics:     this.activeRelics,
+      playerGold:       this.playerGold,
+      cullCount:        this.cullCount,
+      witchRunes:       this.witchRunes,
+    });
+  }
+
   // ─── WIN / LOSE ───────────────────────────────────────────────────────────
 
   _victory() {
@@ -3564,6 +3633,7 @@ export default class BattleScene extends Phaser.Scene {
       });
       return;
     }
+    StatsManager.recordBattleWin({ isBoss: this.enemyDef.tier === 'boss' });
     this.playerGold += 10;
     this.time.delayedCall(1400, () => this.scene.start('UpgradeScene', {
       playerDiceConfig: this.playerDiceConfig,
@@ -3590,6 +3660,11 @@ export default class BattleScene extends Phaser.Scene {
     const battlesWon = this._tutorialMode ? 0 : (this.battleIndex ?? 0);
     const cause = this.poisonStacks > 0 ? 'poison' : 'direct attack';
 
+    if (!this._tutorialMode) {
+      StatsManager.recordRunEnd();
+      SaveManager.clear();
+    }
+
     this.add.text(W / 2, H / 2 - 4, `${battlesWon} battle${battlesWon !== 1 ? 's' : ''} survived`, {
       fontSize: '17px', color: '#8aaabb',
     }).setOrigin(0.5).setDepth(81);
@@ -3608,13 +3683,16 @@ export default class BattleScene extends Phaser.Scene {
 
     this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0)
       .setDepth(82).setInteractive()
-      .on('pointerdown', () => this.scene.start('BattleScene',
-        this._tutorialMode
-          ? { enemyKey: 'training_dummy', tutorial: true,
-              playerDiceConfig: this.playerDiceConfig,
-              playerHp: this.playerMaxHp, playerMaxHp: this.playerMaxHp }
-          : {}
-      ));
+      .on('pointerdown', () => {
+        if (!this._tutorialMode) StatsManager.recordRunStart();
+        this.scene.start('BattleScene',
+          this._tutorialMode
+            ? { enemyKey: 'training_dummy', tutorial: true,
+                playerDiceConfig: this.playerDiceConfig,
+                playerHp: this.playerMaxHp, playerMaxHp: this.playerMaxHp }
+            : {}
+        );
+      });
   }
 
   // ─── UI HELPERS ───────────────────────────────────────────────────────────
@@ -3690,7 +3768,19 @@ export default class BattleScene extends Phaser.Scene {
       d.valLbl.setPosition(d.img.x, d.img.y + 7);
       if (d.crackGfx?.active) d.crackGfx.setPosition(d.img.x, d.img.y);
 
-      if (!d._rolling) return;
+      if (!d._rolling) {
+        // An already-settled die can get knocked again later (e.g. a shatter-chain
+        // collision) without going through the normal reroll-on-collision path.
+        // Without this it'd slide around with nothing tracking it — never re-queued,
+        // its motion never resolving into an effect. Re-arm it like a fresh reroll.
+        if (d.isPlayer) {
+          const v = d.img.body?.velocity;
+          if (v && (Math.abs(v.x) >= SETTLE_VEL || Math.abs(v.y) >= SETTLE_VEL)) {
+            this._rerollDie(d);
+          }
+        }
+        return;
+      }
 
       const vel    = d.img.body?.velocity;
       if (!vel) return;
