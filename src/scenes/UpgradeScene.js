@@ -4,6 +4,7 @@ import { MATERIALS } from '../data/runes.js';
 import { W, H, PLAYER_MAX_HP } from '../constants.js';
 import { UPGRADES, UPGRADE_DESCRIPTIONS } from '../data/upgrades.js';
 import LotterySystem from '../systems/LotterySystem.js';
+import { RADIUS } from '../ui/theme.js';
 
 const CARD_W    = W - 32;
 const CARD_H    = 110;
@@ -29,6 +30,8 @@ export default class UpgradeScene extends Phaser.Scene {
     this.playerGold       = data.playerGold   ?? 0;
     this.cullCount        = data.cullCount    ?? 0;
     this.witchRunes       = data.witchRunes   ?? [];
+    this._returnScene     = data.returnScene  ?? null;
+    this._returnData      = data.returnData   ?? null;
     this._screenObjects   = [];
     this._stepLbl         = null;
     this._navigating      = false;
@@ -58,10 +61,12 @@ export default class UpgradeScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     const g = this.add.graphics();
-    g.fillStyle(0x27ae60);
-    g.fillRect(W / 2 - 80, 62, 160 * hpPct, 5);
     g.lineStyle(1, 0x1a6a3a);
-    g.strokeRect(W / 2 - 80, 62, 160, 5);
+    g.strokeRoundedRect(W / 2 - 80, 62, 160, 5, RADIUS.soft);
+    if (hpPct > 0) {
+      g.fillStyle(0x27ae60);
+      g.fillRoundedRect(W / 2 - 80, 62, 160 * hpPct, 5, RADIUS.soft);
+    }
 
     this._stepLbl = this.add.text(W / 2, 82, '', {
       fontSize: '15px', color: '#334455',
@@ -80,6 +85,28 @@ export default class UpgradeScene extends Phaser.Scene {
   _track(obj) {
     this._screenObjects.push(obj);
     return obj;
+  }
+
+  // Rounded Graphics fill+stroke with a separate interactive hit zone. Both tracked for cleanup.
+  _roundedBg(cx, cy, w, h, opts = {}) {
+    const {
+      fill = 0x0d0d1c, fillHover = 0x181828,
+      stroke = 0xffffff, strokeWidth = 1.5, strokeAlpha = 0.55,
+      strokeHoverWidth = 2, strokeHoverAlpha = 0.9,
+      interactive = true,
+    } = opts;
+    const gfx = this._track(this.add.graphics());
+    const redraw = (hover) => {
+      gfx.clear();
+      gfx.fillStyle(hover ? fillHover : fill, 1);
+      gfx.fillRoundedRect(cx - w / 2, cy - h / 2, w, h, RADIUS.soft);
+      gfx.lineStyle(hover ? strokeHoverWidth : strokeWidth, stroke, hover ? strokeHoverAlpha : strokeAlpha);
+      gfx.strokeRoundedRect(cx - w / 2, cy - h / 2, w, h, RADIUS.soft);
+    };
+    redraw(false);
+    const hit = this._track(this.add.rectangle(cx, cy, w, h, 0x000000, 0));
+    if (interactive) hit.setInteractive();
+    return { gfx, hit, redraw };
   }
 
   // ─── UPGRADE POOL LOGIC ──────────────────────────────────────────────────
@@ -121,8 +148,7 @@ export default class UpgradeScene extends Phaser.Scene {
       const desc = UPGRADE_DESCRIPTIONS[upg.id] ?? '';
       const rarityColor = RARITY_TEXT_COLOR[upg.rarity] ?? '#aaaaaa';
 
-      const bg = this._track(this.add.rectangle(W / 2, cy, CARD_W, CARD_H, 0x0d0d1c));
-      bg.setStrokeStyle(1.5, fc, 0.55).setInteractive();
+      const { hit, redraw } = this._roundedBg(W / 2, cy, CARD_W, CARD_H, { stroke: fc, strokeAlpha: 0.55 });
 
       // Left accent bar
       this._track(this.add.rectangle(16, cy, 4, CARD_H - 16, fc, 0.7));
@@ -146,9 +172,9 @@ export default class UpgradeScene extends Phaser.Scene {
         fontSize: '20px', color: '#2a2a3a',
       }).setOrigin(0.5));
 
-      bg.on('pointerdown', () => this._nav(() => this._showDiePicker(upg.id)));
-      bg.on('pointerover',  () => { bg.setFillStyle(0x181828); bg.setStrokeStyle(2, fc, 0.9); arrow.setColor(upg.color); });
-      bg.on('pointerout',   () => { bg.setFillStyle(0x0d0d1c); bg.setStrokeStyle(1.5, fc, 0.55); arrow.setColor('#2a2a3a'); });
+      hit.on('pointerdown', () => this._nav(() => this._showDiePicker(upg.id)));
+      hit.on('pointerover',  () => { redraw(true); arrow.setColor(upg.color); });
+      hit.on('pointerout',   () => { redraw(false); arrow.setColor('#2a2a3a'); });
     });
 
     this._addHealButton();
@@ -180,9 +206,10 @@ export default class UpgradeScene extends Phaser.Scene {
       const x       = startX + dieIdx * (sz + gap);
       const alreadyHas = dc.upgradeState?.takenUpgrades?.includes(upgradeId) ?? false;
 
-      const bg = this._track(this.add.rectangle(x, rowY, sz, sz, 0x0d0d1c));
-      bg.setStrokeStyle(2, tcol, alreadyHas ? 0.18 : 0.8);
-      if (!alreadyHas) bg.setInteractive();
+      const { hit: dieHit, redraw: dieRedraw } = this._roundedBg(x, rowY, sz, sz, {
+        stroke: tcol, strokeWidth: 2, strokeAlpha: alreadyHas ? 0.18 : 0.8,
+        strokeHoverWidth: 2, strokeHoverAlpha: 1, interactive: !alreadyHas,
+      });
 
       this._track(this.add.text(x, rowY - 14, dt ? dt.sym : '?', {
         fontSize: '15px', color: alreadyHas ? '#333344' : (dt ? dt.color : '#ffffff'),
@@ -213,9 +240,9 @@ export default class UpgradeScene extends Phaser.Scene {
           fontSize: '9px', color: '#445566',
         }).setOrigin(0.5, 1));
       } else {
-        bg.on('pointerdown', () => this._nav(() => this._applyUpgrade(dieIdx, upgradeId)));
-        bg.on('pointerover',  () => { bg.setFillStyle(0x181828); bg.setStrokeStyle(2, tcol, 1); });
-        bg.on('pointerout',   () => { bg.setFillStyle(0x0d0d1c); bg.setStrokeStyle(2, tcol, 0.8); });
+        dieHit.on('pointerdown', () => this._nav(() => this._applyUpgrade(dieIdx, upgradeId)));
+        dieHit.on('pointerover',  () => dieRedraw(true));
+        dieHit.on('pointerout',   () => dieRedraw(false));
       }
     });
 
@@ -252,8 +279,7 @@ export default class UpgradeScene extends Phaser.Scene {
       const cy = CARDS_TOP + i * (CARD_H + CARD_GAP) + CARD_H / 2;
       const fc = parseInt(sd.color.replace('#', ''), 16);
 
-      const bg = this._track(this.add.rectangle(W / 2, cy, CARD_W, CARD_H, 0x0d0d1c));
-      bg.setStrokeStyle(1.5, fc, 0.55).setInteractive();
+      const { hit, redraw } = this._roundedBg(W / 2, cy, CARD_W, CARD_H, { stroke: fc, strokeAlpha: 0.55 });
 
       this._track(this.add.rectangle(16, cy, 4, CARD_H - 16, fc, 0.7));
       this._track(this.add.text(30, cy - 24, sd.title, {
@@ -267,9 +293,9 @@ export default class UpgradeScene extends Phaser.Scene {
         fontSize: '20px', color: '#2a2a3a',
       }).setOrigin(0.5));
 
-      bg.on('pointerdown', () => this._onSpecialDieSelected(sd.type));
-      bg.on('pointerover',  () => { bg.setFillStyle(0x181828); bg.setStrokeStyle(2, fc, 0.9); arrow.setColor(sd.color); });
-      bg.on('pointerout',   () => { bg.setFillStyle(0x0d0d1c); bg.setStrokeStyle(1.5, fc, 0.55); arrow.setColor('#2a2a3a'); });
+      hit.on('pointerdown', () => this._onSpecialDieSelected(sd.type));
+      hit.on('pointerover',  () => { redraw(true); arrow.setColor(sd.color); });
+      hit.on('pointerout',   () => { redraw(false); arrow.setColor('#2a2a3a'); });
     });
 
     this._addSkipButton();
@@ -289,38 +315,44 @@ export default class UpgradeScene extends Phaser.Scene {
   _addHealButton() {
     const y   = H - 44;
     const amt = 5;
-    const bg  = this._track(this.add.rectangle(W / 2, y, W - 16, 50, 0x0e1a12));
-    bg.setStrokeStyle(1, 0x1a6a3a, 0.8).setInteractive();
-    bg.on('pointerdown', () => {
+    const { hit, redraw } = this._roundedBg(W / 2, y, W - 16, 50, {
+      fill: 0x0e1a12, fillHover: 0x163824, stroke: 0x1a6a3a, strokeAlpha: 0.8,
+      strokeHoverWidth: 1, strokeHoverAlpha: 0.8,
+    });
+    hit.on('pointerdown', () => {
       this.playerHp = Math.min(this.playerMaxHp, this.playerHp + amt);
       this._continue();
     });
-    bg.on('pointerover', () => bg.setFillStyle(0x163824));
-    bg.on('pointerout',  () => bg.setFillStyle(0x0e1a12));
+    hit.on('pointerover', () => redraw(true));
+    hit.on('pointerout',  () => redraw(false));
     this._track(this.add.text(W / 2, y, `Rest — Recover ${amt} chips`, {
       fontSize: '17px', color: '#2ecc71',
     }).setOrigin(0.5));
   }
 
   _addSkipButton() {
-    const y  = H - 44;
-    const bg = this._track(this.add.rectangle(W / 2, y, W - 16, 50, 0x1a1a2e).setInteractive());
-    bg.setStrokeStyle(1, 0x2a2a4a, 0.8);
-    bg.on('pointerdown', () => this._continue());
-    bg.on('pointerover',  () => bg.setFillStyle(0x2a2a44));
-    bg.on('pointerout',   () => bg.setFillStyle(0x1a1a2e));
+    const y = H - 44;
+    const { hit, redraw } = this._roundedBg(W / 2, y, W - 16, 50, {
+      fill: 0x1a1a2e, fillHover: 0x2a2a44, stroke: 0x2a2a4a, strokeAlpha: 0.8,
+      strokeHoverWidth: 1, strokeHoverAlpha: 0.8,
+    });
+    hit.on('pointerdown', () => this._continue());
+    hit.on('pointerover',  () => redraw(true));
+    hit.on('pointerout',   () => redraw(false));
     this._track(this.add.text(W / 2, y, 'Skip', {
       fontSize: '17px', color: '#445566',
     }).setOrigin(0.5));
   }
 
   _addBackButton(onBack) {
-    const y  = H - 44;
-    const bg = this._track(this.add.rectangle(W / 2, y, W - 16, 50, 0x1a1a2e).setInteractive());
-    bg.setStrokeStyle(1, 0x2a2a4a, 0.8);
-    bg.on('pointerdown', () => this._nav(onBack));
-    bg.on('pointerover',  () => bg.setFillStyle(0x2a2a44));
-    bg.on('pointerout',   () => bg.setFillStyle(0x1a1a2e));
+    const y = H - 44;
+    const { hit, redraw } = this._roundedBg(W / 2, y, W - 16, 50, {
+      fill: 0x1a1a2e, fillHover: 0x2a2a44, stroke: 0x2a2a4a, strokeAlpha: 0.8,
+      strokeHoverWidth: 1, strokeHoverAlpha: 0.8,
+    });
+    hit.on('pointerdown', () => this._nav(onBack));
+    hit.on('pointerover',  () => redraw(true));
+    hit.on('pointerout',   () => redraw(false));
     this._track(this.add.text(W / 2, y, '← Back', {
       fontSize: '17px', color: '#445566',
     }).setOrigin(0.5));
@@ -334,6 +366,13 @@ export default class UpgradeScene extends Phaser.Scene {
   }
 
   _goToNextBattle() {
+    if (this._returnScene) {
+      this.scene.start(this._returnScene, {
+        ...this._returnData,
+        updatedConfig: this.playerDiceConfig,
+      });
+      return;
+    }
     const base = {
       playerDiceConfig: this.playerDiceConfig,
       playerHp:         this.playerHp,

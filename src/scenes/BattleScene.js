@@ -5,23 +5,37 @@ import { RUNES, MATERIALS } from '../data/runes.js';
 import {
   W, H, SURFACE_TOP, SURFACE_BOTTOM, DIE_SIZE, WALL_T, DIE_STRIP_Y,
   DIE_FRICTION, DIE_FRICTION_AIR, DIE_BOUNCE, SETTLE_VEL,
-  MAX_THROW_SPEED, PLAYER_MAX_HP
+  MAX_THROW_SPEED, PLAYER_MAX_HP, FONT_DISPLAY
 } from '../constants.js';
 import RelicManager from '../systems/RelicManager.js';
 import EventBus from '../systems/EventBus.js';
 import { RUNE_HANDLERS } from '../systems/RuneRegistry.js';
 import { UPGRADE_MAP, UPGRADE_DESCRIPTIONS } from '../data/upgrades.js';
+import { COLORS, RADIUS, hexNum } from '../ui/theme.js';
+import SaveManager from '../systems/SaveManager.js';
+import StatsManager from '../systems/StatsManager.js';
 
 const PHASE = { PREP: 0, ENEMY_ROLL: 1, PLAYER_ROLL: 2, COMMIT: 3 };
 const ENEMY_DIE_TYPE_COLORS = { attack: '#e74c3c', block: '#3498db', strength: '#e67e22', vulnerable: '#bb44cc', frail: '#1abc9c' };
 const ENEMY_DIE_TYPE_SYMS   = { attack: 'ATK', block: 'BLK', strength: 'STR', vulnerable: 'VUL', frail: 'FRL' };
 
+const ABILITY_INFO = {
+  bumper_enrage:   { name: 'ENRAGE',         desc: 'Each time you hit my bumper, I gain permanent Strength.' },
+  flat_reduction:  { name: 'FLAT DRAIN',     desc: 'All your dice roll lower — every value reduced by {v}.' },
+  glass_curse:     { name: 'GLASS CURSE',    desc: 'Your dice are Glass this round — they shatter on first contact.' },
+  contact_drain:   { name: 'CONTACT DRAIN',  desc: 'Every collision shaves −1 off that die\'s value.' },
+  obstacle_buff:   { name: 'OBSTACLE BUFF',  desc: 'Each obstacle hit feeds me permanent Strength.' },
+  bouncy_bumpers:  { name: 'ULTRA BOUNCE',   desc: 'My bumper launches dice at double force — impossible to aim into.' },
+  sticky_walls:    { name: 'STICKY WALLS',   desc: 'Walls absorb all momentum — dice stop dead on contact.' },
+  bullet_throws:   { name: 'BULLET THROWS',  desc: 'Your minimum throw speed is locked to max — no soft tosses.' },
+};
+
 const INTENT = {
   attack:     { label: 'ATTACK',  color: '#e74c3c' },
   block:      { label: 'BLOCK',   color: '#3498db' },
-  strength:   { label: 'LOADED',  color: '#e67e22' },
-  vulnerable: { label: 'HUSTLE',  color: '#bb44cc' },
-  frail:      { label: 'RATTLE',  color: '#1abc9c' },
+  strength:   { label: 'LOADED',  color: '#e67e22', hint: '+STR' },
+  vulnerable: { label: 'HUSTLE',  color: '#bb44cc', hint: '+DMG' },
+  frail:      { label: 'RATTLE',  color: '#1abc9c', hint: '−DEF' },
 };
 const THROW_ZONE_BOTTOM  = SURFACE_BOTTOM - 8;
 const THROW_ORIGIN_X     = W / 2;
@@ -57,6 +71,8 @@ export default class BattleScene extends Phaser.Scene {
   // ─── CREATE ───────────────────────────────────────────────────────────────
 
   create() {
+    if (!this._tutorialMode) this._autosave();
+
     this.phase           = PHASE.PREP;
     this.allDice         = [];
     this.playerDice      = [];
@@ -163,6 +179,12 @@ export default class BattleScene extends Phaser.Scene {
 
     if (this._tutorialMode) this._initTutorial();
     this.time.delayedCall(400, () => this._startTurn());
+
+    // Danger overlay — pulses red when HP is critical
+    this._dangerOverlay = this.add.rectangle(W / 2, H / 2, W, H, 0xff1100, 0).setDepth(1);
+    this._dangerTween   = null;
+
+    this.cameras.main.fadeIn(350, 0, 0, 0);
   }
 
   // ─── TEXTURES ─────────────────────────────────────────────────────────────
@@ -210,10 +232,20 @@ export default class BattleScene extends Phaser.Scene {
 
   _buildHeaderStrip() {
     const mid = SURFACE_TOP / 2;
-    this.phaseTxt     = this.add.text(W / 2, mid - 16, '', { fontSize: '17px', color: '#556677', letterSpacing: 2 }).setOrigin(0.5, 0.5);
-    this.battleMsgTxt = this.add.text(W / 2, mid + 16, '', { fontSize: '17px', color: '#ffffff', wordWrap: { width: W - 60 } }).setOrigin(0.5, 0.5);
-    this.potLabelTxt  = this.add.text(W - 8, 6, 'POT', { fontSize: '10px', color: '#8b7a40', letterSpacing: 1 }).setOrigin(1, 0);
-    this.potTxt       = this.add.text(W - 8, 18, '0', { fontSize: '22px', color: '#f0c040', fontStyle: 'bold' }).setOrigin(1, 0);
+    this.phaseTxt     = this.add.text(W / 2, mid - 16, '', { fontSize: '17px', color: '#5a7a8a', letterSpacing: 3, fontFamily: FONT_DISPLAY }).setOrigin(0.5, 0.5);
+    this.battleMsgTxt = this.add.text(W / 2, mid + 16, '', { fontSize: '17px', color: '#ffffff', wordWrap: { width: W - 60 }, fontFamily: FONT_DISPLAY }).setOrigin(0.5, 0.5);
+    this.potLabelTxt  = this.add.text(W - 8, 6, 'POT', { fontSize: '10px', color: '#8b7a40', letterSpacing: 1, fontFamily: FONT_DISPLAY }).setOrigin(1, 0);
+    this.potTxt       = this.add.text(W - 8, 18, '0', { fontSize: '22px', color: '#f0c040', fontStyle: 'bold', fontFamily: FONT_DISPLAY }).setOrigin(1, 0);
+
+    // Quit button — top-left of header strip
+    const qbx = 14, qby = 14;
+    const qbCircle = this.add.circle(qbx, qby, 11, 0x1a1a2a, 0.95).setDepth(25).setInteractive();
+    qbCircle.setStrokeStyle(1.5, 0x445566, 0.8);
+    this.add.text(qbx, qby, '✕', {
+      fontSize: '11px', color: '#6a8a9a',
+      stroke: '#000000', strokeThickness: 2,
+    }).setOrigin(0.5, 0.5).setDepth(26);
+    qbCircle.on('pointerdown', () => this._showQuitConfirm());
 
     // Info button — bottom-right of header strip
     const ibx = W - 14, iby = 62;
@@ -226,6 +258,59 @@ export default class BattleScene extends Phaser.Scene {
     ibCircle.on('pointerdown', () => this._showHowToPlay());
 
     this._refreshStatusUI();
+  }
+
+  _showQuitConfirm() {
+    if (this._quitPanel) return;
+
+    const cx = W / 2, cy = H / 2;
+    const pop = this._quitPanel = this.add.container(0, 0).setDepth(95);
+
+    const dim = this.add.rectangle(cx, cy, W, H, 0x000000, 0.7).setInteractive();
+    pop.add(dim);
+
+    const panelW = 240, panelH = 110;
+    const panel = this.add.graphics();
+    panel.fillStyle(hexNum(COLORS.panelVoid), 0.98);
+    panel.fillRoundedRect(cx - panelW / 2, cy - panelH / 2, panelW, panelH, RADIUS.soft);
+    panel.lineStyle(2, hexNum('#445566'), 0.9);
+    panel.strokeRoundedRect(cx - panelW / 2, cy - panelH / 2, panelW, panelH, RADIUS.soft);
+    pop.add(panel);
+
+    pop.add(this.add.text(cx, cy - 30, 'Quit run?', {
+      fontSize: '17px', color: '#ccddee', fontStyle: 'bold', fontFamily: FONT_DISPLAY,
+    }).setOrigin(0.5, 0.5));
+
+    const self = this;
+    function close() { self._quitPanel?.destroy(); self._quitPanel = null; }
+
+    const yesBtn = this.add.text(cx - 44, cy + 18, 'QUIT', {
+      fontSize: '14px', color: '#ee6644', fontStyle: 'bold', fontFamily: FONT_DISPLAY,
+    }).setOrigin(0.5, 0.5);
+    const yesGfx = this.add.graphics();
+    yesGfx.fillStyle(hexNum('#1a0a08'), 1);
+    yesGfx.fillRoundedRect(cx - 44 - yesBtn.width / 2 - 16, cy + 18 - yesBtn.height / 2 - 7, yesBtn.width + 32, yesBtn.height + 14, RADIUS.soft);
+    pop.add(yesGfx);
+    yesBtn.setInteractive({ useHandCursor: true });
+    yesBtn.on('pointerdown', () => {
+      close();
+      this.cameras.main.fadeOut(200, 0, 0, 0);
+      this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('HomeScene'));
+    });
+    pop.add(yesBtn);
+
+    const noBtn = this.add.text(cx + 44, cy + 18, 'KEEP GOING', {
+      fontSize: '14px', color: '#4488aa', fontStyle: 'bold', fontFamily: FONT_DISPLAY,
+    }).setOrigin(0.5, 0.5);
+    const noGfx = this.add.graphics();
+    noGfx.fillStyle(hexNum('#08141a'), 1);
+    noGfx.fillRoundedRect(cx + 44 - noBtn.width / 2 - 16, cy + 18 - noBtn.height / 2 - 7, noBtn.width + 32, noBtn.height + 14, RADIUS.soft);
+    pop.add(noGfx);
+    noBtn.setInteractive({ useHandCursor: true });
+    noBtn.on('pointerdown', close);
+    pop.add(noBtn);
+
+    dim.on('pointerdown', close);
   }
 
   _buildRelicStrip() {
@@ -258,8 +343,12 @@ export default class BattleScene extends Phaser.Scene {
     dim.on('pointerdown', () => { this._relicPopup?.destroy(); this._relicPopup = null; });
     pop.add(dim);
 
-    pop.add(this.add.rectangle(panelX, panelY, panelW, panelH, 0x0d0d1c)
-      .setStrokeStyle(2, rarCol, 0.9));
+    const relicPanelGfx = this.add.graphics();
+    relicPanelGfx.fillStyle(hexNum(COLORS.cardDark), 1);
+    relicPanelGfx.fillRoundedRect(panelX - panelW / 2, panelY - panelH / 2, panelW, panelH, RADIUS.soft);
+    relicPanelGfx.lineStyle(2, rarCol, 0.9);
+    relicPanelGfx.strokeRoundedRect(panelX - panelW / 2, panelY - panelH / 2, panelW, panelH, RADIUS.soft);
+    pop.add(relicPanelGfx);
 
     const dotX = panelX - panelW / 2 + 22;
     pop.add(this.add.circle(dotX, panelY - 18, 10, fc, 0.9));
@@ -271,7 +360,7 @@ export default class BattleScene extends Phaser.Scene {
       fontSize: '16px', color: relic.color, fontStyle: 'bold',
     }).setOrigin(0, 0.5));
     pop.add(this.add.text(dotX + 18, panelY - 3, relic.rarity.toUpperCase(), {
-      fontSize: '10px', color: '#334455', letterSpacing: 1,
+      fontSize: '10px', color: '#567090', letterSpacing: 1,
     }).setOrigin(0, 0.5));
     pop.add(this.add.text(panelX - panelW / 2 + 14, panelY + 18, relic.description, {
       fontSize: '13px', color: '#8899aa', wordWrap: { width: panelW - 28 },
@@ -292,8 +381,11 @@ export default class BattleScene extends Phaser.Scene {
     pop.add(dim);
 
     // Panel background + border
-    const panel = this.add.rectangle(cx, cy, panelW, panelH, 0x080f1c, 0.98)
-      .setStrokeStyle(2, 0x2255aa, 0.9);
+    const panel = this.add.graphics();
+    panel.fillStyle(hexNum(COLORS.panelVoid), 0.98);
+    panel.fillRoundedRect(cx - panelW / 2, cy - panelH / 2, panelW, panelH, RADIUS.soft);
+    panel.lineStyle(2, hexNum('#2255aa'), 0.9);
+    panel.strokeRoundedRect(cx - panelW / 2, cy - panelH / 2, panelW, panelH, RADIUS.soft);
     pop.add(panel);
 
     // Title
@@ -348,8 +440,15 @@ export default class BattleScene extends Phaser.Scene {
     // Close button
     const closeBtn = this.add.text(cx, cy + panelH / 2 - 22, 'CLOSE', {
       fontSize: '14px', color: '#4488ff', fontStyle: 'bold',
-      backgroundColor: '#111a2e', padding: { x: 24, y: 7 },
-    }).setOrigin(0.5, 0.5).setInteractive();
+    }).setOrigin(0.5, 0.5);
+    const closeGfx = this.add.graphics();
+    closeGfx.fillStyle(hexNum('#111a2e'), 1);
+    closeGfx.fillRoundedRect(
+      cx - closeBtn.width / 2 - 24, cy + panelH / 2 - 22 - closeBtn.height / 2 - 7,
+      closeBtn.width + 48, closeBtn.height + 14, RADIUS.soft,
+    );
+    pop.add(closeGfx);
+    closeBtn.setInteractive({ useHandCursor: true });
     closeBtn.on('pointerdown', close);
     pop.add(closeBtn);
 
@@ -392,15 +491,24 @@ export default class BattleScene extends Phaser.Scene {
     this.enemyCharContainer.add(ring);
 
     // Intent text inside circle
-    this._intentTxt = this.add.text(0, -3, '', {
+    this._intentTxt = this.add.text(0, -7, '', {
       fontSize: '11px', color: '#ffffff', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 3, align: 'center',
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5, 0.5);
     this.enemyCharContainer.add(this._intentTxt);
 
+    // Mechanical hint below main intent label (decodes LOADED/HUSTLE/RATTLE)
+    this._intentHintTxt = this.add.text(0, 7, '', {
+      fontSize: '9px', color: '#aaaacc',
+      stroke: '#000000', strokeThickness: 2, align: 'center',
+    }).setOrigin(0.5, 0.5);
+    this.enemyCharContainer.add(this._intentHintTxt);
+
     // Enemy name above circle
     const nameTxt = this.add.text(0, -R - 16, this.enemyDef.name.toUpperCase(), {
-      fontSize: '17px', color: this.enemyDef.color, fontStyle: 'bold', letterSpacing: 2
+      fontSize: '17px', color: this.enemyDef.color, fontStyle: 'bold', letterSpacing: 2,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5, 0.5);
     this.enemyCharContainer.add(nameTxt);
 
@@ -617,7 +725,11 @@ export default class BattleScene extends Phaser.Scene {
 
   _refreshIntentDisplay() {
     if (!this._intentTxt) return;
-    if (!this.currentIntent) { this._intentTxt.setText(''); return; }
+    if (!this.currentIntent) {
+      this._intentTxt.setText('');
+      this._intentHintTxt?.setText('');
+      return;
+    }
     const intent = this.currentIntent;
     if (intent.type === 'multi') {
       const parts = intent.intents.map(sub => {
@@ -628,6 +740,7 @@ export default class BattleScene extends Phaser.Scene {
       });
       this._intentTxt.setText(parts.join('\n'));
       this._intentTxt.setColor('#ffffff');
+      this._intentHintTxt?.setText('');
     } else {
       const cfg = INTENT[intent.type];
       if (cfg) {
@@ -641,10 +754,24 @@ export default class BattleScene extends Phaser.Scene {
         }
         this._intentTxt.setText(label);
         this._intentTxt.setColor(cfg.color);
+        this._intentHintTxt?.setText(cfg.hint ?? '');
+        this._intentHintTxt?.setColor(cfg.color ?? '#aaaacc');
       } else {
         this._intentTxt.setText(intent.type.toUpperCase());
         this._intentTxt.setColor('#ffffff');
+        this._intentHintTxt?.setText('');
       }
+    }
+
+    // Pop the bumper to draw attention to the new intent
+    if (this.enemyCharContainer) {
+      this.tweens.killTweensOf(this.enemyCharContainer);
+      this.enemyCharContainer.setScale(1);
+      this.tweens.add({
+        targets: this.enemyCharContainer,
+        scaleX: 1.1, scaleY: 1.1,
+        duration: 120, yoyo: true, ease: 'Sine.Out',
+      });
     }
   }
 
@@ -666,10 +793,15 @@ export default class BattleScene extends Phaser.Scene {
     const panelH = 44 + lines.length * 22 + 16;
     const panelW = 280;
 
-    const bg = this.add.rectangle(0, 0, panelW, panelH, 0x0d0d1e, 0.97);
-    bg.setStrokeStyle(1.5, parseInt(this.enemyDef.color.replace('#', ''), 16), 0.7).setInteractive();
-    bg.on('pointerdown', (ptr) => { ptr.event.stopPropagation(); this._hideIntentPopup(); });
-    this._intentPopup.add(bg);
+    const bgGfx = this.add.graphics();
+    bgGfx.fillStyle(hexNum('#0d0d1e'), 0.97);
+    bgGfx.fillRoundedRect(-panelW / 2, -panelH / 2, panelW, panelH, RADIUS.soft);
+    bgGfx.lineStyle(1.5, parseInt(this.enemyDef.color.replace('#', ''), 16), 0.7);
+    bgGfx.strokeRoundedRect(-panelW / 2, -panelH / 2, panelW, panelH, RADIUS.soft);
+    this._intentPopup.add(bgGfx);
+    const bgHit = this.add.rectangle(0, 0, panelW, panelH, 0x000000, 0).setInteractive();
+    bgHit.on('pointerdown', (ptr) => { ptr.event.stopPropagation(); this._hideIntentPopup(); });
+    this._intentPopup.add(bgHit);
 
     this._intentPopup.add(
       this.add.text(0, -panelH / 2 + 20, this.enemyDef.name.toUpperCase(), {
@@ -727,6 +859,38 @@ export default class BattleScene extends Phaser.Scene {
       }).setOrigin(0.5, 1).setDepth(51);
       this._webViewLabels.push(lbl);
     });
+
+    // Ability card — shown whenever this enemy has passive abilities
+    const abilities = this.enemyDef.abilities ?? [];
+    if (abilities.length > 0) {
+      const cardW = 260, lineH = 38, padY = 14, padX = 16;
+      const cardH = padY * 2 + abilities.length * lineH;
+      const cardX = W / 2;
+      const cardY = this.enemyPos.y + 72;
+
+      const cardBg = this.add.graphics().setDepth(52);
+      cardBg.fillStyle(hexNum('#0a0a18'), 0.92);
+      cardBg.fillRoundedRect(cardX - cardW / 2, cardY - cardH / 2, cardW, cardH, RADIUS.soft);
+      cardBg.lineStyle(1, eCol, 0.6);
+      cardBg.strokeRoundedRect(cardX - cardW / 2, cardY - cardH / 2, cardW, cardH, RADIUS.soft);
+      this._webViewLabels.push(cardBg);
+
+      abilities.forEach((ab, i) => {
+        const info = ABILITY_INFO[ab.id];
+        if (!info) return;
+        const lineY = cardY - cardH / 2 + padY + i * lineH + lineH / 2;
+
+        const desc = info.desc.replace('{v}', ab.value ?? '?');
+        const nameTxt = this.add.text(cardX - cardW / 2 + padX, lineY - 7, info.name, {
+          fontSize: '11px', color: this.enemyDef.color, fontStyle: 'bold', letterSpacing: 1,
+        }).setOrigin(0, 0.5).setDepth(53);
+        const descTxt = this.add.text(cardX - cardW / 2 + padX, lineY + 8, desc, {
+          fontSize: '10px', color: '#99aabb',
+          wordWrap: { width: cardW - padX * 2 },
+        }).setOrigin(0, 0.5).setDepth(53);
+        this._webViewLabels.push(nameTxt, descTxt);
+      });
+    }
 
     const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0)
       .setDepth(49).setInteractive();
@@ -966,6 +1130,23 @@ export default class BattleScene extends Phaser.Scene {
     const hp = Math.max(0, this.playerHp);
     this.playerHpTxt?.setText(`${hp} / ${this.playerMaxHp}`);
     this.potTxt?.setText(`${this.pot}`);
+
+    // Danger pulse: start when HP ≤ 25% of max, stop when recovered
+    const dangerThreshold = Math.ceil(this.playerMaxHp * 0.25);
+    if (hp > 0 && hp <= dangerThreshold) {
+      if (!this._dangerTween?.isPlaying()) {
+        this._dangerTween?.stop();
+        this._dangerOverlay?.setAlpha(0);
+        this._dangerTween = this.tweens.add({
+          targets: this._dangerOverlay, alpha: 0.10,
+          duration: 700, yoyo: true, repeat: -1, ease: 'Sine.InOut',
+        });
+      }
+    } else {
+      this._dangerTween?.stop();
+      this._dangerTween = null;
+      this._dangerOverlay?.setAlpha(0);
+    }
     if (this.playerBlockTxt) {
       if (this.block > 0) {
         this.playerBlockTxt.setText(`BLK ${this.block}`).setVisible(true);
@@ -1005,8 +1186,11 @@ export default class BattleScene extends Phaser.Scene {
     active.forEach((s, i) => {
       const pw = widths[i];
       const fc = parseInt(s.color.replace('#', ''), 16);
-      const bg = this.add.rectangle(cx + pw / 2, 0, pw, PILL_H, fc, 0.2);
-      bg.setStrokeStyle(1.5, fc, 0.75);
+      const bg = this.add.graphics();
+      bg.fillStyle(fc, 0.2);
+      bg.fillRoundedRect(cx, -PILL_H / 2, pw, PILL_H, RADIUS.soft);
+      bg.lineStyle(1.5, fc, 0.75);
+      bg.strokeRoundedRect(cx, -PILL_H / 2, pw, PILL_H, RADIUS.soft);
       txts[i].setPosition(cx + PAD, 0);
       this._playerPillsCont.add([bg, txts[i]]);
       cx += pw + GAP;
@@ -1040,8 +1224,11 @@ export default class BattleScene extends Phaser.Scene {
     active.forEach((s, i) => {
       const pw = widths[i];
       const fc = parseInt(s.color.replace('#', ''), 16);
-      const bg = this.add.rectangle(cx + pw / 2, 0, pw, PILL_H, fc, 0.2);
-      bg.setStrokeStyle(1.5, fc, 0.75);
+      const bg = this.add.graphics();
+      bg.fillStyle(fc, 0.2);
+      bg.fillRoundedRect(cx, -PILL_H / 2, pw, PILL_H, RADIUS.soft);
+      bg.lineStyle(1.5, fc, 0.75);
+      bg.strokeRoundedRect(cx, -PILL_H / 2, pw, PILL_H, RADIUS.soft);
       txts[i].setPosition(cx + PAD, 0);
       this._enemyPillsCont.add([bg, txts[i]]);
       cx += pw + GAP;
@@ -1087,7 +1274,7 @@ export default class BattleScene extends Phaser.Scene {
     pop.add(this.add.rectangle(W / 2, panelY, panelW, panelH, 0x080814)
       .setStrokeStyle(1.5, 0x2a3a5a, 0.9));
     pop.add(this.add.text(W / 2, panelY - panelH / 2 + 16, 'YOUR STATUS', {
-      fontSize: '12px', color: '#2a3848', letterSpacing: 2,
+      fontSize: '12px', color: '#5a7a8a', letterSpacing: 2,
     }).setOrigin(0.5, 0.5));
 
     rows.forEach((row, i) => {
@@ -1984,6 +2171,7 @@ export default class BattleScene extends Phaser.Scene {
     card.img.setVisible(false);
     card.lbl.setVisible(false);
     this.throwCount++;
+    StatsManager.recordDiceThrown();
     this._snapAllCards();
     this._showMsg('Die thrown — waiting to settle…');
   }
@@ -2074,6 +2262,7 @@ export default class BattleScene extends Phaser.Scene {
         if (!dieRef._hadCollision) blk += this.relicManager.getCleanLandBonus();
         blk  = Math.floor(blk * this.relicManager.getBlockMultiplier());
         this.block += blk;
+        StatsManager.recordBlockGained(blk);
         this._refreshStatusUI();
         this._flashDieImpact(dieRef, `+${blk} BLK`, '#3498db');
         this.bus.emit('ON_BLOCK_GAINED', { amount: blk });
@@ -2212,7 +2401,7 @@ export default class BattleScene extends Phaser.Scene {
     }
 
     // BLOCKING STANCE
-    if (has('blocking_stance')) { this.block += value; this._refreshStatusUI(); this._floatText(imgX, imgY - 32, `+${value} BLK`, '#3498db'); this.bus.emit('ON_BLOCK_GAINED', { amount: value }); }
+    if (has('blocking_stance')) { this.block += value; StatsManager.recordBlockGained(value); this._refreshStatusUI(); this._floatText(imgX, imgY - 32, `+${value} BLK`, '#3498db'); this.bus.emit('ON_BLOCK_GAINED', { amount: value }); }
 
     // BUFF
     if (has('buff')) { dieRef._valueBonus = (dieRef._valueBonus ?? 0) + 1; this._floatText(imgX, imgY - 32, 'BUFF +1', '#ffaa00'); }
@@ -3194,6 +3383,17 @@ export default class BattleScene extends Phaser.Scene {
 
   // ─── SETTLE DETECTION ─────────────────────────────────────────────────────
 
+  // Ground-truth check via actual body velocity — not the `_rolling` flag, which
+  // can go stale: a die already marked settled can get knocked again later (e.g.
+  // a shatter triggered by a later contact) without anything resetting `_rolling`.
+  _anyPlayerDieMoving() {
+    return this.allDice.some(d => {
+      if (!d.isPlayer) return false;
+      const v = d.img?.body?.velocity;
+      return v && (Math.abs(v.x) >= SETTLE_VEL || Math.abs(v.y) >= SETTLE_VEL);
+    });
+  }
+
   _waitSettle(cb) {
     let attempts = 0;
     if (this._settleChecker) this._settleChecker.destroy();
@@ -3201,12 +3401,7 @@ export default class BattleScene extends Phaser.Scene {
       delay: 220, startAt: 500, loop: true,
       callback: () => {
         attempts++;
-        const ok = this.allDice.every(d => {
-          if (!d.isPlayer || !d._rolling) return true;
-          const v = d.img?.body?.velocity;
-          return !v || (Math.abs(v.x) < SETTLE_VEL && Math.abs(v.y) < SETTLE_VEL);
-        });
-        if (ok || attempts > 22) {
+        if (!this._anyPlayerDieMoving() || attempts > 22) {
           this._settleChecker.destroy(); this._settleChecker = null; cb();
         }
       }
@@ -3221,6 +3416,7 @@ export default class BattleScene extends Phaser.Scene {
     const settleVal = Math.floor(data.currentFaceIdx / 2) + 1;
     this._settledValuesThisTurn = this._settledValuesThisTurn ?? [];
     this._settledValuesThisTurn.push(settleVal);
+    StatsManager.recordDieLanded(settleVal);
 
     // Finisher: +1 per die settled before it (applied at queue-add time)
     if (this._hasDieUpgrade(data, 'finisher')) {
@@ -3339,7 +3535,7 @@ export default class BattleScene extends Phaser.Scene {
 
         // Wait long enough for rune delays (e.g. Egyptian's 250ms) to initiate movement
         this.time.delayedCall(800, () => {
-          const anyRolling = this.allDice.some(d => d._rolling);
+          const anyRolling = this._anyPlayerDieMoving();
 
           // Slide card off-screen left and destroy
           this.tweens.add({
@@ -3398,6 +3594,21 @@ export default class BattleScene extends Phaser.Scene {
     });
   }
 
+  // ─── SAVE / STATS ───────────────────────────────────────────────────────────
+
+  _autosave() {
+    SaveManager.save({
+      playerDiceConfig: this.playerDiceConfig,
+      battleIndex:      this.battleIndex,
+      playerHp:         this.playerHp,
+      playerMaxHp:      this.playerMaxHp,
+      activeRelics:     this.activeRelics,
+      playerGold:       this.playerGold,
+      cullCount:        this.cullCount,
+      witchRunes:       this.witchRunes,
+    });
+  }
+
   // ─── WIN / LOSE ───────────────────────────────────────────────────────────
 
   _victory() {
@@ -3422,6 +3633,7 @@ export default class BattleScene extends Phaser.Scene {
       });
       return;
     }
+    StatsManager.recordBattleWin({ isBoss: this.enemyDef.tier === 'boss' });
     this.playerGold += 10;
     this.time.delayedCall(1400, () => this.scene.start('UpgradeScene', {
       playerDiceConfig: this.playerDiceConfig,
@@ -3440,26 +3652,62 @@ export default class BattleScene extends Phaser.Scene {
     this.phase = 99;
     this._setPhase('GAME OVER');
     this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.72).setDepth(80);
-    this.add.text(W / 2, H / 2 - 28, 'GAME OVER', {
-      fontSize: '34px', color: '#e74c3c', fontStyle: 'bold'
+
+    this.add.text(W / 2, H / 2 - 64, 'GAME OVER', {
+      fontSize: '34px', color: '#e74c3c', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(81);
-    this.add.text(W / 2, H / 2 + 28, 'Tap to restart', {
-      fontSize: '17px', color: '#aaaaaa'
+
+    const battlesWon = this._tutorialMode ? 0 : (this.battleIndex ?? 0);
+    const cause = this.poisonStacks > 0 ? 'poison' : 'direct attack';
+
+    if (!this._tutorialMode) {
+      StatsManager.recordRunEnd();
+      SaveManager.clear();
+    }
+
+    this.add.text(W / 2, H / 2 - 4, `${battlesWon} battle${battlesWon !== 1 ? 's' : ''} survived`, {
+      fontSize: '17px', color: '#8aaabb',
     }).setOrigin(0.5).setDepth(81);
+
+    this.add.text(W / 2, H / 2 + 22, `defeated by  ${this.enemyDef.name.toUpperCase()}`, {
+      fontSize: '14px', color: this.enemyDef.color,
+    }).setOrigin(0.5).setDepth(81);
+
+    this.add.text(W / 2, H / 2 + 44, `cause: ${cause}`, {
+      fontSize: '12px', color: '#5a7a8a',
+    }).setOrigin(0.5).setDepth(81);
+
+    this.add.text(W / 2, H / 2 + 80, 'tap to restart', {
+      fontSize: '15px', color: '#445566',
+    }).setOrigin(0.5).setDepth(81);
+
     this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0)
       .setDepth(82).setInteractive()
-      .on('pointerdown', () => this.scene.start('BattleScene',
-        this._tutorialMode
-          ? { enemyKey: 'training_dummy', tutorial: true,
-              playerDiceConfig: this.playerDiceConfig,
-              playerHp: this.playerMaxHp, playerMaxHp: this.playerMaxHp }
-          : {}
-      ));
+      .on('pointerdown', () => {
+        if (!this._tutorialMode) StatsManager.recordRunStart();
+        this.scene.start('BattleScene',
+          this._tutorialMode
+            ? { enemyKey: 'training_dummy', tutorial: true,
+                playerDiceConfig: this.playerDiceConfig,
+                playerHp: this.playerMaxHp, playerMaxHp: this.playerMaxHp }
+            : {}
+        );
+      });
   }
 
   // ─── UI HELPERS ───────────────────────────────────────────────────────────
 
-  _setPhase(txt) { this.phaseTxt?.setText(txt); }
+  _setPhase(txt) {
+    if (!this.phaseTxt || this.phaseTxt.text === txt) return;
+    this.tweens.killTweensOf(this.phaseTxt);
+    this.tweens.add({
+      targets: this.phaseTxt, alpha: 0, duration: 80,
+      onComplete: () => {
+        this.phaseTxt.setText(txt);
+        this.tweens.add({ targets: this.phaseTxt, alpha: 1, duration: 160 });
+      },
+    });
+  }
   _showMsg(txt)  { this.battleMsgTxt?.setText(txt); }
 
   _flashDamage(amount) {
@@ -3520,7 +3768,19 @@ export default class BattleScene extends Phaser.Scene {
       d.valLbl.setPosition(d.img.x, d.img.y + 7);
       if (d.crackGfx?.active) d.crackGfx.setPosition(d.img.x, d.img.y);
 
-      if (!d._rolling) return;
+      if (!d._rolling) {
+        // An already-settled die can get knocked again later (e.g. a shatter-chain
+        // collision) without going through the normal reroll-on-collision path.
+        // Without this it'd slide around with nothing tracking it — never re-queued,
+        // its motion never resolving into an effect. Re-arm it like a fresh reroll.
+        if (d.isPlayer) {
+          const v = d.img.body?.velocity;
+          if (v && (Math.abs(v.x) >= SETTLE_VEL || Math.abs(v.y) >= SETTLE_VEL)) {
+            this._rerollDie(d);
+          }
+        }
+        return;
+      }
 
       const vel    = d.img.body?.velocity;
       if (!vel) return;
@@ -3708,7 +3968,7 @@ export default class BattleScene extends Phaser.Scene {
     }).setOrigin(0.5, 0.5));
 
     this._tutPanel.add(this.add.text(W / 2, panY + panH / 2 - 16, 'tap anywhere to continue', {
-      fontSize: '10px', color: '#334455', fontStyle: 'italic',
+      fontSize: '10px', color: '#567090', fontStyle: 'italic',
     }).setOrigin(0.5, 0.5));
 
     this._tutPanel.add(this.add.text(W / 2 + panW / 2 - 12, panY - panH / 2 + 12,

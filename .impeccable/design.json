@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-29T23:30:00Z",
+  "title": "Design System: Dicemore",
+  "extensions": {
+    "colorMeta": {
+      "gold-primary":    { "role": "primary",   "displayName": "Parlor Gold",    "canonical": "#f0c040", "tonalRamp": ["#251a00", "#3d2d00", "#5a4200", "#7a5c00", "#9d7800", "#c29200", "#f0c040", "#ffdf8a"] },
+      "gold-warm":       { "role": "primary",   "displayName": "Player Gold",    "canonical": "#d4a820", "tonalRamp": ["#1c1200", "#332200", "#503400", "#6e4900", "#8e6200", "#b07c00", "#d4a820", "#f5d98a"] },
+      "midnight-base":   { "role": "neutral",   "displayName": "Midnight Base",  "canonical": "#111122", "tonalRamp": ["#06060f", "#0d0d1c", "#131320", "#1a1a2e", "#22223a", "#2d2d50", "#3d3d6a", "#8888aa"] },
+      "battle-surface":  { "role": "neutral",   "displayName": "Battle Surface", "canonical": "#13192e", "tonalRamp": ["#060810", "#0d101e", "#13192e", "#1d2540", "#283352", "#354565", "#435878", "#6a88aa"] },
+      "header-deep":     { "role": "neutral",   "displayName": "Header Deep",    "canonical": "#0e2a42", "tonalRamp": ["#030f18", "#081e2e", "#0e2a42", "#163a58", "#1f4d70", "#2a6490", "#3880b0", "#80b8e0"] },
+      "card-dark":       { "role": "neutral",   "displayName": "Card Dark",      "canonical": "#0d0d1c", "tonalRamp": ["#040408", "#080810", "#0d0d1c", "#141428", "#1c1c36", "#252544", "#303055", "#6a6a88"] },
+      "panel-void":      { "role": "neutral",   "displayName": "Panel Void",     "canonical": "#080f1c", "tonalRamp": ["#020508", "#050a12", "#080f1c", "#0e1828", "#152036", "#1e2e48", "#28405c", "#607080"] },
+      "blue-edge":       { "role": "secondary", "displayName": "Edge Blue",      "canonical": "#1a4a7a", "tonalRamp": ["#050f1a", "#0a1e34", "#102e4e", "#1a4a7a", "#2460a0", "#3070b8", "#4888cc", "#90c0e8"] },
+      "confirm-green":   { "role": "secondary", "displayName": "Confirm Green",  "canonical": "#27ae60", "tonalRamp": ["#082010", "#0f3a1e", "#185230", "#206844", "#27ae60", "#3ec878", "#70dc9a", "#b0f0cc"] },
+      "ink-primary":     { "role": "neutral",   "displayName": "Ink Primary",    "canonical": "#ddeeff", "tonalRamp": ["#203040", "#3a5060", "#5a7080", "#7a90a0", "#a0b8c8", "#c0d4e0", "#ddeeff", "#f0f8ff"] },
+      "ink-secondary":   { "role": "neutral",   "displayName": "Ink Secondary",  "canonical": "#8aaabb", "tonalRamp": ["#102030", "#203848", "#304858", "#446070", "#5c7888", "#708fa0", "#8aaabb", "#c0d8e8"] },
+      "ink-muted":       { "role": "neutral",   "displayName": "Ink Muted",      "canonical": "#5a7a8a", "tonalRamp": ["#0c1820", "#18283a", "#263848", "#344858", "#445868", "#526878", "#5a7a8a", "#90b0c0"] },
+      "ink-ghost":       { "role": "neutral",   "displayName": "Ink Ghost",      "canonical": "#2a3848", "tonalRamp": ["#060c12", "#0e1820", "#18242e", "#2a3848", "#3a4c60", "#4e6478", "#647c90", "#a0b8cc"] },
+      "die-attack":      { "role": "tertiary",  "displayName": "Attack Red",     "canonical": "#ff4444", "tonalRamp": ["#3d0000", "#650000", "#8b0000", "#b00000", "#db2020", "#ff4444", "#ff8888", "#ffcccc"] },
+      "die-block":       { "role": "tertiary",  "displayName": "Block Blue",     "canonical": "#3498db", "tonalRamp": ["#001830", "#002d55", "#003d78", "#0f5a9d", "#2478c0", "#3498db", "#70b8f0", "#c0e4ff"] },
+      "die-buff":        { "role": "tertiary",  "displayName": "Buff Orange",    "canonical": "#ff9900", "tonalRamp": ["#251500", "#3d2300", "#5a3400", "#7a4900", "#9d6000", "#cc7e00", "#ff9900", "#ffd580"] },
+      "die-copy":        { "role": "tertiary",  "displayName": "Copy Lavender",  "canonical": "#cc88ff", "tonalRamp": ["#1a0030", "#2d0055", "#440080", "#5c00b0", "#8833cc", "#aa55ff", "#cc88ff", "#eebbff"] },
+      "die-poison":      { "role": "tertiary",  "displayName": "Poison Green",   "canonical": "#58d68d", "tonalRamp": ["#002010", "#003d1f", "#005a2d", "#00803d", "#22aa5a", "#40c872", "#58d68d", "#aaf0c8"] },
+      "intent-loaded":   { "role": "tertiary",  "displayName": "Intent Loaded",  "canonical": "#e67e22", "tonalRamp": ["#1e1000", "#3a1e00", "#562e00", "#784000", "#9a5800", "#c07000", "#e67e22", "#f5c080"] },
+      "intent-hustle":   { "role": "tertiary",  "displayName": "Intent Hustle",  "canonical": "#bb44cc", "tonalRamp": ["#1a0020", "#300040", "#480060", "#620082", "#882299", "#aa33bb", "#bb44cc", "#e0a0e8"] },
+      "intent-rattle":   { "role": "tertiary",  "displayName": "Intent Rattle",  "canonical": "#1abc9c", "tonalRamp": ["#001e18", "#003830", "#005046", "#007060", "#00907a", "#10aa90", "#1abc9c", "#80e8d8"] },
+      "danger-pulse":    { "role": "primary",   "displayName": "Danger Pulse",   "canonical": "#ff1100", "tonalRamp": ["#2d0000", "#550000", "#800000", "#aa0000", "#d40000", "#ff1100", "#ff6655", "#ffbbbb"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "DICEMORE hero title only — one element per session, rise-entrance animated." },
+      "header":  { "displayName": "Header",  "purpose": "Step titles, modal titles, class card names — the primary decision-making tier." },
+      "title":   { "displayName": "Title",   "purpose": "Enemy names, sub-section labels, content titles inside cards." },
+      "body":    { "displayName": "Body",    "purpose": "Descriptions, subtitles, tutorial copy. Wordwrapped inside cards." },
+      "label":   { "displayName": "Label",   "purpose": "Rarity badges, status pills, intent hint text, small numerical indicators." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "scene-fade-in",    "value": "cameras.main.fadeIn(300–350, 0, 0, 0)",  "purpose": "Every scene entrance. 300ms SetupScene/HomeScene, 350ms BattleScene." },
+      { "name": "scene-fade-out",   "value": "cameras.main.fadeOut(180–200, 0, 0, 0)", "purpose": "Every scene exit before scene.start(). 180ms HomeScene, 200ms SetupScene/BattleScene." },
+      { "name": "step-fade-out",    "value": "tween alpha→0, duration 160",            "purpose": "Within-scene step crossfade, out phase." },
+      { "name": "step-fade-in",     "value": "tween alpha→1, duration 220, Sine.Out",  "purpose": "Within-scene step crossfade, in phase." },
+      { "name": "title-entrance",   "value": "tween alpha→1, y−15, duration 700, Sine.Out", "purpose": "DICEMORE title rises into frame on HomeScene create." },
+      { "name": "button-stagger",   "value": "delay 450/520/600/660ms",                "purpose": "HomeScene button/descriptor stagger after title settles." },
+      { "name": "danger-pulse",     "value": "tween alpha→0.10, duration 700, Sine.InOut, yoyo, repeat -1", "purpose": "Critical HP indicator — triggers at ≤25% playerMaxHp." },
+      { "name": "intent-pop",       "value": "tween scaleX/Y→1.1, duration 120, yoyo, Sine.Out", "purpose": "Enemy bumper pop when intent changes — draws eye to new threat." },
+      { "name": "phase-crossfade",  "value": "alpha→0 80ms, setText, alpha→1 160ms",   "purpose": "phaseTxt crossfade when phase changes." },
+      { "name": "bumper-flash",     "value": "tween scaleX/Y→1.35, duration 55, yoyo, Sine.Out", "purpose": "Bumper contact feedback — both enemy and player bumpers." },
+      { "name": "commit-entrance",  "value": "tween y+16→0, alpha 0→1, duration 280, Back.Out", "purpose": "Commit overlay rises into view after all dice thrown." },
+      { "name": "bumper-glow",      "value": "tween alpha→0.30, duration 1100, yoyo, repeat -1", "purpose": "Enemy bumper outer glow ring — ambient, marks physics body." }
+    ],
+    "breakpoints": [
+      { "name": "canvas", "value": "400×700", "purpose": "Portrait-only fixed canvas. No responsive breakpoints within the game." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button (Gold)",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Main action button — SOLO, DICE DUEL. Rectangular, gold stroke, dark fill floods subtly on hover.",
+      "html": "<button class=\"ds-btn-primary\">SOLO</button>",
+      "css": ".ds-btn-primary { background: #131320; color: #f0c040; font-family: \"Cinzel\", serif; font-size: 22px; font-weight: 700; letter-spacing: 3px; padding: 14px 24px; border: 2px solid rgba(240, 192, 64, 0.9); border-radius: 0; cursor: pointer; width: 240px; transition: background 0.12s; } .ds-btn-primary:hover { background: #1e2840; } .ds-btn-primary:active { background: #273050; }"
+    },
+    {
+      "name": "Confirm Button (Green)",
+      "kind": "button",
+      "refersTo": "button-confirm",
+      "description": "Commit-to-action button — Begin Battle, End Turn, Next. Fill floods green on hover — aggressive confirmation signal.",
+      "html": "<button class=\"ds-btn-confirm\">Begin Battle</button>",
+      "css": ".ds-btn-confirm { background: #163824; color: #aaffaa; font-family: system-ui, sans-serif; font-size: 17px; font-weight: 700; letter-spacing: 2px; padding: 14px 24px; border: 1.5px solid rgba(39, 174, 96, 0.9); border-radius: 0; cursor: pointer; width: 100%; max-width: 360px; transition: background 0.12s, color 0.12s; } .ds-btn-confirm:hover { background: #27ae60; color: #ffffff; }"
+    },
+    {
+      "name": "Destructive Button (Quit)",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Used inside quit confirm dialog. No hover treatment — certainty required.",
+      "html": "<button class=\"ds-btn-destructive\">QUIT</button>",
+      "css": ".ds-btn-destructive { font-family: \"Cinzel\", serif; font-size: 14px; font-weight: 700; color: #ee6644; background: #1a0a08; border: none; padding: 7px 16px; cursor: pointer; } .ds-btn-destructive:focus-visible { outline: 2px solid #ee6644; outline-offset: 2px; }"
+    },
+    {
+      "name": "Class Card (Dice Slinger)",
+      "kind": "card",
+      "refersTo": "class-card",
+      "description": "Full-width 360×108px class selection card. Title in Cinzel, subtitle wordwrapped, die shapes as SVG geometry, relic pill at bottom.",
+      "html": "<div class=\"ds-class-card ds-class-slinger\"><div class=\"ds-card-title\">DICE SLINGER</div><div class=\"ds-card-subtitle\">The boost die amplifies all your dice this turn</div><div class=\"ds-card-dice\"><svg class=\"ds-die\" viewBox=\"0 0 26 26\" width=\"26\" height=\"26\"><rect x=\"1\" y=\"1\" width=\"24\" height=\"24\" fill=\"rgba(255,68,68,0.18)\" stroke=\"#ff4444\" stroke-width=\"1.5\"/></svg><svg class=\"ds-die\" viewBox=\"0 0 26 26\" width=\"26\" height=\"26\"><polygon points=\"13,0 0,26 26,26\" fill=\"rgba(255,153,0,0.18)\" stroke=\"#ff9900\" stroke-width=\"1.5\"/></svg><svg class=\"ds-die\" viewBox=\"0 0 26 26\" width=\"26\" height=\"26\"><rect x=\"1\" y=\"1\" width=\"24\" height=\"24\" fill=\"rgba(52,152,219,0.18)\" stroke=\"#3498db\" stroke-width=\"1.5\"/></svg></div><div class=\"ds-card-relic\">⬟ Lucky Coin</div><div class=\"ds-card-cta\">tap to play →</div></div>",
+      "css": ".ds-class-card { background: #130e08; border: 2px solid rgba(255,102,34,0.65); padding: 0 16px; height: 108px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer; transition: background 0.1s; box-sizing: border-box; width: 360px; } .ds-class-slinger:hover { background: #1e160a; } .ds-card-title { font-family: \"Cinzel\", serif; font-size: 22px; font-weight: 700; letter-spacing: 3px; color: #ff8844; } .ds-card-subtitle { font-size: 12px; color: #6a8090; text-align: center; max-width: 320px; line-height: 1.4; } .ds-card-dice { display: flex; gap: 22px; align-items: center; } .ds-card-relic { font-size: 12px; font-weight: 700; color: #f0c040; border: 1px solid rgba(240,192,64,0.7); padding: 2px 14px; background: #0a0a18; } .ds-card-cta { font-size: 13px; color: #4a6878; }"
+    },
+    {
+      "name": "Status Pill (Poison)",
+      "kind": "chip",
+      "refersTo": "button-primary",
+      "description": "Inline status indicator attached to bumpers. Color carries mechanic meaning — poison green here.",
+      "html": "<div class=\"ds-status-pill ds-pill-poison\">☠ 3</div>",
+      "css": ".ds-status-pill { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; font-size: 11px; font-weight: 700; border-radius: 0; line-height: 1; } .ds-pill-poison { color: #58d68d; background: rgba(88,214,141,0.20); border: 1.5px solid rgba(88,214,141,0.75); } .ds-pill-buff { color: #ff9900; background: rgba(255,153,0,0.20); border: 1.5px solid rgba(255,153,0,0.75); } .ds-pill-attack { color: #ff4444; background: rgba(255,68,68,0.20); border: 1.5px solid rgba(255,68,68,0.75); } .ds-pill-block { color: #3498db; background: rgba(52,152,219,0.20); border: 1.5px solid rgba(52,152,219,0.75); }"
+    },
+    {
+      "name": "Modal Panel (Quit Confirm)",
+      "kind": "custom",
+      "refersTo": "button-primary",
+      "description": "Confirmation dialog — appears over a black 0.70 alpha dim. All modals follow this structure.",
+      "html": "<div class=\"ds-modal-overlay\"><div class=\"ds-modal-panel\"><div class=\"ds-modal-title\">Quit run?</div><div class=\"ds-modal-actions\"><button class=\"ds-btn-destructive\">QUIT</button><button class=\"ds-btn-safe\">KEEP GOING</button></div></div></div>",
+      "css": ".ds-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.70); display: flex; align-items: center; justify-content: center; } .ds-modal-panel { background: rgba(8,15,28,0.98); border: 2px solid rgba(68,85,102,0.9); padding: 24px; width: 240px; display: flex; flex-direction: column; gap: 16px; align-items: center; } .ds-modal-title { font-family: \"Cinzel\", serif; font-size: 17px; font-weight: 700; color: #ccddee; } .ds-modal-actions { display: flex; gap: 16px; } .ds-btn-safe { font-family: \"Cinzel\", serif; font-size: 14px; font-weight: 700; color: #4488aa; background: #08141a; border: none; padding: 7px 16px; cursor: pointer; }"
+    },
+    {
+      "name": "List Item (Relic/Upgrade)",
+      "kind": "card",
+      "refersTo": "class-card",
+      "description": "Scrollable list item — relics, upgrades, runes. Rarity-colored stroke, left color bar, name/rarity/description typography stack.",
+      "html": "<div class=\"ds-list-item\"><div class=\"ds-item-bar\"></div><div class=\"ds-item-content\"><div class=\"ds-item-name\">Lucky Coin</div><div class=\"ds-item-rarity\">COMMON</div><div class=\"ds-item-desc\">Once per turn, re-roll a die that settles lower than half its maximum face.</div></div></div>",
+      "css": ".ds-list-item { position: relative; display: flex; background: #0d0d1c; border: 1.5px solid rgba(85,102,119,0.5); height: 96px; width: 360px; box-sizing: border-box; overflow: hidden; cursor: pointer; transition: background 0.1s; } .ds-list-item:hover { background: #1a1a3a; border-color: rgba(85,102,119,0.9); } .ds-item-bar { width: 4px; background: rgba(240,192,64,0.70); flex-shrink: 0; } .ds-item-content { padding: 12px 12px 12px 8px; display: flex; flex-direction: column; gap: 4px; } .ds-item-name { font-size: 15px; font-weight: 700; color: #f0c040; } .ds-item-rarity { font-size: 11px; font-weight: 700; letter-spacing: 1px; color: #445566; } .ds-item-desc { font-size: 12px; color: #8899aa; line-height: 1.4; max-width: 320px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Devil's Parlor",
+    "overview": "Dicemore is set in an underground western gambling championship where The Devil runs the event and everyone cheats. The UI is the Parlor's interior: near-black surfaces tinted toward deep navy, gold serif lettering that declares the stakes, and a physics surface where dice do not care about your plans.\n\nThis is not a bright mobile game. It is not a generic dark UI. It is a specific kind of dark: the dark of a room where serious things happen under low, deliberate light. Every pixel of contrast is earned. Every animation has a job. Numbers feel heavy because the game is playing for keeps.\n\nThe references PRODUCT.md names — Balatro and Slay the Spire — share one property: their UI cannot be moved to another game. Dicemore's gold Cinzel headers, die-shape visual language, and tonal depth stack must earn the same recognition.",
+    "keyCharacteristics": [
+      "Dark-first backgrounds (near-black with blue hue lean) at every layer",
+      "Cinzel for display type; system sans for body — contrast axis, not similarity axis",
+      "Stroke-not-fill interactions: dark fill with colored stroke; fill floods on hover",
+      "Mechanical color: die types own their colors permanently — never decorative use",
+      "Flat geometry; circles only for functional physics bodies (bumpers, relic indicators)",
+      "Camera fades on all scene transitions; within-scene steps crossfade at 160/220ms",
+      "Header strip (y=0–80) reserved permanently for phase/status/navigation"
+    ],
+    "rules": [
+      { "name": "The Closed Mechanic Rule", "body": "The five die mechanic colors are permanent and exclusive. They appear on die symbols, class card shapes, and status pills — nowhere else. Break this rule and the visual language stops working.", "section": "colors" },
+      { "name": "The One Gold Rule", "body": "Parlor Gold (#f0c040) touches ≤3 elements per screen. Its power comes from its rarity. Do not apply it to interactive elements that need to communicate anything other than Dicemore's identity.", "section": "colors" },
+      { "name": "The Danger Signal Rule", "body": "#ff1100 is used exclusively as the critical-HP danger pulse overlay (alpha ≤ 0.10, 700ms yoyo). Its association with mortal danger must not be diluted by any decorative use.", "section": "colors" },
+      { "name": "The Three Spacings Rule", "body": "letterSpacing has exactly three valid values: 0 (body), 3 (Cinzel headers/buttons), 6 (hero title only). No other values.", "section": "typography" },
+      { "name": "The Cinzel Ceiling Rule", "body": "Cinzel is prohibited below 14px. The letterforms collapse at small sizes. Any text below 14px uses system-ui only.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "Surfaces at rest cast no shadows. Hover states use fill-color lightening, not shadow elevation. Add drop shadows and the game starts looking like a web app.", "section": "elevation" },
+      { "name": "The Dim-Not-Blur Rule", "body": "Modals occlude via 0x000000 at 0.65–0.70 alpha. No blur, no backdrop-filter. The performance budget belongs to Matter.js physics simulation.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do use Cinzel only for display text ≥14px. Below that size, always system-ui.",
+      "Do keep Parlor Gold (#f0c040) to ≤3 elements per screen. Its rarity is its power.",
+      "Do use camera fades (180–350ms black) on every scene transition. Instant cuts read as prototype.",
+      "Do reserve die mechanic colors exclusively for mechanical contexts — die symbols, class card shapes, status pills, intent text. Never decorative.",
+      "Do express depth through fill darkness only: #080f1c → #0d0d1c → #13192e → #111122. No drop shadows.",
+      "Do use the dim overlay (0x000000 at 0.65 alpha) when a modal or picker opens.",
+      "Do verify HP numbers, die values, and damage text hit ≥4.5:1 contrast on their background.",
+      "Do accompany every color-coded indicator with a type label (ATK/BLK/STR). Color is never the sole differentiator.",
+      "Do use the danger pulse (#ff1100, alpha ≤ 0.10, 700ms Sine.InOut yoyo) exclusively for critical HP. One signal, one meaning.",
+      "Do extend the die-shape convention (triangle/square/diamond) to any new die type added."
+    ],
+    "donts": [
+      "Don't use soft pastels, rounded bubbly elements, or 'safe stakes' energy. Per PRODUCT.md: this game has teeth.",
+      "Don't add coin-pop animations, bright primary colors, or in-your-face progression noise. Dicemore is not a generic free-to-play mobile game.",
+      "Don't ship a UI element that could belong to a different game without feeling wrong.",
+      "Don't use #ff1100 (danger red) for anything except the critical-HP overlay.",
+      "Don't add drop shadows to surfaces. The depth system is tonal only.",
+      "Don't use letterSpacing values outside 0, 3, or 6 for Cinzel text.",
+      "Don't add border-radius greater than 4px to buttons or cards. 12px radius belongs in a different game.",
+      "Don't put decorative animation on informational state changes. The danger pulse means danger; repurposing it destroys the signal.",
+      "Don't add a new die type without assigning it a dedicated color that appears across all surfaces.",
+      "Don't render die types as text labels (BUF d4, CPY d4) on class cards — the geometric shape language exists to replace those labels."
+    ]
+  }
+}

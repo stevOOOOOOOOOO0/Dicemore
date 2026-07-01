@@ -1,15 +1,25 @@
 import Phaser from 'phaser';
 import { FACES, ENEMIES, BATTLE_SEQUENCE } from '../data/faces.js';
 import { DIE_TYPES, DIE_TYPE_KEYS, SPECIAL_DIE_KEYS, SIDES_PROGRESSION, FIGHTER_CONFIG, MAGICIAN_CONFIG, ALCHEMIST_CONFIG, BRUTE_CONFIG } from '../data/dice.js';
-import { W, H, PLAYER_MAX_HP } from '../constants.js';
+import { W, H, PLAYER_MAX_HP, FONT_DISPLAY } from '../constants.js';
 import { RUNES, MATERIALS, RUNE_KEYS, MATERIAL_KEYS } from '../data/runes.js';
 import { getRelics } from '../data/relics.js';
 import { UPGRADES, UPGRADE_DESCRIPTIONS } from '../data/upgrades.js';
+import { COLORS, TYPE, RADIUS, hexNum } from '../ui/theme.js';
+import { drawDieShape } from '../ui/components.js';
+import StatsManager from '../systems/StatsManager.js';
 
 const ENEMY_KEYS = ['red_louse', 'cultist', 'jaw_worm'];
 
 export default class SetupScene extends Phaser.Scene {
   constructor() { super({ key: 'SetupScene' }); }
+
+  init(data) {
+    this._mpMode     = data?.mpMode   ?? false;
+    this._mpPlayer   = data?.mpPlayer ?? 1;
+    this._mpP1Config = data?.p1Config ?? null;
+    this._mpP1Relic  = data?.p1Relic  ?? null;
+  }
 
   create() {
     this._enemyKey        = ENEMY_KEYS[0];
@@ -23,11 +33,16 @@ export default class SetupScene extends Phaser.Scene {
     this._selectedCustomRelics = null;
     this._upgradeActiveDie     = 0;
 
+    this.cameras.main.fadeIn(300, 0, 0, 0);
+
     this.add.rectangle(W / 2, H / 2, W, H, 0x111122);
-    this.add.text(8, 8, 'pre-alpha-beta-0.14', {
-      fontSize: '11px', color: '#2a3848',
-    }).setOrigin(0, 0);
     this.add.rectangle(W / 2, 1, W, 2, 0x1a4a7a);
+
+    if (this._mpMode) {
+      this.add.text(W / 2, H - 24, `PLAYER ${this._mpPlayer} — Choose your class`, {
+        fontSize: '14px', color: '#00ccff', fontStyle: 'bold',
+      }).setOrigin(0.5);
+    }
 
     this._showClassStep();
   }
@@ -55,11 +70,11 @@ export default class SetupScene extends Phaser.Scene {
 
   _addBackBtn(g, fn) {
     const btn = this.add.text(20, H - 44, '←', {
-      fontSize: '20px', color: '#2a3a4a'
+      fontSize: '20px', color: '#8aaabb'
     }).setOrigin(0, 0.5).setInteractive();
     btn.on('pointerdown', () => this._transitionTo(fn));
-    btn.on('pointerover',  () => btn.setColor('#8899aa'));
-    btn.on('pointerout',   () => btn.setColor('#2a3a4a'));
+    btn.on('pointerover',  () => btn.setColor('#b0ccdd'));
+    btn.on('pointerout',   () => btn.setColor('#8aaabb'));
     g.add(btn);
   }
 
@@ -69,11 +84,13 @@ export default class SetupScene extends Phaser.Scene {
     const g = this._stepGroup = this.add.container(0, 0);
 
     g.add(this.add.text(W / 2, 52, 'DICEMORE', {
-      fontSize: '28px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 4
+      fontSize: '28px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 4,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5));
 
     g.add(this.add.text(W / 2, 88, 'CHOOSE YOUR ENEMY', {
-      fontSize: '17px', color: '#2a3848', letterSpacing: 2
+      fontSize: '17px', color: '#5a7a8a', letterSpacing: 2,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5));
 
     const cardW = 108, cardH = 220;
@@ -90,31 +107,36 @@ export default class SetupScene extends Phaser.Scene {
       g.add(bg);
 
       g.add(this.add.text(cx, cy - 94, def.name.toUpperCase(), {
-        fontSize: '17px', color: def.color, fontStyle: 'bold', letterSpacing: 1
+        fontSize: '17px', color: def.color, fontStyle: 'bold', letterSpacing: 1,
+        fontFamily: FONT_DISPLAY,
       }).setOrigin(0.5));
       g.add(this.add.text(cx, cy - 38, `${def.hp}`, {
         fontSize: '36px', color: '#ddeeff', fontStyle: 'bold'
       }).setOrigin(0.5));
       g.add(this.add.text(cx, cy + 12, 'HP', {
-        fontSize: '17px', color: '#334455', letterSpacing: 2
+        fontSize: '17px', color: '#567090', letterSpacing: 2
       }).setOrigin(0.5));
       g.add(this.add.text(cx, cy + 44, `${def.obstacleCount} obstacle${def.obstacleCount !== 1 ? 's' : ''}`, {
-        fontSize: '17px', color: '#445566'
+        fontSize: '17px', color: '#5a7090'
       }).setOrigin(0.5));
 
       const INTENT_CLR = {
         attack: '#e74c3c', block: '#3498db', strength: '#e67e22',
         vulnerable: '#bb44cc', frail: '#1abc9c',
       };
+      const INTENT_LBL = { attack: 'ATK', block: 'BLK', strength: 'STR', vulnerable: 'VUL', frail: 'FRL' };
       const intentTypes = [...new Set(
         def.intents.flatMap(e => e.type === 'multi' ? e.intents.map(s => s.type) : [e.type])
       )].slice(0, 4);
       intentTypes.forEach((iType, fi) => {
         const fc    = parseInt((INTENT_CLR[iType] ?? '#555555').replace('#', ''), 16);
         const chipX = cx - ((intentTypes.length - 1) * 20) / 2 + fi * 20;
-        const chip  = this.add.rectangle(chipX, cy + 82, 16, 16, 0x0a0a18);
+        const chip  = this.add.rectangle(chipX, cy + 79, 16, 14, 0x0a0a18);
         chip.setStrokeStyle(1.5, fc, 0.8);
         g.add(chip);
+        g.add(this.add.text(chipX, cy + 93, INTENT_LBL[iType] ?? iType.slice(0, 3).toUpperCase(), {
+          fontSize: '7px', color: INTENT_CLR[iType] ?? '#555555',
+        }).setOrigin(0.5, 0));
       });
 
       bg.on('pointerdown', () => {
@@ -131,15 +153,20 @@ export default class SetupScene extends Phaser.Scene {
   // ─── STEP 1b: CLASS SELECTION ────────────────────────────────────────────
 
   _showClassStep() {
+    this._classCardLocked = false;
     const g = this._stepGroup = this.add.container(0, 0);
     const def = ENEMIES[this._enemyKey];
 
-    g.add(this.add.text(W / 2, 36, 'CHOOSE YOUR CLASS', {
-      fontSize: '20px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3
+    const title = this._mpMode ? `PLAYER ${this._mpPlayer} — CHOOSE CLASS` : 'CHOOSE YOUR CLASS';
+    g.add(this.add.text(W / 2, 36, title, {
+      fontSize: '20px', color: this._mpMode ? '#00ccff' : '#f0c040', fontStyle: 'bold', letterSpacing: 3,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5));
-    g.add(this.add.text(W / 2, 66, `vs. ${def.name}  ·  ${def.hp} HP`, {
-      fontSize: '17px', color: '#2a3848'
-    }).setOrigin(0.5));
+    if (!this._mpMode) {
+      g.add(this.add.text(W / 2, 66, `vs. ${def.name}  ·  ${def.hp} HP`, {
+        fontSize: '17px', color: '#5a7080'
+      }).setOrigin(0.5));
+    }
 
     const cardW = W - 40, cardH = 108;
     const cx = W / 2;
@@ -151,7 +178,7 @@ export default class SetupScene extends Phaser.Scene {
       borderColor: 0xff6622,
       bgColor: 0x130e08,
       bgHover: 0x1e160a,
-      subtitle: 'The card sharp with a quick draw',
+      subtitle: 'The boost die amplifies all your dice this turn',
       dice: [
         { type: 'attack', label: 'ATK d6' },
         { type: 'pierce', label: 'BUF d4' },
@@ -175,7 +202,7 @@ export default class SetupScene extends Phaser.Scene {
       borderColor: 0x8844cc,
       bgColor: 0x100a18,
       bgHover: 0x1a1028,
-      subtitle: 'A master of misdirection',
+      subtitle: 'The copy die becomes whatever it strikes',
       dice: [
         { type: 'attack', label: 'ATK d6' },
         { type: 'copy',   label: 'CPY d4' },
@@ -199,7 +226,7 @@ export default class SetupScene extends Phaser.Scene {
       borderColor: 0x27ae60,
       bgColor: 0x081208,
       bgHover: 0x0e1e0e,
-      subtitle: 'Lifts your chips while shaking your hand',
+      subtitle: 'Poison die stacks on the enemy each turn',
       dice: [
         { type: 'attack', label: 'ATK d6' },
         { type: 'poison', label: 'PKP d4' },
@@ -223,7 +250,7 @@ export default class SetupScene extends Phaser.Scene {
       borderColor: 0xc0392b,
       bgColor: 0x130808,
       bgHover: 0x1e0e0e,
-      subtitle: 'Built like a brick, moves like one too',
+      subtitle: 'Pure block dice — built to absorb everything',
       dice: [
         { type: 'block', label: 'BLK d8' },
         { type: 'block', label: 'BLK d8' },
@@ -240,29 +267,39 @@ export default class SetupScene extends Phaser.Scene {
     });
 
     // Separator
-    g.add(this.add.rectangle(cx, 537, cardW, 1, 0x1e2840));
+    g.add(this.add.rectangle(cx, 537, cardW, 1, hexNum(COLORS.inkGhost)));
 
     // The Drifter button
-    const customBg = this.add.rectangle(cx, 562, cardW - 40, 40, 0x0a0a14);
-    customBg.setStrokeStyle(1, 0x2a3a5a, 0.7).setInteractive();
-    g.add(customBg);
+    const customW = cardW - 40, customH = 40;
+    const customGfx = this.add.graphics();
+    const redrawCustom = (hover) => {
+      customGfx.clear();
+      customGfx.fillStyle(hexNum(hover ? '#141424' : '#0a0a14'), 1);
+      customGfx.fillRoundedRect(cx - customW / 2, 562 - customH / 2, customW, customH, RADIUS.soft);
+      customGfx.lineStyle(1, hexNum(hover ? '#4466aa' : '#2a3a5a'), hover ? 1 : 0.7);
+      customGfx.strokeRoundedRect(cx - customW / 2, 562 - customH / 2, customW, customH, RADIUS.soft);
+    };
+    redrawCustom(false);
+    g.add(customGfx);
+    const customHit = this.add.rectangle(cx, 562, customW, customH, 0x000000, 0).setInteractive();
+    g.add(customHit);
     g.add(this.add.text(cx, 562, 'The Drifter  — build custom', {
-      fontSize: '14px', color: '#2a3848', letterSpacing: 1
+      ...TYPE.body, fontSize: '14px', color: '#5a7a8a', letterSpacing: 1,
     }).setOrigin(0.5));
-    customBg.on('pointerdown', () => {
+    customHit.on('pointerdown', () => {
       this._usedClassPreset = false;
       this._transitionTo(() => this._showCountStep());
     });
-    customBg.on('pointerover',  () => { customBg.setFillStyle(0x141424); customBg.setStrokeStyle(1, 0x4466aa); });
-    customBg.on('pointerout',   () => { customBg.setFillStyle(0x0a0a14); customBg.setStrokeStyle(1, 0x2a3a5a, 0.7); });
+    customHit.on('pointerover', () => redrawCustom(true));
+    customHit.on('pointerout',  () => redrawCustom(false));
 
     // Tutorial link
     const tutTxt = this.add.text(cx, 612, '? First time? Try the Tutorial', {
-      fontSize: '13px', color: '#2a3848',
+      ...TYPE.body, fontSize: '13px', color: '#7aaccc',
     }).setOrigin(0.5).setInteractive();
     g.add(tutTxt);
-    tutTxt.on('pointerover', () => tutTxt.setColor('#5588aa'));
-    tutTxt.on('pointerout',  () => tutTxt.setColor('#2a3848'));
+    tutTxt.on('pointerover', () => tutTxt.setColor('#aaddf0'));
+    tutTxt.on('pointerout',  () => tutTxt.setColor('#7aaccc'));
     tutTxt.on('pointerdown', () => {
       this.time.delayedCall(1, () => this.scene.start('BattleScene', {
         playerDiceConfig: JSON.parse(JSON.stringify(FIGHTER_CONFIG)),
@@ -279,51 +316,99 @@ export default class SetupScene extends Phaser.Scene {
   }
 
   _makeClassCard(g, cx, cy, cardW, cardH, opts) {
-    const cardBg = this.add.rectangle(cx, cy, cardW, cardH, opts.bgColor);
-    cardBg.setStrokeStyle(2, opts.borderColor, 0.65).setInteractive();
-    g.add(cardBg);
+    const cardGfx = this.add.graphics();
+    const redrawCard = (hover) => {
+      cardGfx.clear();
+      cardGfx.fillStyle(hover ? opts.bgHover : opts.bgColor, 1);
+      cardGfx.fillRoundedRect(cx - cardW / 2, cy - cardH / 2, cardW, cardH, RADIUS.soft);
+      cardGfx.lineStyle(2, opts.borderColor, 0.65);
+      cardGfx.strokeRoundedRect(cx - cardW / 2, cy - cardH / 2, cardW, cardH, RADIUS.soft);
+    };
+    redrawCard(false);
+    g.add(cardGfx);
 
-    g.add(this.add.text(cx, cy - 42, opts.title, {
-      fontSize: '22px', color: opts.titleColor, fontStyle: 'bold', letterSpacing: 4
-    }).setOrigin(0.5));
-    g.add(this.add.text(cx, cy - 20, opts.subtitle, {
-      fontSize: '17px', color: '#445566'
-    }).setOrigin(0.5));
+    const hitZone = this.add.rectangle(cx, cy, cardW, cardH, 0x000000, 0).setInteractive();
+    g.add(hitZone);
 
-    // Die type pills
+    const titleTxt = this.add.text(cx, cy - 42, opts.title, {
+      ...TYPE.title, fontSize: '22px', color: opts.titleColor,
+    }).setOrigin(0.5);
+    g.add(titleTxt);
+    const subtitleTxt = this.add.text(cx, cy - 22, opts.subtitle, {
+      fontSize: '12px', color: '#6a8090',
+      wordWrap: { width: cardW - 24 }, align: 'center',
+    }).setOrigin(0.5);
+    g.add(subtitleTxt);
+
+    // Die shapes
     const hasRelic = !!opts.startingRelicName;
-    const pillsY   = hasRelic ? cy + 2 : cy + 12;
-    const pillW = 76, pillGap = 8;
-    const totalW = opts.dice.length * pillW + (opts.dice.length - 1) * pillGap;
+    const shapesY  = hasRelic ? cy + 2 : cy + 10;
+    const S = 26, shapeGap = 22;
+    const totalShapeW = opts.dice.length * S + (opts.dice.length - 1) * shapeGap;
+    const startX = cx - totalShapeW / 2 + S / 2;
+
+    const gfx = this.add.graphics();
+    g.add(gfx);
+
     opts.dice.forEach((d, i) => {
-      const dt = DIE_TYPES[d.type];
-      const fc = dt ? parseInt(dt.color.replace('#', ''), 16) : 0x555555;
-      const px = cx - totalW / 2 + i * (pillW + pillGap) + pillW / 2;
-      const pill = this.add.rectangle(px, pillsY, pillW, 30, 0x0a0a18);
-      pill.setStrokeStyle(1, fc, 0.7);
-      g.add(pill);
-      g.add(this.add.text(px, pillsY, d.label, {
-        fontSize: '17px', color: dt ? dt.color : '#777777', fontStyle: 'bold'
-      }).setOrigin(0.5));
+      const px = startX + i * (S + shapeGap);
+      const sides = parseInt(d.label.split(' ')[1].slice(1), 10); // 'd4' -> 4
+      drawDieShape(gfx, px, shapesY, S, d.type, sides);
     });
 
+    let relicPill = null, relicTxt = null;
     if (hasRelic) {
-      const rc = parseInt((opts.startingRelicColor ?? '#e74c3c').replace('#', ''), 16);
-      const relicPill = this.add.rectangle(cx, cy + 32, 170, 22, 0x0a0a18);
-      relicPill.setStrokeStyle(1, rc, 0.7);
+      const rc = opts.startingRelicColor ?? '#e74c3c';
+      relicPill = this.add.graphics();
+      relicPill.fillStyle(hexNum('#0a0a18'), 1);
+      relicPill.fillRoundedRect(cx - 85, cy + 30 - 11, 170, 22, RADIUS.soft);
+      relicPill.lineStyle(1, hexNum(rc), 0.7);
+      relicPill.strokeRoundedRect(cx - 85, cy + 30 - 11, 170, 22, RADIUS.soft);
       g.add(relicPill);
-      g.add(this.add.text(cx, cy + 32, `⬟ ${opts.startingRelicName}`, {
-        fontSize: '12px', color: opts.startingRelicColor ?? '#e74c3c', fontStyle: 'bold',
-      }).setOrigin(0.5));
+      relicTxt = this.add.text(cx, cy + 30, `⬟ ${opts.startingRelicName}`, {
+        fontSize: '12px', color: rc, fontStyle: 'bold',
+      }).setOrigin(0.5);
+      g.add(relicTxt);
     }
 
-    g.add(this.add.text(cx, hasRelic ? cy + 48 : cy + 44, 'tap to play  →', {
-      fontSize: '17px', color: '#2a2a3a'
-    }).setOrigin(0.5));
+    const tapTxt = this.add.text(cx, hasRelic ? cy + 47 : cy + 44, 'tap to play  →', {
+      fontSize: '13px', color: '#4a6878'
+    }).setOrigin(0.5);
+    g.add(tapTxt);
 
-    cardBg.on('pointerdown', opts.onTap);
-    cardBg.on('pointerover',  () => cardBg.setFillStyle(opts.bgHover));
-    cardBg.on('pointerout',   () => cardBg.setFillStyle(opts.bgColor));
+    hitZone.on('pointerdown', () => {
+      if (this._classCardLocked) return;
+      this._classCardLocked = true;
+      g.list.forEach(o => o.disableInteractive && o.disableInteractive());
+      this._playClassCardExit({ titleTxt, subtitleTxt, gfx, relicPill, relicTxt, tapTxt }, opts.onTap);
+    });
+    hitZone.on('pointerover', () => redrawCard(true));
+    hitZone.on('pointerout',  () => redrawCard(false));
+  }
+
+  // Fires each element off the right edge in rapid succession, then fades to black.
+  _playClassCardExit(elements, onTap) {
+    const flyTargets = [
+      elements.titleTxt,
+      elements.subtitleTxt,
+      elements.gfx,
+      elements.relicPill ? [elements.relicPill, elements.relicTxt] : null,
+      elements.tapTxt,
+    ].filter(Boolean);
+
+    const FLY_DX = 480, DUR = 200, STAGGER = 65;
+
+    flyTargets.forEach((target, i) => {
+      this.tweens.add({
+        targets: target,
+        x: `+=${FLY_DX}`,
+        duration: DUR,
+        delay: i * STAGGER,
+        ease: 'Cubic.In',
+      });
+    });
+
+    this.time.delayedCall(flyTargets.length * STAGGER + DUR, onTap);
   }
 
   // ─── STEP 2: DICE COUNT ───────────────────────────────────────────────────
@@ -333,10 +418,11 @@ export default class SetupScene extends Phaser.Scene {
     const def = ENEMIES[this._enemyKey];
 
     g.add(this.add.text(W / 2, 80, 'HOW MANY DICE?', {
-      fontSize: '20px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3
+      fontSize: '20px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5));
     g.add(this.add.text(W / 2, 118, `vs. ${def.name}  ·  ${def.hp} HP`, {
-      fontSize: '17px', color: '#2a3848'
+      fontSize: '17px', color: '#5a7080'
     }).setOrigin(0.5));
 
     const btnW = 96, btnH = 86;
@@ -351,17 +437,28 @@ export default class SetupScene extends Phaser.Scene {
       const x   = hGap + col * (btnW + hGap) + btnW / 2;
       const y   = row === 0 ? row1Y : row2Y;
 
-      const bg = this.add.rectangle(x, y, btnW, btnH, 0x131320);
-      bg.setStrokeStyle(1.5, 0x2a3a5a, 0.9).setInteractive();
-      g.add(bg);
+      const bgGfx = this.add.graphics();
+      const redrawBtn = (hover) => {
+        bgGfx.clear();
+        bgGfx.fillStyle(hexNum(hover ? '#1e2840' : '#131320'), 1);
+        bgGfx.fillRoundedRect(x - btnW / 2, y - btnH / 2, btnW, btnH, RADIUS.soft);
+        bgGfx.lineStyle(1.5, hexNum(hover ? '#4466aa' : '#2a3a5a'), hover ? 1 : 0.9);
+        bgGfx.strokeRoundedRect(x - btnW / 2, y - btnH / 2, btnW, btnH, RADIUS.soft);
+      };
+      redrawBtn(false);
+      g.add(bgGfx);
+
+      const hit = this.add.rectangle(x, y, btnW, btnH, 0x000000, 0).setInteractive();
+      g.add(hit);
+
       g.add(this.add.text(x, y - 16, `${n}`, {
-        fontSize: '34px', color: '#ddeeff', fontStyle: 'bold'
+        fontSize: '34px', color: COLORS.inkPrimary, fontStyle: 'bold'
       }).setOrigin(0.5));
       g.add(this.add.text(x, y + 26, n === 1 ? 'die' : 'dice', {
-        fontSize: '17px', color: '#334455', letterSpacing: 1
+        fontSize: '17px', color: '#567090', letterSpacing: 1
       }).setOrigin(0.5));
 
-      bg.on('pointerdown', () => {
+      hit.on('pointerdown', () => {
         this._diceCount  = n;
         this._diceConfig = Array.from({ length: n }, (_, j) => ({
           id: `custom_${j}`, type: null, sides: 6,
@@ -370,8 +467,8 @@ export default class SetupScene extends Phaser.Scene {
         }));
         this._transitionTo(() => this._showTypeStep());
       });
-      bg.on('pointerover',  () => { bg.setFillStyle(0x1e2840); bg.setStrokeStyle(1.5, 0x4466aa); });
-      bg.on('pointerout',   () => { bg.setFillStyle(0x131320); bg.setStrokeStyle(1.5, 0x2a3a5a, 0.9); });
+      hit.on('pointerover', () => redrawBtn(true));
+      hit.on('pointerout',  () => redrawBtn(false));
     });
 
     this._addBackBtn(g, () => this._showClassStep());
@@ -384,7 +481,8 @@ export default class SetupScene extends Phaser.Scene {
     const g = this._stepGroup = this.add.container(0, 0);
 
     g.add(this.add.text(W / 2, 36, 'CHOOSE DIE TYPES', {
-      fontSize: '17px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3
+      fontSize: '17px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5));
 
     const startY   = 76;
@@ -480,7 +578,8 @@ export default class SetupScene extends Phaser.Scene {
     this._runeObjs = [];
 
     g.add(this.add.text(W / 2, 36, 'BRANDS & MATERIALS', {
-      fontSize: '17px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3
+      fontSize: '17px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5));
 
     const cardH = 64, gap = 8, startY = 64;
@@ -574,6 +673,7 @@ export default class SetupScene extends Phaser.Scene {
 
     g.add(this.add.text(W / 2, 36, 'CHOOSE A BRAND', {
       fontSize: '17px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5));
     g.add(this.add.text(W / 2, 62, `Die ${di + 1} — ${dt?.sym ?? '?'} d${dc.sides}`, {
       fontSize: '13px', color: dt ? dt.color : '#445566',
@@ -849,9 +949,10 @@ export default class SetupScene extends Phaser.Scene {
 
     g.add(this.add.text(W / 2, 36, 'STARTING CHIP', {
       fontSize: '20px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5));
     g.add(this.add.text(W / 2, 66, 'Pick one to carry into your first battle — or skip.', {
-      fontSize: '13px', color: '#445566', wordWrap: { width: W - 40 }, align: 'center',
+      fontSize: '13px', color: '#5a7a8a', wordWrap: { width: W - 40 }, align: 'center',
     }).setOrigin(0.5));
 
     const all = getRelics().filter(r => !r.exclusive);
@@ -865,9 +966,19 @@ export default class SetupScene extends Phaser.Scene {
       const fc     = parseInt((relic.color ?? '#ffffff').replace('#', ''), 16);
       const rarCol = RARITY_COLOR[relic.rarity] ?? RARITY_COLOR.common;
 
-      const bg = this.add.rectangle(W / 2, cy, W - 32, cardH, 0x0d0d1c);
-      bg.setStrokeStyle(2, rarCol, 0.85).setInteractive();
-      g.add(bg);
+      const cardW2 = W - 32;
+      const bgGfx = this.add.graphics();
+      const redrawBg = (hover) => {
+        bgGfx.clear();
+        bgGfx.fillStyle(hexNum(hover ? '#1a1a2e' : '#0d0d1c'), 1);
+        bgGfx.fillRoundedRect(W / 2 - cardW2 / 2, cy - cardH / 2, cardW2, cardH, RADIUS.soft);
+        bgGfx.lineStyle(2, rarCol, 0.85);
+        bgGfx.strokeRoundedRect(W / 2 - cardW2 / 2, cy - cardH / 2, cardW2, cardH, RADIUS.soft);
+      };
+      redrawBg(false);
+      g.add(bgGfx);
+      const hit = this.add.rectangle(W / 2, cy, cardW2, cardH, 0x000000, 0).setInteractive();
+      g.add(hit);
 
       const dot = this.add.circle(44, cy, 12, fc, 0.9);
       g.add(dot);
@@ -885,21 +996,31 @@ export default class SetupScene extends Phaser.Scene {
         fontSize: '13px', color: '#8899aa', wordWrap: { width: W - 96 },
       }).setOrigin(0, 0.5));
 
-      bg.on('pointerover', () => bg.setFillStyle(0x1a1a2e));
-      bg.on('pointerout',  () => bg.setFillStyle(0x0d0d1c));
-      bg.on('pointerdown', () => {
+      hit.on('pointerover', () => redrawBg(true));
+      hit.on('pointerout',  () => redrawBg(false));
+      hit.on('pointerdown', () => {
         this._startingRelic = relic;
         this._startBattle();
       });
     });
 
     const skipY = startY + choices.length * (cardH + gap) + 30;
-    const skipBg = this.add.rectangle(W / 2, skipY, W - 32, 44, 0x0a0a14);
-    skipBg.setStrokeStyle(1, 0x222233, 0.8).setInteractive();
-    skipBg.on('pointerdown', () => this._startBattle());
-    skipBg.on('pointerover', () => skipBg.setFillStyle(0x181828));
-    skipBg.on('pointerout',  () => skipBg.setFillStyle(0x0a0a14));
-    g.add(skipBg);
+    const skipW = W - 32, skipH = 44;
+    const skipGfx = this.add.graphics();
+    const redrawSkip = (hover) => {
+      skipGfx.clear();
+      skipGfx.fillStyle(hexNum(hover ? '#181828' : '#0a0a14'), 1);
+      skipGfx.fillRoundedRect(W / 2 - skipW / 2, skipY - skipH / 2, skipW, skipH, RADIUS.soft);
+      skipGfx.lineStyle(1, hexNum('#222233'), 0.8);
+      skipGfx.strokeRoundedRect(W / 2 - skipW / 2, skipY - skipH / 2, skipW, skipH, RADIUS.soft);
+    };
+    redrawSkip(false);
+    g.add(skipGfx);
+    const skipHit = this.add.rectangle(W / 2, skipY, skipW, skipH, 0x000000, 0).setInteractive();
+    skipHit.on('pointerdown', () => this._startBattle());
+    skipHit.on('pointerover', () => redrawSkip(true));
+    skipHit.on('pointerout',  () => redrawSkip(false));
+    g.add(skipHit);
     g.add(this.add.text(W / 2, skipY, 'Skip  →', {
       fontSize: '15px', color: '#2a3848',
     }).setOrigin(0.5, 0.5));
@@ -930,6 +1051,7 @@ export default class SetupScene extends Phaser.Scene {
     // Title
     g.add(this.add.text(W / 2, 28, 'UPGRADES', {
       fontSize: '20px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5));
 
     // Die selector tabs
@@ -996,8 +1118,15 @@ export default class SetupScene extends Phaser.Scene {
       const rarCol = RARITY_COLOR[upg.rarity] ?? RARITY_COLOR.common;
       const sel    = (dc.upgradeState?.takenUpgrades ?? []).includes(upg.id);
 
-      const bg       = this.add.rectangle(W / 2, cy, W - 32, ITEM_H, sel ? 0x1a1a3a : 0x0d0d1c);
-      bg.setStrokeStyle(1.5, rarCol, sel ? 0.9 : 0.5);
+      const itemGfx  = this.add.graphics();
+      const redrawItem = (s) => {
+        itemGfx.clear();
+        itemGfx.fillStyle(hexNum(s ? '#1a1a3a' : '#0d0d1c'), 1);
+        itemGfx.fillRoundedRect(16, cy - ITEM_H / 2, W - 32, ITEM_H, RADIUS.soft);
+        itemGfx.lineStyle(1.5, rarCol, s ? 0.9 : 0.5);
+        itemGfx.strokeRoundedRect(16, cy - ITEM_H / 2, W - 32, ITEM_H, RADIUS.soft);
+      };
+      redrawItem(sel);
       const colorBar = this.add.rectangle(16, cy, 4, ITEM_H - 12, uc, sel ? 1 : 0.55);
       const nameTxt  = this.add.text(28, cy - 28, upg.name, {
         fontSize: '15px', color: upg.color, fontStyle: 'bold',
@@ -1009,17 +1138,27 @@ export default class SetupScene extends Phaser.Scene {
         fontSize: '12px', color: '#8899aa', wordWrap: { width: W - 60 },
       }).setOrigin(0, 0.5);
 
-      listCont.add([bg, colorBar, nameTxt, rarTxt, descTxt]);
-      items.push({ upg, bg, colorBar, rarCol });
+      listCont.add([itemGfx, colorBar, nameTxt, rarTxt, descTxt]);
+      items.push({ upg, redrawItem, colorBar });
     });
 
     // Bottom next button
-    const btnBg = this.add.rectangle(W / 2, H - 38, W - 16, 46, 0x163824);
-    btnBg.setStrokeStyle(1.5, 0x27ae60, 0.9).setInteractive();
-    btnBg.on('pointerdown', () => this._transitionTo(() => this._showCustomRelicStep()));
-    btnBg.on('pointerover', () => btnBg.setFillStyle(0x27ae60));
-    btnBg.on('pointerout',  () => btnBg.setFillStyle(0x163824));
-    g.add(btnBg);
+    const nextW = W - 16, nextH = 46;
+    const btnGfx = this.add.graphics();
+    const redrawNext = (hover) => {
+      btnGfx.clear();
+      btnGfx.fillStyle(hexNum(hover ? '#27ae60' : '#163824'), 1);
+      btnGfx.fillRoundedRect(W / 2 - nextW / 2, H - 38 - nextH / 2, nextW, nextH, RADIUS.soft);
+      btnGfx.lineStyle(1.5, hexNum('#27ae60'), 0.9);
+      btnGfx.strokeRoundedRect(W / 2 - nextW / 2, H - 38 - nextH / 2, nextW, nextH, RADIUS.soft);
+    };
+    redrawNext(false);
+    g.add(btnGfx);
+    const nextHit = this.add.rectangle(W / 2, H - 38, nextW, nextH, 0x000000, 0).setInteractive();
+    nextHit.on('pointerdown', () => this._transitionTo(() => this._showCustomRelicStep()));
+    nextHit.on('pointerover', () => redrawNext(true));
+    nextHit.on('pointerout',  () => redrawNext(false));
+    g.add(nextHit);
     g.add(this.add.text(W / 2, H - 38, 'Next  →', {
       fontSize: '17px', color: '#aaffaa', fontStyle: 'bold', letterSpacing: 2,
     }).setOrigin(0.5));
@@ -1043,14 +1182,13 @@ export default class SetupScene extends Phaser.Scene {
         const relY = ptr.y - LIST_TOP + scrollY;
         const idx  = Math.floor(relY / ITEM_TOTAL);
         if (idx >= 0 && idx < items.length) {
-          const { upg, bg, colorBar, rarCol } = items[idx];
+          const { upg, redrawItem, colorBar } = items[idx];
           if (!dc.upgradeState) dc.upgradeState = { takenUpgrades: [] };
           const arr    = dc.upgradeState.takenUpgrades;
           const si     = arr.indexOf(upg.id);
           const nowSel = si < 0;
           if (si >= 0) arr.splice(si, 1); else arr.push(upg.id);
-          bg.setFillStyle(nowSel ? 0x1a1a3a : 0x0d0d1c);
-          bg.setStrokeStyle(1.5, rarCol, nowSel ? 0.9 : 0.5);
+          redrawItem(nowSel);
           colorBar.setAlpha(nowSel ? 1 : 0.55);
           const n = arr.length;
           summaryTxt.setText(n > 0 ? `${n} selected` : 'tap to add upgrades');
@@ -1082,9 +1220,10 @@ export default class SetupScene extends Phaser.Scene {
 
     g.add(this.add.text(W / 2, 36, 'CHOOSE CHIPS', {
       fontSize: '20px', color: '#f0c040', fontStyle: 'bold', letterSpacing: 3,
+      fontFamily: FONT_DISPLAY,
     }).setOrigin(0.5));
     g.add(this.add.text(W / 2, 68, 'Select any to take into battle.', {
-      fontSize: '13px', color: '#445566',
+      fontSize: '13px', color: '#5a7a8a',
     }).setOrigin(0.5));
 
     let scrollY = 0;
@@ -1103,7 +1242,7 @@ export default class SetupScene extends Phaser.Scene {
       const fc     = parseInt((relic.color ?? '#ffffff').replace('#', ''), 16);
       const rarCol = RARITY_COLOR[relic.rarity] ?? RARITY_COLOR.common;
 
-      const bg      = this.add.rectangle(W / 2, cy, W - 32, ITEM_H, 0x0d0d1c);
+      const bgGfx   = this.add.graphics();
       const dot     = this.add.circle(44, cy, 12, fc, 0.8);
       const dotLtr  = this.add.text(44, cy, relic.name[0].toUpperCase(), {
         fontSize: '12px', color: '#dddddd', fontStyle: 'bold',
@@ -1118,11 +1257,14 @@ export default class SetupScene extends Phaser.Scene {
         fontSize: '12px', color: '#8899aa', wordWrap: { width: W - 96 },
       }).setOrigin(0, 0.5);
 
-      listCont.add([bg, dot, dotLtr, nameTxt, rarTxt, descTxt]);
+      listCont.add([bgGfx, dot, dotLtr, nameTxt, rarTxt, descTxt]);
 
       const refresh = (sel) => {
-        bg.setFillStyle(sel ? 0x1a1a3a : 0x0d0d1c);
-        bg.setStrokeStyle(2, rarCol, sel ? 0.9 : 0.5);
+        bgGfx.clear();
+        bgGfx.fillStyle(hexNum(sel ? '#1a1a3a' : '#0d0d1c'), 1);
+        bgGfx.fillRoundedRect(16, cy - ITEM_H / 2, W - 32, ITEM_H, RADIUS.soft);
+        bgGfx.lineStyle(2, rarCol, sel ? 0.9 : 0.5);
+        bgGfx.strokeRoundedRect(16, cy - ITEM_H / 2, W - 32, ITEM_H, RADIUS.soft);
         dot.setAlpha(sel ? 1 : 0.8);
         dotLtr.setColor(sel ? '#ffffff' : '#dddddd');
         nameTxt.setColor(relic.color);
@@ -1134,16 +1276,26 @@ export default class SetupScene extends Phaser.Scene {
     });
 
     // Begin Battle button
-    const btnBg = this.add.rectangle(W / 2, H - 38, W - 16, 46, 0x163824);
-    btnBg.setStrokeStyle(1.5, 0x27ae60, 0.9).setInteractive();
+    const beginW = W - 16, beginH = 46;
+    const beginGfx = this.add.graphics();
+    const redrawBegin = (hover) => {
+      beginGfx.clear();
+      beginGfx.fillStyle(hexNum(hover ? '#27ae60' : '#163824'), 1);
+      beginGfx.fillRoundedRect(W / 2 - beginW / 2, H - 38 - beginH / 2, beginW, beginH, RADIUS.soft);
+      beginGfx.lineStyle(1.5, hexNum('#27ae60'), 0.9);
+      beginGfx.strokeRoundedRect(W / 2 - beginW / 2, H - 38 - beginH / 2, beginW, beginH, RADIUS.soft);
+    };
+    redrawBegin(false);
+    const beginHit = this.add.rectangle(W / 2, H - 38, beginW, beginH, 0x000000, 0).setInteractive();
     const btnTxt = this.add.text(W / 2, H - 38,
       `Begin Battle · ${this._selectedCustomRelics.length} chips`, {
         fontSize: '17px', color: '#aaffaa', fontStyle: 'bold', letterSpacing: 2,
       }).setOrigin(0.5);
-    btnBg.on('pointerdown', () => this._startBattle());
-    btnBg.on('pointerover',  () => btnBg.setFillStyle(0x27ae60));
-    btnBg.on('pointerout',   () => btnBg.setFillStyle(0x163824));
-    g.add(btnBg);
+    beginHit.on('pointerdown', () => this._startBattle());
+    beginHit.on('pointerover', () => redrawBegin(true));
+    beginHit.on('pointerout',  () => redrawBegin(false));
+    g.add(beginGfx);
+    g.add(beginHit);
     g.add(btnTxt);
 
     // Transparent drag zone sits above the list to capture scroll + tap
@@ -1193,15 +1345,42 @@ export default class SetupScene extends Phaser.Scene {
   // ─── LAUNCH ───────────────────────────────────────────────────────────────
 
   _startBattle() {
-    const relics = this._selectedCustomRelics !== null
-      ? this._selectedCustomRelics
-      : (this._startingRelic ? [this._startingRelic] : []);
-    this.time.delayedCall(1, () => this.scene.start('BattleScene', {
-      playerDiceConfig: this._diceConfig,
-      playerHp:         PLAYER_MAX_HP,
-      playerMaxHp:      PLAYER_MAX_HP,
-      battleIndex:      BATTLE_SEQUENCE.indexOf(this._enemyKey),
-      activeRelics:     relics,
-    }));
+    this.cameras.main.fadeOut(200, 0, 0, 0);
+    this.cameras.main.once('camerafadeoutcomplete', () => {
+      if (this._mpMode) {
+        if (this._mpPlayer === 1) {
+          this.scene.start('SetupScene', {
+            mpMode: true, mpPlayer: 2,
+            p1Config: this._diceConfig,
+            p1Relic:  this._startingRelic?.id ?? null,
+          });
+        } else {
+          this.scene.start('DiceDuelScene', {
+            p1Config:    this._mpP1Config,
+            p2Config:    this._diceConfig,
+            p1Relic:     this._mpP1Relic,
+            p2Relic:     this._startingRelic?.id ?? null,
+            p1Hp:        30,
+            p2Hp:        30,
+            p1Wins:      0,
+            p2Wins:      0,
+            gameNum:     1,
+            firstPlayer: Math.random() < 0.5 ? 'p1' : 'p2',
+          });
+        }
+        return;
+      }
+      const relics = this._selectedCustomRelics !== null
+        ? this._selectedCustomRelics
+        : (this._startingRelic ? [this._startingRelic] : []);
+      StatsManager.recordRunStart();
+      this.scene.start('BattleScene', {
+        playerDiceConfig: this._diceConfig,
+        playerHp:         PLAYER_MAX_HP,
+        playerMaxHp:      PLAYER_MAX_HP,
+        battleIndex:      BATTLE_SEQUENCE.indexOf(this._enemyKey),
+        activeRelics:     relics,
+      });
+    });
   }
 }

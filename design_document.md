@@ -1,6 +1,6 @@
 # Dicemore — Game Design Document
 
-**Version:** pre-alpha-beta-0.14
+**Version:** pre-alpha-beta-0.26
 **Genre:** Roguelike Dice-Builder
 
 > Sections marked **[PLANNED]** describe intended future design not yet implemented. All other sections describe mechanics that are built and working.
@@ -222,24 +222,29 @@ Enemy dice use a warm red/orange palette distinct from player dice. The die's ty
 
 ### 8.5 Enemy Roster
 
-Dice values updated to double the original — enemy dice sides were too weak at the original scale.
+Each enemy has one large die and one smaller die of each type — the smaller die has **half the sides** of its partner (e.g. d12 + d6). This creates natural variance in enemy throws rather than always rolling two identical dice.
 
-| #   | Key                | Name             | Tier     | HP  | Obstacles | Enemy Dice                            | Ability            |
-| --- | ------------------ | ---------------- | -------- | --- | --------- | ------------------------------------- | ------------------ |
-| —   | `training_dummy`   | The Greenhorn    | tutorial | 14  | 0         | 1× d8 ATK                            | —                  |
-| 1   | `red_louse`        | Two-Bit Hank     | minion   | 26  | 1         | 1× d12 ATK                           | —                  |
-| 2   | `cultist`          | Snake Eyes Sally | minion   | 24  | 1         | 1× d12 ATK, 1× d8 FRL               | —                  |
-| 3   | `jaw_worm`         | The Dandy        | minion   | 42  | 1         | 1× d16 ATK                           | —                  |
-| 4   | `spike_slime`      | The Reverend     | standard | 52  | 2         | 1× d16 ATK, 1× d12 BLK              | —                  |
-| 5   | `green_louse`      | Mad-Eye McGee    | standard | 44  | 2         | 2× d12 ATK                           | —                  |
-| 6   | `fungal_beast`     | The Widow        | standard | 62  | 2         | 1× d16 ATK, 1× d12 STR              | —                  |
-| 7   | `gremlin_nob`      | The Baron        | elite    | 80  | 3         | 1× d20 ATK, 1× d12 STR              | —                  |
-| 8   | `lagavulin`        | Iron Iris        | elite    | 96  | 3         | 1× d20 ATK, 1× d16 BLK              | —                  |
-| 9   | `bronze_automaton` | The House        | elite    | 86  | 3         | 2× d16 ATK, 1× d12 BLK              | —                  |
-| 10  | `slime_lord`       | The House (TBD)  | elite    | 130 | 4         | 2× d20 ATK, 1× d14 STR              | —                  |
-| 11  | `hexaghost`        | The Devil        | boss     | 150 | 4         | 2× d20 ATK, 1× d16 BLK, 1× d12 STR | —                  |
+The run is 14 battles: basic enemies are interspersed with ability enemies so ability encounters feel like events rather than the default.
 
-The Greenhorn is used only in the tutorial and uses the Dice Slinger class loadout.
+| #  | Key              | Name          | Tier     | HP  | Enemy Dice                                         | Ability           |
+| -- | ---------------- | ------------- | -------- | --- | -------------------------------------------------- | ----------------- |
+| —  | `training_dummy` | Training Dummy| tutorial | 14  | d8 + d4 ATK                                        | —                 |
+| 1  | `grub`           | Grub          | minion   | 30  | d8 + d4 ATK                                        | —                 |
+| 2  | `red_louse`      | Red Louse     | minion   | 26  | d12 + d6 ATK                                       | —                 |
+| 3  | `witch`          | The Hex       | minion   | 22  | d10 + d5 ATK, d8 + d4 FRL                          | `bumper_enrage`   |
+| 4  | `void_worm`      | The Maw       | minion   | 38  | d14 + d7 ATK                                       | `flat_reduction`  |
+| 5  | `bog_crawler`    | Bog Crawler   | standard | 56  | d14 + d7 ATK, d10 + d5 BLK                         | —                 |
+| 6  | `spike_slime`    | Spike Slime   | standard | 52  | d16 + d8 ATK, d12 + d6 BLK                         | —                 |
+| 7  | `swarm`          | The Pack      | standard | 36  | d10 + d5 ATK × 2 pairs                             | `contact_drain`   |
+| 8  | `shatter_slime`  | The Smashball | standard | 48  | d14 + d7 ATK, d10 + d5 BLK                         | `glass_curse`     |
+| 9  | `mycelium`       | The Tangle    | standard | 56  | d14 + d7 ATK, d10 + d5 STR                         | `obstacle_buff`   |
+| 10 | `lagavulin`      | Lagavulin     | elite    | 96  | d20 + d10 ATK, d16 + d8 BLK                        | —                 |
+| 11 | `pinball_nob`    | Pinball Pete  | elite    | 72  | d18 + d9 ATK, d10 + d5 STR                         | `bouncy_bumpers`  |
+| 12 | `tar_giant`      | Tar Molly     | elite    | 88  | d18 + d9 ATK, d14 + d7 BLK                         | `sticky_walls`    |
+| 13 | `artillery_bot`  | The Gatling   | elite    | 80  | d14 + d7 ATK × 2 pairs, d10 + d5 BLK               | `bullet_throws`   |
+| 14 | `hexaghost`      | Hexaghost     | boss     | 150 | d20 + d10 ATK × 2 pairs, d16 + d8 BLK, d12 + d6 STR | —               |
+
+The Training Dummy is used only in the tutorial. The roster also contains unused enemies (`cultist`, `jaw_worm`, `spike_slime`, `green_louse`, `fungal_beast`, `gremlin_nob`, `bronze_automaton`, `slime_lord`) retained as a reserve pool for future map branching.
 
 ### 8.6 Enemy Strength & Vulnerable
 
@@ -265,49 +270,9 @@ Each ability entry has an `id` and an optional `value`. A list of teardown callb
 | `bullet_throws`     | Overrides the minimum throw speed to a high value. Every throw goes fast regardless of gesture length. Difficult to aim precisely; dice careen unpredictably.       |
 | `weak_throws`       | Caps the maximum throw speed at half normal. Dice barely reach the enemy bumper. Pairs poorly with featherlight upgrades.                                           |
 
-#### Suggested enemy alternatives using abilities
+All eight ability enemies are currently live in `BATTLE_SEQUENCE`. The ability system is fully implemented via `_applyEnemyAbility(ab)` in BattleScene, with a `_abilityCleanup[]` array of teardown callbacks flushed after each turn so no state leaks between rounds.
 
-Each of the following is a named alternate version of an existing roster slot, selectable via a future branching map. The player would see one or the other per run, not both.
-
-| Replaces           | Alt key              | Alt name      | Ability            | Design note                                                                              |
-| ------------------ | -------------------- | ------------- | ------------------ | ---------------------------------------------------------------------------------------- |
-| `cultist`          | `witch`              | The Hex       | `bumper_enrage`    | Punishes the instinct to aim for the bumper; turns a reward loop into a liability.       |
-| `spike_slime`      | `shatter_slime`      | The Smashball | `glass_curse`      | Slime theme, destroys player dice on contact rather than debuffing stats.                |
-| `green_louse`      | `swarm`              | The Pack      | `contact_drain`    | Two dice = lots of collisions = lots of drain. Rewards clean, minimal-contact throws.    |
-| `fungal_beast`     | `mycelium`           | The Tangle    | `obstacle_buff`    | Obstacles feel like mycelium tendrils; hitting them feeds the beast.                     |
-| `gremlin_nob`      | `pinball_nob`        | Pinball Pete  | `bouncy_bumpers`   | Elite-tier chaos. Every round is structurally different. High-skill ceiling to play around. |
-| `lagavulin`        | `tar_giant`          | Tar Molly     | `sticky_walls`     | Slow and oppressive. Shuts down wall-bounce and featherlight strategies.                 |
-| `bronze_automaton` | `artillery_bot`      | The Gatling   | `bullet_throws`    | Forces the player to deal with their own uncontrollable speed. Chaotic table state.      |
-| `jaw_worm`         | `void_worm`          | The Maw       | `flat_reduction`   | Simple, readable debuff as the first non-trivial minion.                                 |
-
-#### Implementation sketch
-
-```
-faces.js:
-  abilities: [{ id: 'bouncy_bumpers', duration: 'turn' }]
-  abilities: [{ id: 'obstacle_buff',  value: 2 }]
-
-BattleScene.js:
-  _enemyRollPhase():
-    (this.enemyDef.abilities ?? []).forEach(ab => this._applyEnemyAbility(ab))
-
-  _applyEnemyAbility(ab):
-    switch ab.id:
-      'bouncy_bumpers' → enemyBumperBody.restitution = 2.0
-                         _abilityCleanup.push(() => reset)
-      'sticky_walls'   → wallBodies.forEach(b => b.friction = 8, b.restitution = 0)
-                         _abilityCleanup.push(() => reset)
-      'glass_curse'    → playerDice.forEach(d => d._cursedGlass = true)
-      'obstacle_buff'  → _obstacleBuffPerHit = ab.value
-                         _abilityCleanup.push(() => reset)
-      ... etc.
-
-  _clearSurface():
-    _abilityCleanup.forEach(fn => fn())
-    _abilityCleanup = []
-```
-
-Abilities that modify the collision handler (`obstacle_buff`, `contact_drain`, `bumper_enrage`) read a flag set by `_applyEnemyAbility` rather than checking the ability list directly, so the collision handler stays a simple flag check rather than an array scan per-collision.
+Abilities that modify the collision handler (`obstacle_buff`, `contact_drain`, `bumper_enrage`) read a simple flag set by `_applyEnemyAbility` rather than scanning the ability list per-collision.
 
 ---
 
@@ -406,7 +371,7 @@ Chips are passive or triggered effects carried through the run. One chip is gran
 | Stone Calendar       | uncommon | ON_TURN_START           | Start each turn with 5 block.                                               |
 | Venom Clock          | uncommon | ON_TURN_START           | If the enemy has 3+ poison stacks at turn start, deal 2 damage.             |
 | Orichalcum           | uncommon | PASSIVE                 | All block amounts are doubled.                                              |
-| Steady Hand          | uncommon | PASSIVE                 | Dice that land without hitting anything deal +4 bonus effect.               |
+| Steady Hand          | uncommon | PASSIVE                 | Dice that land without hitting a wall or bumper deal +4 bonus effect.       |
 | Tormentor's Ring     | uncommon | ON_STATUS_APPLIED       | Each time a status is applied to the enemy, deal 1 damage.                  |
 | Plague Doctor's Coat | uncommon | ON_DAMAGE_TAKEN         | When the player takes damage, apply 2 poison stacks to the enemy.           |
 | Rune Resonance       | uncommon | ON_RUNE_TRIGGER         | Heal 1 HP each time a brand fires.                                          |
@@ -682,7 +647,7 @@ Mouse input mirrors touch.
 
 ## 20. **[PLANNED]** Map and Run Structure
 
-The full roguelike run structure is not yet implemented. The current prototype is a linear sequence of 11 battles with upgrade screens and shops between them.
+The full roguelike run structure is not yet implemented. The current prototype is a linear sequence of 14 battles with upgrade screens and shops between them.
 
 **Planned structure:** A branching path map spanning multiple floors — Battle, Elite, Boss, Rest, Shop, Event nodes. Gold drops from battles; spent at shops.
 
@@ -745,6 +710,61 @@ After each fight the player chooses their next table (replaces current linear se
 | **Copy die default**              | If a Copy die never physically touches another player die, it deals 1 weak steal rather than doing nothing.                                                                    |
 | **Physics body shape**            | Circular, not square. Square bodies caused excessive energy loss at wall contacts.                                                                                             |
 | **Enemy intent → enemy dice**     | Replaced the static weighted-intent system with fully physical enemy dice. Enemy dice land on the table at turn start; the player can physically nudge them before COMMIT.      |
+
+---
+
+## 25. Dice Duel (2-Player Mode)
+
+Dice Duel is a local two-player mode played on the same device. Both players share the rolling surface but each has their own HP strip, die tray, and bumper.
+
+### 25.1 Layout
+
+The screen is split into two mirrored zones:
+
+- **P2 strip** (top, y=0–80): HP bar, ATK/BLK counters, status indicators — all rotated 180° so P2 reads from their side.
+- **Rolling surface** (y=80–640): shared physics space.
+- **P1 strip** (bottom, y=640–700): HP bar, ATK/BLK counters, status indicators.
+
+The die tray sits on the right side of each player's strip. Each player throws from their own tray.
+
+### 25.2 Round Structure
+
+Each round:
+1. **Placement phase** — P1 then P2 each place one bumper by dragging it onto the surface. A slim colored banner indicates whose turn it is (gold for P1, red for P2). The vignette around the screen edge matches the active player's color (alpha 0.1). Placement drag activates immediately — no waiting for an animation to finish.
+2. **Throw phase** — Players alternate throws. Each throw has a 0.8× speed multiplier. Dice cannot trigger their own player's bumper for 500ms after spawning (startup mask), preventing instant self-bumper contact.
+3. **Round end** — When both players have thrown all their dice, an animated damage sequence plays: the attacker's pending damage flies from their HP strip to the defender's with a shockwave impact. BLOCKED! or SHATTERED! text appears if block absorbed the hit. Poison ticks at round end, then decays by 1.
+4. **Next round** — New placement phase begins. Bumpers **accumulate** across rounds — each round adds a new bumper per player on top of those from previous rounds, increasing table complexity over time.
+
+### 25.3 HP and Damage
+
+- Both players start with the same HP pool (matching the solo game's `PLAYER_HP`).
+- Attack dice add to `_p1PendingDmg` / `_p2PendingDmg` during the throw phase.
+- Block dice add to `_p1Block` / `_p2Block`.
+- At round end, pending damage is reduced by the defender's block, then applied to HP.
+- **Mid-round KO:** If a die effect drops a player to 0 HP during the throw phase, the game ends immediately without waiting for round end.
+
+### 25.4 Status Effects Display
+
+Each player's HP strip shows two small indicators below the HP bar:
+- **☠ N** (green) — current poison stack count on that player.
+- **BUF +N** (orange) — current pierce/buff bonus accumulated this round.
+
+Both clear at the start of each new round. P2's indicators are rotated 180° to match their orientation.
+
+### 25.5 Class Relics in Duel Mode
+
+Each player selects a class in SetupScene before the duel. The class's starting relic is active during the duel:
+
+| Class            | Relic               | Duel Effect                                                         |
+| ---------------- | ------------------- | ------------------------------------------------------------------- |
+| Dice Slinger     | Lucky Coin          | Once per round, max face value fires effect twice.                  |
+| Illusionist      | Steady Hand         | Dice landing without hitting a wall or bumper deal +4 bonus effect. |
+| Pickpocket       | Pickpocket's Thumb  | Poison dice apply 1 extra stack on settle.                          |
+| The Muscle       | Spiked Bumper       | Die hitting opponent's bumper deals bonus damage = die's max value. |
+
+### 25.6 Vignette
+
+A soft colored glow fills the screen edges during placement to indicate the active player. P1 = gold (`#d4a820`), P2 = red (`#e74c3c`). Alpha 0.1. Fades to 0 when it's the other player's turn.
 
 ### 24.2 Open Questions
 

@@ -21,3 +21,6 @@ export const MAX_THROW_SPEED  = 20;
 
 // Game
 export const PLAYER_MAX_HP = 30; // base value — relics can increase the per-run effective max
+
+// Typography
+export const FONT_DISPLAY = '"Cinzel", serif';
