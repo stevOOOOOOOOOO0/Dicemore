@@ -2409,7 +2409,7 @@ export default class BattleScene extends Phaser.Scene {
     // BUFF REACH
     if (has('buff_reach')) {
       const bonus = Math.max(1, Math.floor(value / 2));
-      this.playerDice.forEach(pd => { if (pd.img?.active) pd._valueBonus = (pd._valueBonus ?? 0) + bonus; });
+      this.playerDice.forEach(pd => { if (pd !== dieRef && pd.img?.active) pd._valueBonus = (pd._valueBonus ?? 0) + bonus; });
       this._floatText(imgX, imgY - 32, `REACH +${bonus}`, '#ffaa00');
     }
 
