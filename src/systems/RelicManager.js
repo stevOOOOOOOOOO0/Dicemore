@@ -239,7 +239,7 @@ export default class RelicManager {
         const curVal = Math.floor((payload.die.data.currentFaceIdx ?? 0) / 2) + 1;
         if (curVal < maxVal) return;
         s._luckyCoinUsed = true;
-        s._addToEffectQueue(payload.die);
+        s._addToEffectQueue(payload.die, { skipRune: true });
         if (!s._queueActive) s._startQueue();
         s._floatText(s.enemyPos.x, s.enemyPos.y - 70, 'LUCKY COIN ×2!', '#f0c040');
         break;

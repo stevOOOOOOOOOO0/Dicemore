@@ -2409,7 +2409,7 @@ export default class BattleScene extends Phaser.Scene {
     // BUFF REACH
     if (has('buff_reach')) {
       const bonus = Math.max(1, Math.floor(value / 2));
-      this.playerDice.forEach(pd => { if (pd !== dieRef && pd.img?.active) pd._valueBonus = (pd._valueBonus ?? 0) + bonus; });
+      this.playerDice.forEach(pd => { if (pd.img?.active) pd._valueBonus = (pd._valueBonus ?? 0) + bonus; });
       this._floatText(imgX, imgY - 32, `REACH +${bonus}`, '#ffaa00');
     }
 
@@ -3410,7 +3410,7 @@ export default class BattleScene extends Phaser.Scene {
 
   // ─── EFFECT QUEUE ─────────────────────────────────────────────────────────
 
-  _addToEffectQueue(dieRef) {
+  _addToEffectQueue(dieRef, opts = {}) {
     if (this._tutorialMode && !this._tutFirstSettled) this._tutFirstSettled = true;
     const { data } = dieRef;
     const settleVal = Math.floor(data.currentFaceIdx / 2) + 1;
@@ -3427,7 +3427,7 @@ export default class BattleScene extends Phaser.Scene {
     const type  = dieRef._mimicType ?? data.type;
     const x     = dieRef.img?.x ?? 0;
     const y     = dieRef.img?.y ?? 0;
-    const entry = { dieRef, value, type, x, y };
+    const entry = { dieRef, value, type, x, y, skipRune: opts.skipRune ?? false };
 
     // Vanguard: insert at front of queue
     if (this._hasDieUpgrade(data, 'vanguard')) {
@@ -3531,7 +3531,7 @@ export default class BattleScene extends Phaser.Scene {
         this._prevQueueEffect = this._currQueueEffect ?? null;
         this._currQueueEffect = null;
         this.bus.emit('ON_QUEUE_FIRE', { die: entry.dieRef });
-        this._applyDieFaceImmediate(entry.dieRef, false, entry.x, entry.y);
+        this._applyDieFaceImmediate(entry.dieRef, entry.skipRune ?? false, entry.x, entry.y);
 
         // Wait long enough for rune delays (e.g. Egyptian's 250ms) to initiate movement
         this.time.delayedCall(800, () => {
@@ -3775,7 +3775,10 @@ export default class BattleScene extends Phaser.Scene {
         // its motion never resolving into an effect. Re-arm it like a fresh reroll.
         if (d.isPlayer) {
           const v = d.img.body?.velocity;
-          if (v && (Math.abs(v.x) >= SETTLE_VEL || Math.abs(v.y) >= SETTLE_VEL)) {
+          // Use MIN_REROLL_VEL, not SETTLE_VEL — Matter.js keeps tiny residual
+          // jitter on settled bodies that would otherwise trigger a reroll every frame.
+          const speed = Math.hypot(v.x, v.y);
+          if (speed >= MIN_REROLL_VEL) {
             this._rerollDie(d);
           }
         }
